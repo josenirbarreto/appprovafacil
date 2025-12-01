@@ -1,4 +1,3 @@
-
 import { 
     collection, 
     getDocs, 
@@ -221,32 +220,57 @@ export const FirebaseService = {
             }
 
             else if (type === 'unit' && ids.uId) {
+                // Delete Unit
                 batch.delete(doc(db, COLLECTIONS.UNITS, ids.uId));
                 
+                // Delete all Topics in this Unit
                 const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", ids.uId));
                 const snapT = await getDocs(qT);
                 snapT.forEach(d => batch.delete(d.ref));
             }
 
             else if (type === 'chapter' && ids.cId) {
+                // Delete Chapter
                 batch.delete(doc(db, COLLECTIONS.CHAPTERS, ids.cId));
 
+                // Get Units
                 const qU = query(collection(db, COLLECTIONS.UNITS), where("chapterId", "==", ids.cId));
                 const snapU = await getDocs(qU);
                 
-                if (!snapU.empty) {
-                    snapU.forEach(d => batch.delete(d.ref));
+                // For each Unit, delete Topics and the Unit itself
+                for (const uDoc of snapU.docs) {
+                    batch.delete(uDoc.ref);
+                    const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", uDoc.id));
+                    const snapT = await getDocs(qT);
+                    snapT.forEach(t => batch.delete(t.ref));
                 }
             }
 
             else if (type === 'discipline' && ids.dId) {
+                // Delete Discipline
                 batch.delete(doc(db, COLLECTIONS.DISCIPLINES, ids.dId));
                 
+                // Get Chapters
                 const qC = query(collection(db, COLLECTIONS.CHAPTERS), where("disciplineId", "==", ids.dId));
                 const snapC = await getDocs(qC);
                 
-                if (!snapC.empty) {
-                    snapC.forEach(d => batch.delete(d.ref));
+                // For each Chapter...
+                for (const cDoc of snapC.docs) {
+                    batch.delete(cDoc.ref);
+                    
+                    // Get Units
+                    const qU = query(collection(db, COLLECTIONS.UNITS), where("chapterId", "==", cDoc.id));
+                    const snapU = await getDocs(qU);
+                    
+                    // For each Unit...
+                    for (const uDoc of snapU.docs) {
+                        batch.delete(uDoc.ref);
+                        
+                        // Get Topics
+                        const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", uDoc.id));
+                        const snapT = await getDocs(qT);
+                        snapT.forEach(t => batch.delete(t.ref));
+                    }
                 }
             }
 
