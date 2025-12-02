@@ -318,11 +318,11 @@ const StepItem = ({ label, active, onClick, onDelete, onEdit }: any) => (
             : 'bg-white border-transparent hover:bg-slate-50 hover:border-slate-200'
         }`}
     >
-        <div className="flex items-center gap-2 overflow-hidden">
+        <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
             {active && <div className="w-1.5 h-1.5 rounded-full bg-brand-blue flex-shrink-0" />}
             <span className={`truncate text-sm font-medium ${active ? 'text-brand-blue' : 'text-slate-600'}`}>{label}</span>
         </div>
-        <div className="flex opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+        <div className="flex opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ml-2 shrink-0">
             <button 
                 type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(); }} 
