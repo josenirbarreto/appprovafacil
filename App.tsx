@@ -252,7 +252,7 @@ const InstitutionPage = () => {
     );
 };
 
-// GESTÃO DE TURMAS (Com Ordenação)
+// GESTÃO DE TURMAS (Com Ordenação por Ano e Instituição)
 const ClassesPage = () => {
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [institutions, setInstitutions] = useState<Institution[]>([]); 
@@ -289,13 +289,13 @@ const ClassesPage = () => {
             {institutions
                 .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
                 .map(inst => {
-                const instClasses = classes
-                    .filter(c => c.institutionId === inst.id)
-                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+                const instClasses = classes.filter(c => c.institutionId === inst.id);
+                // Extrai os anos únicos presentes nas turmas desta instituição e ordena decrescente
+                const years = Array.from(new Set(instClasses.map(c => c.year))).sort((a: number, b: number) => b - a);
 
                 return (
                     <div key={inst.id} className="bg-white rounded-xl shadow-sm border p-6">
-                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
                             {inst.logoUrl ? (
                                 <img src={inst.logoUrl} alt={inst.name} className="w-8 h-8 object-contain rounded-full border border-slate-200 bg-white" />
                             ) : (
@@ -303,19 +303,35 @@ const ClassesPage = () => {
                             )}
                             {inst.name}
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {instClasses.length > 0 ? instClasses.map(c => (
-                                <div key={c.id} className="border p-4 rounded flex justify-between items-center bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                                    <div><p className="font-bold">{c.name}</p><p className="text-xs text-slate-500">{c.year}</p></div>
-                                    <div className="flex gap-1">
-                                        <Button variant="ghost" onClick={() => {setCurrentClass(c); setShowModal(true)}}><Icons.Edit /></Button>
-                                        <Button variant="ghost" onClick={() => handleDelete(c.id)} className="text-red-500"><Icons.Trash /></Button>
+                        
+                        {instClasses.length > 0 ? (
+                            <div className="space-y-6">
+                                {years.map(year => (
+                                    <div key={year}>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Badge color="blue">{year.toString()}</Badge>
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ano Letivo</span>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {instClasses
+                                                .filter(c => c.year === year)
+                                                .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                                                .map(c => (
+                                                    <div key={c.id} className="border p-4 rounded flex justify-between items-center bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                                                        <div><p className="font-bold">{c.name}</p></div>
+                                                        <div className="flex gap-1">
+                                                            <Button variant="ghost" onClick={() => {setCurrentClass(c); setShowModal(true)}}><Icons.Edit /></Button>
+                                                            <Button variant="ghost" onClick={() => handleDelete(c.id)} className="text-red-500"><Icons.Trash /></Button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )) : (
-                                <p className="text-sm text-slate-400 italic">Nenhuma turma cadastrada.</p>
-                            )}
-                        </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-400 italic">Nenhuma turma cadastrada.</p>
+                        )}
                     </div>
                 );
             })}
