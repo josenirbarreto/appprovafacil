@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { User, UserRole, Question, Exam, Discipline, QuestionType, Institution, SchoolClass, Chapter, Unit } from './types';
 import { FirebaseService } from './services/firebaseService';
-import { Button, Card, Badge, Input, Select, Modal } from './components/UI';
+import { Button, Card, Badge, Input, Select, Modal, RichTextEditor } from './components/UI';
 import { GeminiService } from './services/geminiService';
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -25,14 +25,24 @@ const Icons = {
   Edit: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>,
   ArrowLeft: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>,
   ArrowRight: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>,
-  Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+  Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+  Eye: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+};
+
+// Traduções dos Tipos de Questão
+const QuestionTypeLabels: Record<QuestionType, string> = {
+    [QuestionType.MULTIPLE_CHOICE]: 'Múltipla Escolha',
+    [QuestionType.TRUE_FALSE]: 'Verdadeiro / Falso',
+    [QuestionType.SHORT_ANSWER]: 'Resposta Curta',
+    [QuestionType.NUMERIC]: 'Numérica',
+    [QuestionType.ASSOCIATION]: 'Associação'
 };
 
 const AuthContext = React.createContext<{ user: User | null; loading: boolean }>({ user: null, loading: true });
 
 // --- PÁGINAS ---
 
-// 1. LOGIN
+// 1. LOGIN (Mantido igual)
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ email: '', password: '', name: '' });
@@ -99,7 +109,7 @@ const Login = () => {
   );
 };
 
-// 2. DASHBOARD
+// 2. DASHBOARD (Mantido igual)
 const Dashboard = () => {
   const { user } = React.useContext(AuthContext);
   const [stats, setStats] = useState({ users: 0, questions: 0, exams: 0 });
@@ -153,7 +163,7 @@ const Dashboard = () => {
   );
 };
 
-// GESTÃO DE INSTITUIÇÕES
+// GESTÃO DE INSTITUIÇÕES (Mantido igual)
 const InstitutionPage = () => {
     const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [showModal, setShowModal] = useState(false);
@@ -242,7 +252,7 @@ const InstitutionPage = () => {
     );
 };
 
-// GESTÃO DE TURMAS
+// GESTÃO DE TURMAS (Mantido igual)
 const ClassesPage = () => {
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [institutions, setInstitutions] = useState<Institution[]>([]); 
@@ -308,7 +318,7 @@ const ClassesPage = () => {
     );
 };
 
-// --- NOVOS COMPONENTES VISUAIS PARA HIERARQUIA (STEP CARDS) ---
+// --- COMPONENTES DE HIERARQUIA (Mantidos iguais) ---
 const StepItem = ({ label, active, onClick, onDelete, onEdit }: any) => (
     <div 
         onClick={onClick} 
@@ -445,21 +455,16 @@ const StepCard = ({
     );
 };
 
-// PÁGINA DE HIERARQUIA
+// PÁGINA DE HIERARQUIA (Mantido igual)
 const HierarchyPage = () => {
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
-    
-    // Selection State
     const [selDisc, setSelDisc] = useState<Discipline | null>(null);
     const [selChap, setSelChap] = useState<Chapter | null>(null);
     const [selUnit, setSelUnit] = useState<Unit | null>(null);
-
-    // Inputs for Adding
     const [inputD, setInputD] = useState('');
     const [inputC, setInputC] = useState('');
     const [inputU, setInputU] = useState('');
     const [inputT, setInputT] = useState('');
-
     const [editingItem, setEditingItem] = useState<{ type: 'discipline'|'chapter'|'unit'|'topic', id: string, name: string } | null>(null);
 
     useEffect(() => { loadData(); }, []);
@@ -467,7 +472,6 @@ const HierarchyPage = () => {
     const loadData = async () => {
         const data = await FirebaseService.getHierarchy();
         setHierarchy(data);
-        
         if (selDisc) {
             const d = data.find(x => x.id === selDisc.id);
             setSelDisc(d || null);
@@ -492,25 +496,18 @@ const HierarchyPage = () => {
 
     const handleDelete = async (type: 'discipline'|'chapter'|'unit'|'topic', id: string) => {
         if (!confirm('Tem certeza que deseja excluir? Todos os itens dentro deste serão apagados.')) return;
-        
         const ids: any = {};
         if (type === 'discipline') ids.dId = id;
         if (type === 'chapter') ids.cId = id;
         if (type === 'unit') ids.uId = id;
         if (type === 'topic') ids.tId = id;
-
         try {
             await FirebaseService.deleteItem(type, ids);
-            
             if (type === 'discipline' && selDisc?.id === id) setSelDisc(null);
             if (type === 'chapter' && selChap?.id === id) setSelChap(null);
             if (type === 'unit' && selUnit?.id === id) setSelUnit(null);
-
             await loadData();
-        } catch (error: any) {
-            console.error("Delete error:", error);
-            alert(`Erro ao excluir: ${error.message || 'Tente novamente.'}`);
-        }
+        } catch (error: any) { console.error("Delete error:", error); alert(`Erro ao excluir: ${error.message || 'Tente novamente.'}`); }
     };
 
     const handleUpdateName = async () => {
@@ -533,116 +530,32 @@ const HierarchyPage = () => {
                 </div>
             </div>
             
-            {/* O Grid precisa ser flex-1 e ter min-h-0 para respeitar o limite do pai e forçar scroll interno nos cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 min-h-0">
-                
-                {/* PASSO 1: DISCIPLINA */}
-                <StepCard 
-                    stepNumber={1} 
-                    title="Disciplinas" 
-                    singularName="Disciplina"
-                    inputValue={inputD} 
-                    setInputValue={setInputD} 
-                    onAdd={() => handleAdd('D')}
-                >
+                <StepCard stepNumber={1} title="Disciplinas" singularName="Disciplina" inputValue={inputD} setInputValue={setInputD} onAdd={() => handleAdd('D')}>
                     {hierarchy.map(d => (
-                        <StepItem 
-                            key={d.id} 
-                            label={d.name} 
-                            active={selDisc?.id === d.id} 
-                            onClick={() => { setSelDisc(d); setSelChap(null); setSelUnit(null); }} 
-                            onDelete={() => handleDelete('discipline', d.id)}
-                            onEdit={() => setEditingItem({ type: 'discipline', id: d.id, name: d.name })}
-                        />
+                        <StepItem key={d.id} label={d.name} active={selDisc?.id === d.id} onClick={() => { setSelDisc(d); setSelChap(null); setSelUnit(null); }} onDelete={() => handleDelete('discipline', d.id)} onEdit={() => setEditingItem({ type: 'discipline', id: d.id, name: d.name })} />
                     ))}
                 </StepCard>
-
-                {/* PASSO 2: CAPÍTULO */}
-                <StepCard 
-                    stepNumber={2} 
-                    title="Capítulos" 
-                    singularName="Capítulo"
-                    disabled={!selDisc} 
-                    placeholder="Selecione uma Disciplina para ver os Capítulos"
-                    parentName={selDisc?.name}
-                    inputValue={inputC} 
-                    setInputValue={setInputC} 
-                    onAdd={() => handleAdd('C')}
-                >
+                <StepCard stepNumber={2} title="Capítulos" singularName="Capítulo" disabled={!selDisc} placeholder="Selecione uma Disciplina para ver os Capítulos" parentName={selDisc?.name} inputValue={inputC} setInputValue={setInputC} onAdd={() => handleAdd('C')}>
                     {selDisc?.chapters.map(c => (
-                        <StepItem 
-                            key={c.id} 
-                            label={c.name} 
-                            active={selChap?.id === c.id} 
-                            onClick={() => { setSelChap(c); setSelUnit(null); }} 
-                            onDelete={() => handleDelete('chapter', c.id)}
-                            onEdit={() => setEditingItem({ type: 'chapter', id: c.id, name: c.name })}
-                        />
+                        <StepItem key={c.id} label={c.name} active={selChap?.id === c.id} onClick={() => { setSelChap(c); setSelUnit(null); }} onDelete={() => handleDelete('chapter', c.id)} onEdit={() => setEditingItem({ type: 'chapter', id: c.id, name: c.name })} />
                     ))}
                 </StepCard>
-
-                {/* PASSO 3: UNIDADE */}
-                <StepCard 
-                    stepNumber={3} 
-                    title="Unidades" 
-                    singularName="Unidade"
-                    disabled={!selChap} 
-                    placeholder="Selecione um Capítulo para ver as Unidades"
-                    parentName={selChap?.name}
-                    inputValue={inputU} 
-                    setInputValue={setInputU} 
-                    onAdd={() => handleAdd('U')}
-                >
+                <StepCard stepNumber={3} title="Unidades" singularName="Unidade" disabled={!selChap} placeholder="Selecione uma Capítulo para ver as Unidades" parentName={selChap?.name} inputValue={inputU} setInputValue={setInputU} onAdd={() => handleAdd('U')}>
                     {selChap?.units.map(u => (
-                        <StepItem 
-                            key={u.id} 
-                            label={u.name} 
-                            active={selUnit?.id === u.id} 
-                            onClick={() => setSelUnit(u)} 
-                            onDelete={() => handleDelete('unit', u.id)}
-                            onEdit={() => setEditingItem({ type: 'unit', id: u.id, name: u.name })}
-                        />
+                        <StepItem key={u.id} label={u.name} active={selUnit?.id === u.id} onClick={() => setSelUnit(u)} onDelete={() => handleDelete('unit', u.id)} onEdit={() => setEditingItem({ type: 'unit', id: u.id, name: u.name })} />
                     ))}
                 </StepCard>
-
-                {/* PASSO 4: TÓPICO */}
-                <StepCard 
-                    stepNumber={4} 
-                    title="Tópicos" 
-                    singularName="Tópico"
-                    disabled={!selUnit} 
-                    placeholder="Selecione uma Unidade para ver os Tópicos"
-                    parentName={selUnit?.name}
-                    inputValue={inputT} 
-                    setInputValue={setInputT} 
-                    onAdd={() => handleAdd('T')}
-                >
+                <StepCard stepNumber={4} title="Tópicos" singularName="Tópico" disabled={!selUnit} placeholder="Selecione uma Unidade para ver os Tópicos" parentName={selUnit?.name} inputValue={inputT} setInputValue={setInputT} onAdd={() => handleAdd('T')}>
                     {selUnit?.topics.map(t => (
-                        <StepItem 
-                            key={t.id} 
-                            label={t.name} 
-                            active={false} 
-                            onClick={() => {}} 
-                            onDelete={() => handleDelete('topic', t.id)}
-                            onEdit={() => setEditingItem({ type: 'topic', id: t.id, name: t.name })}
-                        />
+                        <StepItem key={t.id} label={t.name} active={false} onClick={() => {}} onDelete={() => handleDelete('topic', t.id)} onEdit={() => setEditingItem({ type: 'topic', id: t.id, name: t.name })} />
                     ))}
                 </StepCard>
             </div>
 
-            <Modal 
-                isOpen={!!editingItem} 
-                onClose={() => setEditingItem(null)} 
-                title="Editar Nome" 
-                footer={<Button onClick={handleUpdateName}>Salvar</Button>}
-                maxWidth="max-w-sm"
-            >
+            <Modal isOpen={!!editingItem} onClose={() => setEditingItem(null)} title="Editar Nome" footer={<Button onClick={handleUpdateName}>Salvar</Button>} maxWidth="max-w-sm">
                 <div className="pt-2">
-                    <Input 
-                        value={editingItem?.name || ''} 
-                        onChange={e => setEditingItem(prev => prev ? ({...prev, name: e.target.value}) : null)}
-                        autoFocus
-                    />
+                    <Input value={editingItem?.name || ''} onChange={e => setEditingItem(prev => prev ? ({...prev, name: e.target.value}) : null)} autoFocus />
                 </div>
             </Modal>
         </div>
@@ -654,6 +567,7 @@ const QuestionBank = () => {
     const [questions, setQuestions] = useState<Question[]>([]);
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     const [showModal, setShowModal] = useState(false);
+    const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
     const [newQ, setNewQ] = useState<Partial<Question>>({ type: QuestionType.MULTIPLE_CHOICE, options: [] });
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -664,117 +578,292 @@ const QuestionBank = () => {
     };
 
     const handleSave = async () => {
-        await FirebaseService.addQuestion({
-            ...newQ, 
-            id: '', 
-            createdAt: new Date().toISOString(),
-            chapterId: 'c1', unitId: 'u1', topicId: 't1', 
-            difficulty: 'Medium'
-        } as Question);
+        if (!newQ.disciplineId || !newQ.chapterId) {
+            alert('Disciplina e Capítulo são obrigatórios.');
+            return;
+        }
+        
+        const qData = {
+            ...newQ,
+            createdAt: newQ.createdAt || new Date().toISOString(),
+            difficulty: newQ.difficulty || 'Medium',
+            options: newQ.options || [],
+            pairs: newQ.pairs || []
+        } as Question;
+
+        if (newQ.id) {
+            await FirebaseService.updateQuestion(qData);
+        } else {
+            await FirebaseService.addQuestion(qData);
+        }
+        
         setShowModal(false);
         load();
     }
 
+    const handleDelete = async (id: string) => {
+        if (confirm('Tem certeza que deseja excluir esta questão?')) {
+            await FirebaseService.deleteQuestion(id);
+            load();
+        }
+    };
+
+    const handleEdit = (q: Question) => {
+        setNewQ({ ...q });
+        setShowModal(true);
+    };
+
     const handleGenerateAI = async () => {
-        const topic = prompt("Tópico:");
-        if(!topic) return;
+        if (!newQ.disciplineId || !newQ.chapterId) {
+            alert('Selecione Disciplina e Capítulo para dar contexto à IA.');
+            return;
+        }
+
         setIsGenerating(true);
-        const res = await GeminiService.generateQuestion(topic, newQ.type || QuestionType.MULTIPLE_CHOICE, 'Medium');
-        if(res) setNewQ({...newQ, ...res});
+        const contextString = getContextString();
+        const res = await GeminiService.generateQuestion(contextString, newQ.type || QuestionType.MULTIPLE_CHOICE, 'Medium');
+        if(res) setNewQ(prev => ({...prev, ...res}));
         setIsGenerating(false);
     }
 
+    // --- Helpers for Manual Option Editing ---
+    const handleAddOption = () => {
+        setNewQ(prev => ({
+            ...prev,
+            options: [...(prev.options || []), { id: Date.now().toString(), text: '', isCorrect: false }]
+        }));
+    };
+
+    const handleOptionChange = (idx: number, text: string) => {
+        const newOpts = [...(newQ.options || [])];
+        newOpts[idx].text = text;
+        setNewQ({ ...newQ, options: newOpts });
+    };
+
+    const handleSetCorrect = (idx: number) => {
+        const newOpts = (newQ.options || []).map((o, i) => ({ ...o, isCorrect: i === idx }));
+        setNewQ({ ...newQ, options: newOpts });
+    };
+
+    const handleRemoveOption = (idx: number) => {
+        const newOpts = [...(newQ.options || [])];
+        newOpts.splice(idx, 1);
+        setNewQ({ ...newQ, options: newOpts });
+    };
+
+    const handleAnswerChange = (text: string) => {
+        // For Short/Numeric, we treat options[0] as the correct answer
+        setNewQ(prev => ({
+            ...prev,
+            options: [{ id: 'ans', text: text, isCorrect: true }]
+        }));
+    };
+
+    const getContextString = () => {
+        const disc = hierarchy.find(d => d.id === newQ.disciplineId);
+        const chap = disc?.chapters.find(c => c.id === newQ.chapterId);
+        const unit = chap?.units.find(u => u.id === newQ.unitId);
+        const topic = unit?.topics.find(t => t.id === newQ.topicId);
+        let ctx = disc?.name || '';
+        if (chap) ctx += ` > ${chap.name}`;
+        if (unit) ctx += ` > ${unit.name}`;
+        if (topic) ctx += ` > ${topic.name}`;
+        return ctx;
+    }
+
+    const getDiscName = (id: string) => hierarchy.find(d => d.id === id)?.name || '-';
+    const getChapName = (dId: string, cId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.name || '-';
+    const getUnitName = (dId: string, cId: string, uId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.units.find(u => u.id === uId)?.name || '-';
+    const getTopicName = (dId: string, cId: string, uId: string, tId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.units.find(u => u.id === uId)?.topics.find(t => t.id === tId)?.name || '-';
+    const selectedDiscipline = hierarchy.find(d => d.id === newQ.disciplineId);
+    const selectedChapter = selectedDiscipline?.chapters.find(c => c.id === newQ.chapterId);
+    const selectedUnit = selectedChapter?.units.find(u => u.id === newQ.unitId);
+    const stripHtml = (html: string) => { const tmp = document.createElement("DIV"); tmp.innerHTML = html || ''; return tmp.textContent || tmp.innerText || ""; }
+
     return (
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
-            <div className="flex justify-between"><h2 className="text-3xl font-bold">Questões</h2><Button onClick={() => setShowModal(true)}>Nova</Button></div>
-            <div className="grid gap-4">
-                {questions.map(q => (
-                    <div key={q.id} className="bg-white p-4 border rounded shadow-sm">
-                        <div className="flex justify-between text-xs text-slate-500 mb-2"><Badge>{q.type}</Badge> {FirebaseService.getFullHierarchyString(q, hierarchy)}</div>
-                        <p className="font-medium">{q.enunciado}</p>
-                    </div>
-                ))}
+            <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-display font-bold text-brand-dark">Banco de Questões</h2>
+                <Button onClick={() => { setNewQ({ type: QuestionType.MULTIPLE_CHOICE, options: [] }); setShowModal(true); }}><Icons.Plus /> Nova Questão</Button>
             </div>
-            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Questão" footer={<Button onClick={handleSave}>Salvar</Button>}>
-                <div className="space-y-4">
-                     <Select label="Disciplina" value={newQ.disciplineId} onChange={e => setNewQ({...newQ, disciplineId: e.target.value})}>
-                        <option value="">Selecione</option>
-                        {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                     </Select>
-                     <div className="flex justify-end"><Button variant="secondary" onClick={handleGenerateAI} disabled={isGenerating}>IA Generator</Button></div>
-                     <Input label="Enunciado" value={newQ.enunciado || ''} onChange={e => setNewQ({...newQ, enunciado: e.target.value})} />
+            
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                <th className="p-4 w-1/3">Enunciado</th>
+                                <th className="p-4">Tipo</th>
+                                <th className="p-4">Disciplina</th>
+                                <th className="p-4">Capítulo</th>
+                                <th className="p-4">Unidade</th>
+                                <th className="p-4">Tópico</th>
+                                <th className="p-4 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm">
+                            {questions.length === 0 ? (
+                                <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhuma questão cadastrada.</td></tr>
+                            ) : (
+                                questions.map(q => (
+                                    <tr key={q.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="p-4">
+                                            <div className="line-clamp-2 text-slate-700 font-medium" title={stripHtml(q.enunciado)}>
+                                                {stripHtml(q.enunciado)}
+                                            </div>
+                                        </td>
+                                        <td className="p-4"><Badge color="blue">{QuestionTypeLabels[q.type]}</Badge></td>
+                                        <td className="p-4 text-slate-600">{getDiscName(q.disciplineId)}</td>
+                                        <td className="p-4 text-slate-600">{getChapName(q.disciplineId, q.chapterId)}</td>
+                                        <td className="p-4 text-slate-500">{getUnitName(q.disciplineId, q.chapterId, q.unitId)}</td>
+                                        <td className="p-4 text-slate-500">{getTopicName(q.disciplineId, q.chapterId, q.unitId, q.topicId)}</td>
+                                        <td className="p-4">
+                                            <div className="flex justify-end gap-1">
+                                                <Button variant="ghost" onClick={() => setViewingQuestion(q)} title="Visualizar"><Icons.Eye /></Button>
+                                                <Button variant="ghost" onClick={() => handleEdit(q)} title="Editar"><Icons.Edit /></Button>
+                                                <Button variant="ghost" onClick={() => handleDelete(q.id)} className="text-red-500" title="Excluir"><Icons.Trash /></Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
+            </div>
+            
+            {/* MODAL DE CRIAÇÃO / EDIÇÃO */}
+            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={newQ.id ? "Editar Questão" : "Nova Questão"} footer={<Button onClick={handleSave} disabled={!newQ.disciplineId || !newQ.chapterId}>Salvar</Button>}>
+                <div className="space-y-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select label="Disciplina *" value={newQ.disciplineId || ''} onChange={e => setNewQ({...newQ, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}>
+                            <option value="">Selecione...</option>
+                            {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </Select>
+
+                        <Select label="Capítulo *" value={newQ.chapterId || ''} onChange={e => setNewQ({...newQ, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!newQ.disciplineId}>
+                            <option value="">Selecione...</option>
+                            {selectedDiscipline?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </Select>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select label="Unidade (Opcional)" value={newQ.unitId || ''} onChange={e => setNewQ({...newQ, unitId: e.target.value, topicId: ''})} disabled={!newQ.chapterId}>
+                            <option value="">Selecione...</option>
+                            {selectedChapter?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </Select>
+
+                        <Select label="Tópico (Opcional)" value={newQ.topicId || ''} onChange={e => setNewQ({...newQ, topicId: e.target.value})} disabled={!newQ.unitId}>
+                            <option value="">Selecione...</option>
+                            {selectedUnit?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </Select>
+                     </div>
+
+                     <div className="flex gap-4 items-end border-t pt-4">
+                         <div className="flex-1">
+                             <Select label="Tipo de Questão" value={newQ.type} onChange={e => setNewQ({...newQ, type: e.target.value as QuestionType, options: []})}>
+                                 <option value={QuestionType.MULTIPLE_CHOICE}>Múltipla Escolha</option>
+                                 <option value={QuestionType.TRUE_FALSE}>Verdadeiro / Falso</option>
+                                 <option value={QuestionType.SHORT_ANSWER}>Resposta Curta</option>
+                                 <option value={QuestionType.NUMERIC}>Numérica</option>
+                                 <option value={QuestionType.ASSOCIATION}>Associação</option>
+                             </Select>
+                         </div>
+                         <Button variant="secondary" onClick={handleGenerateAI} disabled={isGenerating || !newQ.disciplineId || !newQ.chapterId} className="shrink-0">
+                            <Icons.Sparkles /> {isGenerating ? 'Gerando...' : 'Gerar com IA'}
+                         </Button>
+                     </div>
+                     
+                     {/* ENUNCIADO AGORA CONTÉM A IMAGEM INTEGRADA */}
+                     <RichTextEditor label="Enunciado da Questão (Use o ícone de imagem na barra para inserir)" value={newQ.enunciado || ''} onChange={(html) => setNewQ({...newQ, enunciado: html})} />
+                     
+                     {/* ÁREA DE EDIÇÃO MANUAL DE RESPOSTAS */}
+                     <div className="bg-slate-50 p-4 rounded border border-slate-200 space-y-3">
+                        <label className="text-xs font-bold text-slate-700 uppercase">Alternativas / Gabarito</label>
+                        
+                        {newQ.type === QuestionType.MULTIPLE_CHOICE && (
+                            <div className="space-y-2">
+                                {(newQ.options || []).map((opt, idx) => (
+                                    <div key={idx} className="flex gap-2 items-center">
+                                        <input type="radio" name="correctOpt" checked={opt.isCorrect} onChange={() => handleSetCorrect(idx)} className="w-4 h-4 text-brand-blue" />
+                                        <Input value={opt.text} onChange={e => handleOptionChange(idx, e.target.value)} placeholder={`Alternativa ${String.fromCharCode(65 + idx)}`} className="flex-1" />
+                                        <button onClick={() => handleRemoveOption(idx)} className="text-red-400 hover:text-red-600 p-2"><Icons.Trash /></button>
+                                    </div>
+                                ))}
+                                <Button variant="outline" onClick={handleAddOption} className="w-full text-xs py-2">+ Adicionar Alternativa</Button>
+                            </div>
+                        )}
+
+                        {newQ.type === QuestionType.TRUE_FALSE && (
+                            <div className="space-y-2">
+                                <div className="flex gap-2 items-center p-2 bg-white border rounded">
+                                    <input type="radio" name="tf" checked={newQ.options?.find(o => o.text === 'Verdadeiro')?.isCorrect} onChange={() => setNewQ({...newQ, options: [{text:'Verdadeiro', isCorrect:true, id:'t'}, {text:'Falso', isCorrect:false, id:'f'}]})} />
+                                    <span>Verdadeiro</span>
+                                </div>
+                                <div className="flex gap-2 items-center p-2 bg-white border rounded">
+                                    <input type="radio" name="tf" checked={newQ.options?.find(o => o.text === 'Falso')?.isCorrect} onChange={() => setNewQ({...newQ, options: [{text:'Verdadeiro', isCorrect:false, id:'t'}, {text:'Falso', isCorrect:true, id:'f'}]})} />
+                                    <span>Falso</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {(newQ.type === QuestionType.SHORT_ANSWER || newQ.type === QuestionType.NUMERIC) && (
+                            <div>
+                                <Input label="Resposta Correta (Gabarito)" value={newQ.options?.[0]?.text || ''} onChange={e => handleAnswerChange(e.target.value)} placeholder={newQ.type === QuestionType.NUMERIC ? "Ex: 42" : "Digite a resposta esperada..."} />
+                            </div>
+                        )}
+
+                        {newQ.type === QuestionType.ASSOCIATION && (
+                             <div className="text-sm text-slate-500 italic text-center p-2">Use a IA para gerar pares de associação complexos ou implemente a edição manual futura.</div>
+                        )}
+                     </div>
+                </div>
+            </Modal>
+
+            {/* MODAL DE VISUALIZAÇÃO */}
+            <Modal isOpen={!!viewingQuestion} onClose={() => setViewingQuestion(null)} title="Detalhes da Questão" footer={<Button onClick={() => setViewingQuestion(null)}>Fechar</Button>}>
+                {viewingQuestion && (
+                    <div className="space-y-6">
+                        <div className="flex flex-wrap gap-2 text-xs">
+                            <Badge>{QuestionTypeLabels[viewingQuestion.type]}</Badge>
+                            <Badge color="yellow">{viewingQuestion.difficulty}</Badge>
+                            <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{FirebaseService.getFullHierarchyString(viewingQuestion, hierarchy)}</span>
+                        </div>
+                        
+                        <div className="prose prose-sm max-w-none bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            {/* A imagem já faz parte do HTML do enunciado agora */}
+                            <div dangerouslySetInnerHTML={{ __html: viewingQuestion.enunciado }} />
+                        </div>
+
+                        {viewingQuestion.options && viewingQuestion.options.length > 0 && (
+                            <div>
+                                <h4 className="font-bold text-sm text-slate-700 mb-2">Alternativas / Gabarito</h4>
+                                <ul className="space-y-2">
+                                    {viewingQuestion.options.map((opt, idx) => (
+                                        <li key={idx} className={`p-3 rounded border flex gap-3 items-start ${opt.isCorrect ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-slate-100'}`}>
+                                            <span className="font-bold shrink-0">{String.fromCharCode(65 + idx)})</span>
+                                            <span>{opt.text}</span>
+                                            {opt.isCorrect && <span className="ml-auto text-xs font-bold bg-green-200 text-green-800 px-2 py-0.5 rounded-full">Correta</span>}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                )}
             </Modal>
         </div>
     );
 };
 
-// EXAM GENERATOR
-const ExamGenerator = () => {
-    const [step, setStep] = useState(1);
-    const [questions, setQuestions] = useState<Question[]>([]);
-    useEffect(() => { FirebaseService.getQuestions().then(setQuestions); }, []);
-    
+const NavLink = ({ to, icon, label }: { to: string, icon: React.ReactNode, label: string }) => {
+    const location = useLocation();
+    const active = location.pathname === to;
     return (
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-            {step === 1 && (
-                <Card title="Gerar Prova">
-                    <div className="text-center py-10">
-                        <p className="mb-4">Funcionalidade conectada ao banco de questões real.</p>
-                        <Button onClick={() => window.print()}>Simular Impressão</Button>
-                    </div>
-                </Card>
-            )}
-        </div>
-    );
-};
-
-// ADMIN USERS
-const AdminUsers = () => {
-    const [users, setUsers] = useState<User[]>([]);
-    useEffect(() => { FirebaseService.getUsers().then(setUsers); }, []);
-    return (
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-            <Card title="Usuários">
-                {users.map(u => <div key={u.id} className="p-2 border-b">{u.name} ({u.email}) - {u.role}</div>)}
-            </Card>
-        </div>
-    );
-};
-
-const Layout = ({ children }: { children?: React.ReactNode }) => {
-    const { user } = React.useContext(AuthContext);
-
-    return (
-        <div className="flex h-screen bg-slate-50 overflow-hidden">
-            <aside className="w-64 bg-brand-dark text-white hidden md:flex flex-col flex-shrink-0 z-10 no-print">
-                <div className="p-6 border-b border-slate-700">
-                    <h1 className="text-2xl font-display font-bold text-brand-blue">Prova Fácil</h1>
-                    <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">{user?.role}</p>
-                </div>
-                <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
-                    <Link to="/" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Dashboard /> Dashboard</Link>
-                    <Link to="/questions" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Questions /> Questões</Link>
-                    <Link to="/exams" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Exams /> Provas</Link>
-                    {user?.role === UserRole.TEACHER && (
-                        <>
-                            <div className="pt-4 px-4 text-xs font-bold text-slate-500 uppercase">Cadastros</div>
-                            <Link to="/institution" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Building /> Instituição</Link>
-                            <Link to="/classes" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.UsersGroup /> Turmas</Link>
-                            <Link to="/subjects" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.BookOpen /> Conteúdos</Link>
-                        </>
-                    )}
-                    {user?.role === UserRole.ADMIN && <Link to="/users" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Users /> Usuários</Link>}
-                </nav>
-                <div className="p-4 bg-slate-900 shrink-0">
-                    <button onClick={() => FirebaseService.logout()} className="flex items-center gap-3 text-slate-400 hover:text-white w-full"><Icons.Logout /> Sair</button>
-                </div>
-            </aside>
-            {/* Main Area: Simple Flex Container. Pages handle scroll via flex-1 overflow-y-auto */}
-            <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-slate-50 relative">
-                {children}
-            </main>
-        </div>
+        <Link to={to} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${active ? 'bg-blue-50 text-brand-blue' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+            {icon}
+            <span>{label}</span>
+        </Link>
     );
 };
 
@@ -783,8 +872,8 @@ const App = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
                 const userData = await FirebaseService.getCurrentUserData();
                 setUser(userData);
             } else {
@@ -795,30 +884,69 @@ const App = () => {
         return () => unsubscribe();
     }, []);
 
-    if (loading) return <div className="h-screen flex items-center justify-center">Carregando Prova Fácil...</div>;
+    if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500">Carregando...</div>;
+
+    if (!user) return <Login />;
 
     return (
         <AuthContext.Provider value={{ user, loading }}>
             <HashRouter>
-                <Routes>
-                    {!user ? (
-                        <Route path="*" element={<Login />} />
-                    ) : (
-                        <Route path="*" element={
-                            <Layout>
-                                <Routes>
-                                    <Route path="/" element={<Dashboard />} />
-                                    <Route path="/questions" element={<QuestionBank />} />
-                                    <Route path="/exams" element={<ExamGenerator />} />
-                                    <Route path="/institution" element={<InstitutionPage />} />
-                                    <Route path="/classes" element={<ClassesPage />} />
-                                    <Route path="/subjects" element={<HierarchyPage />} />
-                                    <Route path="/users" element={user.role === UserRole.ADMIN ? <AdminUsers /> : <Navigate to="/" />} />
-                                </Routes>
-                            </Layout>
-                        } />
-                    )}
-                </Routes>
+                <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
+                    {/* Sidebar */}
+                    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex">
+                        <div className="p-6 border-b border-slate-100">
+                            <h1 className="text-2xl font-display font-bold text-brand-blue flex items-center gap-2">
+                                <Icons.BookOpen /> Prova Fácil
+                            </h1>
+                        </div>
+                        
+                        <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
+                            <NavLink to="/" icon={<Icons.Dashboard />} label="Dashboard" />
+                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Gestão</div>
+                            <NavLink to="/institutions" icon={<Icons.Building />} label="Instituições" />
+                            <NavLink to="/classes" icon={<Icons.UsersGroup />} label="Turmas" />
+                            <NavLink to="/hierarchy" icon={<Icons.BookOpen />} label="Conteúdos (BNCC)" />
+                            
+                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Avaliações</div>
+                            <NavLink to="/questions" icon={<Icons.Questions />} label="Banco de Questões" />
+                            <NavLink to="/exams" icon={<Icons.Exams />} label="Provas & Exames" />
+                        </nav>
+
+                        <div className="p-4 border-t border-slate-100">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-10 h-10 rounded-full bg-brand-orange text-white flex items-center justify-center font-bold shadow-sm">
+                                    {user.name ? user.name.charAt(0) : 'U'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-slate-900 truncate">{user.name}</p>
+                                    <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                                </div>
+                            </div>
+                            <Button variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => FirebaseService.logout()}>
+                                <Icons.Logout /> Sair
+                            </Button>
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="flex-1 flex flex-col overflow-hidden relative">
+                        {/* Mobile Header */}
+                        <div className="md:hidden h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0">
+                             <h1 className="font-bold text-brand-blue flex items-center gap-2"><Icons.BookOpen /> Prova Fácil</h1>
+                             <Button variant="ghost" onClick={() => FirebaseService.logout()}><Icons.Logout /></Button>
+                        </div>
+
+                        <Routes>
+                            <Route path="/" element={<Dashboard />} />
+                            <Route path="/institutions" element={<InstitutionPage />} />
+                            <Route path="/classes" element={<ClassesPage />} />
+                            <Route path="/hierarchy" element={<HierarchyPage />} />
+                            <Route path="/questions" element={<QuestionBank />} />
+                            <Route path="/exams" element={<div className="p-8 text-center text-slate-500">Módulo de Provas em Desenvolvimento...</div>} />
+                            <Route path="*" element={<Navigate to="/" />} />
+                        </Routes>
+                    </main>
+                </div>
             </HashRouter>
         </AuthContext.Provider>
     );

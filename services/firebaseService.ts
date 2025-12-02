@@ -294,6 +294,16 @@ export const FirebaseService = {
         return { ...q, id: docRef.id };
     },
 
+    updateQuestion: async (q: Question) => {
+        const { id, ...rest } = q;
+        if (!id) throw new Error("ID da questão obrigatório para atualização");
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), rest);
+    },
+
+    deleteQuestion: async (id: string) => {
+        await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id));
+    },
+
     // --- PROVAS ---
     getExams: async () => {
         const snapshot = await getDocs(collection(db, COLLECTIONS.EXAMS));

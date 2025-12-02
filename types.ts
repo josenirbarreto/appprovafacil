@@ -43,6 +43,7 @@ export enum QuestionType {
   MULTIPLE_CHOICE = 'MULTIPLE_CHOICE',
   TRUE_FALSE = 'TRUE_FALSE',
   SHORT_ANSWER = 'SHORT_ANSWER',
+  NUMERIC = 'NUMERIC', // Nova opção
   ASSOCIATION = 'ASSOCIATION' // Column A vs B
 }
 

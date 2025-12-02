@@ -2,7 +2,7 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QuestionType } from "../types";
 
 const getClient = () => {
-    const apiKey = process.env.API_KEY || ''; // In a real app, handle missing key gracefully
+    const apiKey = process.env.API_KEY || ''; 
     return new GoogleGenAI({ apiKey });
 }
 
@@ -22,14 +22,18 @@ export const GeminiService = {
             } else if (type === QuestionType.TRUE_FALSE) {
                 prompt += `Type: True/False statement.`;
             } else if (type === QuestionType.SHORT_ANSWER) {
-                prompt += `Type: Short Answer (provide a suggested answer key).`;
+                prompt += `Type: Short Answer. Provide the expected answer key text.`;
+            } else if (type === QuestionType.NUMERIC) {
+                prompt += `Type: Numeric Problem. The answer must be a number. Provide the correct number as the answer key.`;
+            } else if (type === QuestionType.ASSOCIATION) {
+                prompt += `Type: Association/Matching. Provide pairs to match (e.g. Term A - Definition B).`;
             }
 
             // Define Schema based on type
             const schema: Schema = {
                 type: Type.OBJECT,
                 properties: {
-                    enunciado: { type: Type.STRING, description: "The question text/statement" },
+                    enunciado: { type: Type.STRING, description: "The question text/statement (in Portuguese)" },
                     options: {
                         type: Type.ARRAY,
                         items: {
@@ -50,7 +54,7 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    systemInstruction: "You are an assistant for teachers creating exams. Respond in Portuguese.",
+                    systemInstruction: "You are an assistant for teachers creating exams in Brazil. Respond strictly in Portuguese.",
                     temperature: 0.7
                 }
             });
