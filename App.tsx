@@ -252,7 +252,7 @@ const InstitutionPage = () => {
     );
 };
 
-// GESTÃO DE TURMAS (Mantido igual)
+// GESTÃO DE TURMAS (Com Ordenação)
 const ClassesPage = () => {
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [institutions, setInstitutions] = useState<Institution[]>([]); 
@@ -286,28 +286,42 @@ const ClassesPage = () => {
                 <h2 className="text-3xl font-display font-bold text-brand-dark">Turmas</h2>
                 <Button onClick={() => { setCurrentClass({year: new Date().getFullYear(), institutionId: institutions[0]?.id || ''}); setShowModal(true); }}><Icons.Plus /> Nova Turma</Button>
             </div>
-            {institutions.map(inst => {
-                const instClasses = classes.filter(c => c.institutionId === inst.id);
+            {institutions
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                .map(inst => {
+                const instClasses = classes
+                    .filter(c => c.institutionId === inst.id)
+                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
                 return (
                     <div key={inst.id} className="bg-white rounded-xl shadow-sm border p-6">
-                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Icons.Building /> {inst.name}</h3>
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                            {inst.logoUrl ? (
+                                <img src={inst.logoUrl} alt={inst.name} className="w-8 h-8 object-contain rounded-full border border-slate-200 bg-white" />
+                            ) : (
+                                <div className="p-1.5 bg-slate-100 rounded-full text-slate-500"><Icons.Building /></div>
+                            )}
+                            {inst.name}
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {instClasses.map(c => (
-                                <div key={c.id} className="border p-4 rounded flex justify-between items-center">
-                                    <div><p className="font-bold">{c.name}</p><p className="text-xs">{c.year}</p></div>
+                            {instClasses.length > 0 ? instClasses.map(c => (
+                                <div key={c.id} className="border p-4 rounded flex justify-between items-center bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                                    <div><p className="font-bold">{c.name}</p><p className="text-xs text-slate-500">{c.year}</p></div>
                                     <div className="flex gap-1">
                                         <Button variant="ghost" onClick={() => {setCurrentClass(c); setShowModal(true)}}><Icons.Edit /></Button>
                                         <Button variant="ghost" onClick={() => handleDelete(c.id)} className="text-red-500"><Icons.Trash /></Button>
                                     </div>
                                 </div>
-                            ))}
+                            )) : (
+                                <p className="text-sm text-slate-400 italic">Nenhuma turma cadastrada.</p>
+                            )}
                         </div>
                     </div>
                 );
             })}
              <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Turma" footer={<Button onClick={handleSave}>Salvar</Button>}>
                 <div className="space-y-4">
-                    <Input label="Nome" value={currentClass.name || ''} onChange={e => setCurrentClass({...currentClass, name: e.target.value})} />
+                    <Input label="Nome" value={currentClass.name || ''} onChange={e => setCurrentClass({...currentClass, name: e.target.value})} placeholder="Ex: 3º Ano A" />
                     <Input label="Ano" type="number" value={currentClass.year} onChange={e => setCurrentClass({...currentClass, year: parseInt(e.target.value)})} />
                     <Select label="Instituição" value={currentClass.institutionId} onChange={e => setCurrentClass({...currentClass, institutionId: e.target.value})}>
                         {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
@@ -330,7 +344,9 @@ const StepItem = ({ label, active, onClick, onDelete, onEdit }: any) => (
     >
         <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
             {active && <div className="w-1.5 h-1.5 rounded-full bg-brand-blue flex-shrink-0" />}
-            <span className={`truncate text-sm font-medium ${active ? 'text-brand-blue' : 'text-slate-600'}`}>{label}</span>
+            <div className="flex-1 min-w-0 truncate text-sm font-medium" title={label}>
+                 <span className={`${active ? 'text-brand-blue' : 'text-slate-600'}`}>{label}</span>
+            </div>
         </div>
         <div className="flex opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ml-2 shrink-0">
             <button 
@@ -430,7 +446,7 @@ const StepCard = ({
 
             {!disabled && (
                 <div className="p-3 border-t border-blue-200 bg-blue-50/90 rounded-b-xl shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-auto">
-                    <label className="text-xs font-bold text-brand-blue mb-1 block pl-1">{addLabel}</label>
+                    <label className="text-xs font-bold text-brand-blue mb-1 block pl-1 truncate" title={addLabel}>{addLabel}</label>
                     <div className="flex items-center gap-2">
                         <input 
                             ref={inputRef}
@@ -860,7 +876,7 @@ const NavLink = ({ to, icon, label }: { to: string, icon: React.ReactNode, label
     const location = useLocation();
     const active = location.pathname === to;
     return (
-        <Link to={to} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${active ? 'bg-blue-50 text-brand-blue' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+        <Link to={to} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${active ? 'bg-brand-blue text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
             {icon}
             <span>{label}</span>
         </Link>
@@ -893,36 +909,37 @@ const App = () => {
             <HashRouter>
                 <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
                     {/* Sidebar */}
-                    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex">
-                        <div className="p-6 border-b border-slate-100">
-                            <h1 className="text-2xl font-display font-bold text-brand-blue flex items-center gap-2">
+                    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col hidden md:flex">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-2xl font-display font-bold text-white flex items-center gap-2">
                                 <Icons.BookOpen /> Prova Fácil
                             </h1>
+                            <span className="text-xs text-slate-500 font-mono mt-1 block">TEACHER PANEL</span>
                         </div>
                         
                         <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
                             <NavLink to="/" icon={<Icons.Dashboard />} label="Dashboard" />
-                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Gestão</div>
+                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Gestão</div>
                             <NavLink to="/institutions" icon={<Icons.Building />} label="Instituições" />
                             <NavLink to="/classes" icon={<Icons.UsersGroup />} label="Turmas" />
                             <NavLink to="/hierarchy" icon={<Icons.BookOpen />} label="Conteúdos (BNCC)" />
                             
-                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Avaliações</div>
+                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Avaliações</div>
                             <NavLink to="/questions" icon={<Icons.Questions />} label="Banco de Questões" />
                             <NavLink to="/exams" icon={<Icons.Exams />} label="Provas & Exames" />
                         </nav>
 
-                        <div className="p-4 border-t border-slate-100">
+                        <div className="p-4 border-t border-slate-800">
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-brand-orange text-white flex items-center justify-center font-bold shadow-sm">
                                     {user.name ? user.name.charAt(0) : 'U'}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-slate-900 truncate">{user.name}</p>
+                                    <p className="text-sm font-bold text-white truncate">{user.name}</p>
                                     <p className="text-xs text-slate-500 truncate">{user.email}</p>
                                 </div>
                             </div>
-                            <Button variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => FirebaseService.logout()}>
+                            <Button variant="ghost" className="w-full justify-start text-red-400 hover:bg-slate-800 hover:text-red-300" onClick={() => FirebaseService.logout()}>
                                 <Icons.Logout /> Sair
                             </Button>
                         </div>
@@ -931,9 +948,9 @@ const App = () => {
                     {/* Main Content */}
                     <main className="flex-1 flex flex-col overflow-hidden relative">
                         {/* Mobile Header */}
-                        <div className="md:hidden h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0">
-                             <h1 className="font-bold text-brand-blue flex items-center gap-2"><Icons.BookOpen /> Prova Fácil</h1>
-                             <Button variant="ghost" onClick={() => FirebaseService.logout()}><Icons.Logout /></Button>
+                        <div className="md:hidden h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shrink-0 text-white">
+                             <h1 className="font-bold flex items-center gap-2"><Icons.BookOpen /> Prova Fácil</h1>
+                             <Button variant="ghost" onClick={() => FirebaseService.logout()} className="text-white hover:bg-slate-800"><Icons.Logout /></Button>
                         </div>
 
                         <Routes>
