@@ -115,7 +115,7 @@ const Dashboard = () => {
   }, [user]);
 
   return (
-    <div className="h-full overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
+    <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
       <h2 className="text-3xl font-display font-bold text-brand-dark">Olá, {user?.name}</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -207,7 +207,7 @@ const InstitutionPage = () => {
     };
 
     return (
-        <div className="h-full overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-display font-bold text-brand-dark">Minhas Instituições</h2>
                 <Button onClick={handleCreateNew}><Icons.Plus /> Nova Instituição</Button>
@@ -271,7 +271,7 @@ const ClassesPage = () => {
     }
 
     return (
-        <div className="h-full overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-display font-bold text-brand-dark">Turmas</h2>
                 <Button onClick={() => { setCurrentClass({year: new Date().getFullYear(), institutionId: institutions[0]?.id || ''}); setShowModal(true); }}><Icons.Plus /> Nova Turma</Button>
@@ -367,7 +367,7 @@ const StepCard = ({
         : `Nova ${singularName}`;
 
     return (
-        <div className={`flex flex-col h-[500px] md:h-full rounded-xl border transition-all duration-300 ${disabled ? 'opacity-50 grayscale bg-slate-100 border-slate-200' : 'bg-white border-slate-200 shadow-lg'}`}>
+        <div className={`flex flex-col h-[500px] md:h-full rounded-xl border transition-all duration-300 overflow-hidden ${disabled ? 'opacity-50 grayscale bg-slate-100 border-slate-200' : 'bg-white border-slate-200 shadow-lg'}`}>
             <div className={`p-4 border-b ${disabled ? 'border-slate-200' : 'border-slate-100 bg-slate-50'} flex flex-col gap-3 shrink-0`}>
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
@@ -403,7 +403,7 @@ const StepCard = ({
                 )}
             </div>
             
-            <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1 relative min-h-0">
+            <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1 relative min-h-0 bg-white">
                 {disabled ? (
                      <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-4">
                         <Icons.ArrowLeft />
@@ -419,7 +419,7 @@ const StepCard = ({
             </div>
 
             {!disabled && (
-                <div className="p-3 border-t border-blue-200 bg-blue-50/90 rounded-b-xl mt-auto shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                <div className="p-3 border-t border-blue-200 bg-blue-50/90 rounded-b-xl shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-auto">
                     <label className="text-xs font-bold text-brand-blue mb-1 block pl-1">{addLabel}</label>
                     <div className="flex gap-2">
                         <input 
@@ -522,7 +522,7 @@ const HierarchyPage = () => {
     };
 
     return (
-        <div className="flex flex-col h-full p-6 md:overflow-hidden overflow-y-auto custom-scrollbar space-y-4">
+        <div className="flex flex-col h-full p-6 space-y-4">
             <div className="flex justify-between items-end shrink-0">
                 <div>
                     <h2 className="text-3xl font-display font-bold text-brand-dark">Conteúdos</h2>
@@ -533,7 +533,8 @@ const HierarchyPage = () => {
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:flex-1 md:min-h-0 shrink-0 md:shrink">
+            {/* O Grid precisa ser flex-1 e ter min-h-0 para respeitar o limite do pai e forçar scroll interno nos cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 min-h-0">
                 
                 {/* PASSO 1: DISCIPLINA */}
                 <StepCard 
@@ -684,7 +685,7 @@ const QuestionBank = () => {
     }
 
     return (
-        <div className="h-full overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
             <div className="flex justify-between"><h2 className="text-3xl font-bold">Questões</h2><Button onClick={() => setShowModal(true)}>Nova</Button></div>
             <div className="grid gap-4">
                 {questions.map(q => (
@@ -715,7 +716,7 @@ const ExamGenerator = () => {
     useEffect(() => { FirebaseService.getQuestions().then(setQuestions); }, []);
     
     return (
-        <div className="h-full overflow-y-auto p-6 md:p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
             {step === 1 && (
                 <Card title="Gerar Prova">
                     <div className="text-center py-10">
@@ -733,7 +734,7 @@ const AdminUsers = () => {
     const [users, setUsers] = useState<User[]>([]);
     useEffect(() => { FirebaseService.getUsers().then(setUsers); }, []);
     return (
-        <div className="h-full overflow-y-auto p-6 md:p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
             <Card title="Usuários">
                 {users.map(u => <div key={u.id} className="p-2 border-b">{u.name} ({u.email}) - {u.role}</div>)}
             </Card>
@@ -769,15 +770,9 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                     <button onClick={() => FirebaseService.logout()} className="flex items-center gap-3 text-slate-400 hover:text-white w-full"><Icons.Logout /> Sair</button>
                 </div>
             </aside>
+            {/* Main Area: Simple Flex Container. Pages handle scroll via flex-1 overflow-y-auto */}
             <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-slate-50 relative">
-                {/* 
-                    O Layout Principal agora é apenas um container fixo.
-                    Cada página filha (Hierarchy, Dashboard) gerencia seu próprio scroll.
-                    Isso resolve o conflito entre páginas de altura fixa (Miller Columns) e páginas longas.
-                */}
-                <div className="flex-1 h-full flex flex-col overflow-hidden relative">
-                    {children}
-                </div>
+                {children}
             </main>
         </div>
     );
