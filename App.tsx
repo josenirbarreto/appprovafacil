@@ -403,7 +403,7 @@ const StepCard = ({
                 )}
             </div>
             
-            <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1 relative">
+            <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1 relative min-h-0">
                 {disabled ? (
                      <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-4">
                         <Icons.ArrowLeft />
@@ -419,7 +419,7 @@ const StepCard = ({
             </div>
 
             {!disabled && (
-                <div className="p-3 border-t border-blue-100 bg-blue-50/50 rounded-b-xl mt-auto shrink-0 z-10">
+                <div className="p-3 border-t border-blue-200 bg-blue-50/90 rounded-b-xl mt-auto shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <label className="text-xs font-bold text-brand-blue mb-1 block pl-1">{addLabel}</label>
                     <div className="flex gap-2">
                         <input 
@@ -522,7 +522,7 @@ const HierarchyPage = () => {
     };
 
     return (
-        <div className="space-y-6 flex flex-col h-[calc(100vh-6rem)]">
+        <div className="flex flex-col h-full space-y-4">
             <div className="flex justify-between items-end shrink-0">
                 <div>
                     <h2 className="text-3xl font-display font-bold text-brand-dark">Conteúdos</h2>
@@ -742,15 +742,19 @@ const AdminUsers = () => {
 const Layout = ({ children }: { children?: React.ReactNode }) => {
     const { user } = React.useContext(AuthContext);
     const location = useLocation();
+    
+    // Determina se a página atual precisa de altura fixa (sem scroll na janela principal)
+    // A página de hierarquia (/subjects) precisa controlar seu próprio scroll interno.
+    const isFixedPage = location.pathname === '/subjects';
 
     return (
-        <div className="flex min-h-screen bg-slate-50">
-            <aside className="w-64 bg-brand-dark text-white hidden md:flex flex-col fixed h-full z-10 no-print">
+        <div className="flex h-screen bg-slate-50 overflow-hidden">
+            <aside className="w-64 bg-brand-dark text-white hidden md:flex flex-col flex-shrink-0 z-10 no-print">
                 <div className="p-6 border-b border-slate-700">
                     <h1 className="text-2xl font-display font-bold text-brand-blue">Prova Fácil</h1>
                     <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">{user?.role}</p>
                 </div>
-                <nav className="flex-1 p-4 space-y-1">
+                <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
                     <Link to="/" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Dashboard /> Dashboard</Link>
                     <Link to="/questions" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Questions /> Questões</Link>
                     <Link to="/exams" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Exams /> Provas</Link>
@@ -764,11 +768,20 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                     )}
                     {user?.role === UserRole.ADMIN && <Link to="/users" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white"><Icons.Users /> Usuários</Link>}
                 </nav>
-                <div className="p-4 bg-slate-900">
+                <div className="p-4 bg-slate-900 shrink-0">
                     <button onClick={() => FirebaseService.logout()} className="flex items-center gap-3 text-slate-400 hover:text-white w-full"><Icons.Logout /> Sair</button>
                 </div>
             </aside>
-            <main className="flex-1 md:ml-64 p-8 print:ml-0 print:p-0">{children}</main>
+            <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-slate-50 relative">
+                {/* 
+                    Se for Fixed Page (Conteúdos), removemos o scroll global e o padding padrão 
+                    para que o componente gerencie seu próprio layout (Grid + Scroll Interno).
+                    Se for página normal, adicionamos o container de scroll e padding.
+                */}
+                <div className={`flex-1 h-full flex flex-col ${isFixedPage ? 'overflow-hidden p-6' : 'overflow-y-auto p-8'}`}>
+                    {children}
+                </div>
+            </main>
         </div>
     );
 };
