@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { User, UserRole, Question, Exam, Discipline, QuestionType, Institution, SchoolClass, Chapter, Unit } from './types';
 import { FirebaseService } from './services/firebaseService';
 import { Button, Card, Badge, Input, Select, Modal, RichTextEditor } from './components/UI';
 import { GeminiService } from './services/geminiService';
+import { PdfService } from './services/pdfService';
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -27,7 +28,9 @@ const Icons = {
   ArrowRight: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>,
   Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
   Eye: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
-  ChevronDown: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+  ChevronDown: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
+  Pdf: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>,
+  Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
 };
 
 // Traduções dos Tipos de Questão
@@ -253,13 +256,12 @@ const InstitutionPage = () => {
     );
 };
 
-// GESTÃO DE TURMAS (Com Ordenação por Ano e Instituição e Accordion)
+// GESTÃO DE TURMAS
 const ClassesPage = () => {
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [institutions, setInstitutions] = useState<Institution[]>([]); 
     const [showModal, setShowModal] = useState(false);
     const [currentClass, setCurrentClass] = useState<Partial<SchoolClass>>({ year: new Date().getFullYear(), institutionId: '' });
-    // Estado para controlar quais instituições estão expandidas (Acordeão)
     const [expandedInsts, setExpandedInsts] = useState<Record<string, boolean>>({});
 
     useEffect(() => { loadData(); }, []);
@@ -297,14 +299,11 @@ const ClassesPage = () => {
                 .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
                 .map(inst => {
                 const instClasses = classes.filter(c => c.institutionId === inst.id);
-                // Extrai os anos únicos presentes nas turmas desta instituição e ordena decrescente
                 const years = Array.from(new Set(instClasses.map(c => c.year))).sort((a: number, b: number) => b - a);
-                // Verifica se está expandido (padrão true se undefined)
                 const isExpanded = expandedInsts[inst.id] !== false;
 
                 return (
                     <div key={inst.id} className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                        {/* Accordion Header */}
                         <div 
                             onClick={() => toggleAccordion(inst.id)}
                             className="p-6 cursor-pointer hover:bg-slate-50 transition-colors flex justify-between items-center select-none"
@@ -325,7 +324,6 @@ const ClassesPage = () => {
                             </div>
                         </div>
                         
-                        {/* Accordion Content */}
                         {isExpanded && (
                             <div className="px-6 pb-6 border-t border-slate-100 animate-fade-in pt-4">
                                 {instClasses.length > 0 ? (
@@ -374,7 +372,7 @@ const ClassesPage = () => {
     );
 };
 
-// --- COMPONENTES DE HIERARQUIA (Mantidos iguais) ---
+// --- COMPONENTES DE HIERARQUIA ---
 const StepItem = ({ label, active, onClick, onDelete, onEdit }: any) => (
     <div 
         onClick={onClick} 
@@ -513,7 +511,7 @@ const StepCard = ({
     );
 };
 
-// PÁGINA DE HIERARQUIA (Mantido igual)
+// PÁGINA DE HIERARQUIA
 const HierarchyPage = () => {
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     const [selDisc, setSelDisc] = useState<Discipline | null>(null);
@@ -628,6 +626,19 @@ const QuestionBank = () => {
     const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
     const [newQ, setNewQ] = useState<Partial<Question>>({ type: QuestionType.MULTIPLE_CHOICE, options: [] });
     const [isGenerating, setIsGenerating] = useState(false);
+    
+    // Tabela Avançada
+    const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+
+    // Importação de PDF
+    const [showPdfModal, setShowPdfModal] = useState(false);
+    const [pdfContext, setPdfContext] = useState({ disciplineId: '', chapterId: '', unitId: '', topicId: '' });
+    const [isProcessingPdf, setIsProcessingPdf] = useState(false);
+    const [extractedQuestions, setExtractedQuestions] = useState<Partial<Question>[]>([]);
+    const pdfInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => { load(); }, []);
     const load = async () => {
@@ -635,88 +646,113 @@ const QuestionBank = () => {
         setHierarchy(await FirebaseService.getHierarchy());
     };
 
-    const handleSave = async () => {
-        if (!newQ.disciplineId || !newQ.chapterId) {
-            alert('Disciplina e Capítulo são obrigatórios.');
-            return;
-        }
-        
-        const qData = {
-            ...newQ,
-            createdAt: newQ.createdAt || new Date().toISOString(),
-            difficulty: newQ.difficulty || 'Medium',
-            options: newQ.options || [],
-            pairs: newQ.pairs || []
-        } as Question;
+    // Helper functions for names
+    const getDiscName = (id: string) => hierarchy.find(d => d.id === id)?.name || '-';
+    const getChapName = (dId: string, cId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.name || '-';
+    const getUnitName = (dId: string, cId: string, uId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.units.find(u => u.id === uId)?.name || '-';
+    const getTopicName = (dId: string, cId: string, uId: string, tId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.units.find(u => u.id === uId)?.topics.find(t => t.id === tId)?.name || '-';
+    const stripHtml = (html: string) => { const tmp = document.createElement("DIV"); tmp.innerHTML = html || ''; return tmp.textContent || tmp.innerText || ""; };
 
-        if (newQ.id) {
-            await FirebaseService.updateQuestion(qData);
-        } else {
-            await FirebaseService.addQuestion(qData);
+    // 1. Process Data
+    const processedQuestions = useMemo(() => {
+        return questions.map(q => ({
+            ...q,
+            plainEnunciado: stripHtml(q.enunciado),
+            disciplineName: getDiscName(q.disciplineId),
+            chapterName: getChapName(q.disciplineId, q.chapterId),
+            unitName: getUnitName(q.disciplineId, q.chapterId, q.unitId),
+            topicName: getTopicName(q.disciplineId, q.chapterId, q.unitId, q.topicId),
+            typeName: QuestionTypeLabels[q.type]
+        }));
+    }, [questions, hierarchy]);
+
+    // 2. Filter & Sort
+    const filteredAndSortedQuestions = useMemo(() => {
+        let result = processedQuestions;
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            result = result.filter(q => 
+                q.plainEnunciado.toLowerCase().includes(lowerTerm) ||
+                q.disciplineName.toLowerCase().includes(lowerTerm) ||
+                q.chapterName.toLowerCase().includes(lowerTerm) ||
+                q.unitName.toLowerCase().includes(lowerTerm) ||
+                q.topicName.toLowerCase().includes(lowerTerm) ||
+                q.typeName.toLowerCase().includes(lowerTerm)
+            );
         }
-        
+        if (sortConfig) {
+            result.sort((a: any, b: any) => {
+                if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return result;
+    }, [processedQuestions, searchTerm, sortConfig]);
+
+    // 3. Pagination
+    const totalItems = filteredAndSortedQuestions.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedQuestions = filteredAndSortedQuestions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    useEffect(() => { setCurrentPage(1); }, [searchTerm, itemsPerPage]);
+
+    const handleSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+        setSortConfig({ key, direction });
+    };
+    const getSortIcon = (key: string) => {
+        if (sortConfig?.key !== key) return <span className="text-slate-300 ml-1">⇅</span>;
+        return sortConfig.direction === 'asc' ? <span className="ml-1 text-brand-blue">▲</span> : <span className="ml-1 text-brand-blue">▼</span>;
+    };
+
+    const PaginationControls = () => (
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50 p-4 border-t border-slate-200 text-sm">
+            <div className="flex items-center gap-2">
+                <span className="text-slate-600">Mostrar</span>
+                <select value={itemsPerPage} onChange={e => setItemsPerPage(Number(e.target.value))} className="border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-brand-blue">
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                </select>
+                <span className="text-slate-600">por página</span>
+            </div>
+            <div className="flex items-center gap-4">
+                <span className="text-slate-600">{totalItems === 0 ? '0' : (currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems}</span>
+                <div className="flex gap-1">
+                    <Button variant="outline" className="px-2 py-1 h-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>{'<'}</Button>
+                    <span className="flex items-center px-3 font-medium bg-white border rounded">{currentPage} / {totalPages || 1}</span>
+                    <Button variant="outline" className="px-2 py-1 h-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>{'>'}</Button>
+                </div>
+            </div>
+        </div>
+    );
+
+    const handleSave = async () => {
+        if (!newQ.disciplineId || !newQ.chapterId) { alert('Disciplina e Capítulo são obrigatórios.'); return; }
+        const qData = { ...newQ, createdAt: newQ.createdAt || new Date().toISOString(), difficulty: newQ.difficulty || 'Medium', options: newQ.options || [], pairs: newQ.pairs || [] } as Question;
+        if (newQ.id) await FirebaseService.updateQuestion(qData);
+        else await FirebaseService.addQuestion(qData);
         setShowModal(false);
         load();
     }
-
-    const handleDelete = async (id: string) => {
-        if (confirm('Tem certeza que deseja excluir esta questão?')) {
-            await FirebaseService.deleteQuestion(id);
-            load();
-        }
-    };
-
-    const handleEdit = (q: Question) => {
-        setNewQ({ ...q });
-        setShowModal(true);
-    };
-
+    const handleDelete = async (id: string) => { if (confirm('Tem certeza que deseja excluir esta questão?')) { await FirebaseService.deleteQuestion(id); load(); } };
+    const handleEdit = (q: Question) => { setNewQ({ ...q }); setShowModal(true); };
     const handleGenerateAI = async () => {
-        if (!newQ.disciplineId || !newQ.chapterId) {
-            alert('Selecione Disciplina e Capítulo para dar contexto à IA.');
-            return;
-        }
-
+        if (!newQ.disciplineId || !newQ.chapterId) { alert('Selecione Disciplina e Capítulo para dar contexto à IA.'); return; }
         setIsGenerating(true);
         const contextString = getContextString();
         const res = await GeminiService.generateQuestion(contextString, newQ.type || QuestionType.MULTIPLE_CHOICE, 'Medium');
         if(res) setNewQ(prev => ({...prev, ...res}));
         setIsGenerating(false);
     }
-
-    // --- Helpers for Manual Option Editing ---
-    const handleAddOption = () => {
-        setNewQ(prev => ({
-            ...prev,
-            options: [...(prev.options || []), { id: Date.now().toString(), text: '', isCorrect: false }]
-        }));
-    };
-
-    const handleOptionChange = (idx: number, text: string) => {
-        const newOpts = [...(newQ.options || [])];
-        newOpts[idx].text = text;
-        setNewQ({ ...newQ, options: newOpts });
-    };
-
-    const handleSetCorrect = (idx: number) => {
-        const newOpts = (newQ.options || []).map((o, i) => ({ ...o, isCorrect: i === idx }));
-        setNewQ({ ...newQ, options: newOpts });
-    };
-
-    const handleRemoveOption = (idx: number) => {
-        const newOpts = [...(newQ.options || [])];
-        newOpts.splice(idx, 1);
-        setNewQ({ ...newQ, options: newOpts });
-    };
-
-    const handleAnswerChange = (text: string) => {
-        // For Short/Numeric, we treat options[0] as the correct answer
-        setNewQ(prev => ({
-            ...prev,
-            options: [{ id: 'ans', text: text, isCorrect: true }]
-        }));
-    };
-
+    const handleAddOption = () => { setNewQ(prev => ({ ...prev, options: [...(prev.options || []), { id: Date.now().toString(), text: '', isCorrect: false }] })); };
+    const handleOptionChange = (idx: number, text: string) => { const newOpts = [...(newQ.options || [])]; newOpts[idx].text = text; setNewQ({ ...newQ, options: newOpts }); };
+    const handleSetCorrect = (idx: number) => { const newOpts = (newQ.options || []).map((o, i) => ({ ...o, isCorrect: i === idx })); setNewQ({ ...newQ, options: newOpts }); };
+    const handleRemoveOption = (idx: number) => { const newOpts = [...(newQ.options || [])]; newOpts.splice(idx, 1); setNewQ({ ...newQ, options: newOpts }); };
+    const handleAnswerChange = (text: string) => { setNewQ(prev => ({ ...prev, options: [{ id: 'ans', text: text, isCorrect: true }] })); };
+    
     const getContextString = () => {
         const disc = hierarchy.find(d => d.id === newQ.disciplineId);
         const chap = disc?.chapters.find(c => c.id === newQ.chapterId);
@@ -728,69 +764,166 @@ const QuestionBank = () => {
         if (topic) ctx += ` > ${topic.name}`;
         return ctx;
     }
-
-    const getDiscName = (id: string) => hierarchy.find(d => d.id === id)?.name || '-';
-    const getChapName = (dId: string, cId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.name || '-';
-    const getUnitName = (dId: string, cId: string, uId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.units.find(u => u.id === uId)?.name || '-';
-    const getTopicName = (dId: string, cId: string, uId: string, tId: string) => hierarchy.find(d => d.id === dId)?.chapters.find(c => c.id === cId)?.units.find(u => u.id === uId)?.topics.find(t => t.id === tId)?.name || '-';
     const selectedDiscipline = hierarchy.find(d => d.id === newQ.disciplineId);
     const selectedChapter = selectedDiscipline?.chapters.find(c => c.id === newQ.chapterId);
     const selectedUnit = selectedChapter?.units.find(u => u.id === newQ.unitId);
-    const stripHtml = (html: string) => { const tmp = document.createElement("DIV"); tmp.innerHTML = html || ''; return tmp.textContent || tmp.innerText || ""; }
+
+    // --- PDF IMPORT LOGIC ---
+    const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!pdfContext.disciplineId || !pdfContext.chapterId) { alert("Selecione Disciplina e Capítulo antes de enviar o arquivo."); return; }
+
+        setIsProcessingPdf(true);
+        try {
+            // 1. Extract Text
+            const text = await PdfService.extractText(file);
+            // 2. Parse with AI
+            const parsedQuestions = await GeminiService.parseQuestionsFromText(text);
+            
+            setExtractedQuestions(parsedQuestions);
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao processar PDF. Verifique se o arquivo é válido.");
+        } finally {
+            setIsProcessingPdf(false);
+            if (pdfInputRef.current) pdfInputRef.current.value = '';
+        }
+    };
+
+    const handleSaveImport = async () => {
+        if(extractedQuestions.length === 0) return;
+        setIsProcessingPdf(true);
+        try {
+            for (const q of extractedQuestions) {
+                const finalQ = {
+                    ...q,
+                    disciplineId: pdfContext.disciplineId,
+                    chapterId: pdfContext.chapterId,
+                    unitId: pdfContext.unitId,
+                    topicId: pdfContext.topicId,
+                    createdAt: new Date().toISOString()
+                } as Question;
+                await FirebaseService.addQuestion(finalQ);
+            }
+            alert(`${extractedQuestions.length} questões importadas com sucesso!`);
+            setShowPdfModal(false);
+            setExtractedQuestions([]);
+            load();
+        } catch(e) {
+            alert("Erro ao salvar questões.");
+        } finally {
+            setIsProcessingPdf(false);
+        }
+    };
+
+    const removeExtractedQuestion = (idx: number) => {
+        setExtractedQuestions(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const updateExtractedQuestion = (idx: number, updates: Partial<Question>) => {
+        setExtractedQuestions(prev => {
+            const newState = [...prev];
+            newState[idx] = { ...newState[idx], ...updates };
+            return newState;
+        });
+    };
+
+    const handleExtractedOptionChange = (qIdx: number, optIdx: number, text: string) => {
+        setExtractedQuestions(prev => {
+            const newState = [...prev];
+            if(newState[qIdx].options) {
+                newState[qIdx].options![optIdx].text = text;
+            }
+            return newState;
+        });
+    };
+
+    const handleExtractedCorrectOption = (qIdx: number, optIdx: number) => {
+        setExtractedQuestions(prev => {
+             const newState = [...prev];
+             if(newState[qIdx].options) {
+                 newState[qIdx].options = newState[qIdx].options!.map((o, i) => ({...o, isCorrect: i === optIdx}));
+             }
+             return newState;
+        });
+    };
+
+    const removeExtractedOption = (qIdx: number, optIdx: number) => {
+         setExtractedQuestions(prev => {
+            const newState = [...prev];
+            if(newState[qIdx].options) {
+                newState[qIdx].options!.splice(optIdx, 1);
+            }
+            return newState;
+         });
+    };
+    
+    const addExtractedOption = (qIdx: number) => {
+        setExtractedQuestions(prev => {
+            const newState = [...prev];
+            if (!newState[qIdx].options) newState[qIdx].options = [];
+            newState[qIdx].options!.push({ id: Date.now().toString(), text: '', isCorrect: false });
+            return newState;
+        });
+    };
+
+    const pdfSelectedDiscipline = hierarchy.find(d => d.id === pdfContext.disciplineId);
+    const pdfSelectedChapter = pdfSelectedDiscipline?.chapters.find(c => c.id === pdfContext.chapterId);
+    const pdfSelectedUnit = pdfSelectedChapter?.units.find(u => u.id === pdfContext.unitId);
 
     return (
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <h2 className="text-3xl font-display font-bold text-brand-dark">Banco de Questões</h2>
-                <Button onClick={() => { setNewQ({ type: QuestionType.MULTIPLE_CHOICE, options: [] }); setShowModal(true); }}><Icons.Plus /> Nova Questão</Button>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64">
+                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Icons.Search /></div>
+                         <input type="text" placeholder="Buscar questão..." className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    </div>
+                    <Button variant="secondary" onClick={() => setShowPdfModal(true)} className="whitespace-nowrap"><Icons.Pdf /> Converter PDF</Button>
+                    <Button onClick={() => { setNewQ({ type: QuestionType.MULTIPLE_CHOICE, options: [] }); setShowModal(true); }} className="whitespace-nowrap"><Icons.Plus /> Nova Questão</Button>
+                </div>
             </div>
             
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <PaginationControls />
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                <th className="p-4 w-1/3">Enunciado</th>
-                                <th className="p-4">Tipo</th>
-                                <th className="p-4">Disciplina</th>
-                                <th className="p-4">Capítulo</th>
-                                <th className="p-4">Unidade</th>
-                                <th className="p-4">Tópico</th>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none">
+                                <th onClick={() => handleSort('plainEnunciado')} className="p-4 w-1/3 cursor-pointer hover:bg-slate-100 transition-colors">Enunciado {getSortIcon('plainEnunciado')}</th>
+                                <th onClick={() => handleSort('typeName')} className="p-4 text-center cursor-pointer hover:bg-slate-100 transition-colors">Tipo {getSortIcon('typeName')}</th>
+                                <th onClick={() => handleSort('disciplineName')} className="p-4 cursor-pointer hover:bg-slate-100 transition-colors">Disciplina {getSortIcon('disciplineName')}</th>
+                                <th onClick={() => handleSort('chapterName')} className="p-4 cursor-pointer hover:bg-slate-100 transition-colors">Capítulo {getSortIcon('chapterName')}</th>
+                                <th onClick={() => handleSort('unitName')} className="p-4 cursor-pointer hover:bg-slate-100 transition-colors">Unidade {getSortIcon('unitName')}</th>
+                                <th onClick={() => handleSort('topicName')} className="p-4 cursor-pointer hover:bg-slate-100 transition-colors">Tópico {getSortIcon('topicName')}</th>
                                 <th className="p-4 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm">
-                            {questions.length === 0 ? (
-                                <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhuma questão cadastrada.</td></tr>
+                            {paginatedQuestions.length === 0 ? (
+                                <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhuma questão encontrada.</td></tr>
                             ) : (
-                                questions.map(q => (
+                                paginatedQuestions.map(q => (
                                     <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-4">
-                                            <div className="line-clamp-2 text-slate-700 font-medium" title={stripHtml(q.enunciado)}>
-                                                {stripHtml(q.enunciado)}
-                                            </div>
-                                        </td>
-                                        <td className="p-4"><Badge color="blue">{QuestionTypeLabels[q.type]}</Badge></td>
-                                        <td className="p-4 text-slate-600">{getDiscName(q.disciplineId)}</td>
-                                        <td className="p-4 text-slate-600">{getChapName(q.disciplineId, q.chapterId)}</td>
-                                        <td className="p-4 text-slate-500">{getUnitName(q.disciplineId, q.chapterId, q.unitId)}</td>
-                                        <td className="p-4 text-slate-500">{getTopicName(q.disciplineId, q.chapterId, q.unitId, q.topicId)}</td>
-                                        <td className="p-4">
-                                            <div className="flex justify-end gap-1">
-                                                <Button variant="ghost" onClick={() => setViewingQuestion(q)} title="Visualizar"><Icons.Eye /></Button>
-                                                <Button variant="ghost" onClick={() => handleEdit(q)} title="Editar"><Icons.Edit /></Button>
-                                                <Button variant="ghost" onClick={() => handleDelete(q.id)} className="text-red-500" title="Excluir"><Icons.Trash /></Button>
-                                            </div>
-                                        </td>
+                                        <td className="p-4"><div className="line-clamp-2 text-slate-700 font-medium" title={q.plainEnunciado}>{q.plainEnunciado}</div></td>
+                                        <td className="p-4 text-center"><Badge color="blue">{q.typeName}</Badge></td>
+                                        <td className="p-4 text-slate-600">{q.disciplineName}</td>
+                                        <td className="p-4 text-slate-600">{q.chapterName}</td>
+                                        <td className="p-4 text-slate-500">{q.unitName}</td>
+                                        <td className="p-4 text-slate-500">{q.topicName}</td>
+                                        <td className="p-4"><div className="flex justify-end gap-1"><Button variant="ghost" onClick={() => setViewingQuestion(q)} title="Visualizar"><Icons.Eye /></Button><Button variant="ghost" onClick={() => handleEdit(q)} title="Editar"><Icons.Edit /></Button><Button variant="ghost" onClick={() => handleDelete(q.id)} className="text-red-500" title="Excluir"><Icons.Trash /></Button></div></td>
                                     </tr>
                                 ))
                             )}
                         </tbody>
                     </table>
                 </div>
+                <PaginationControls />
             </div>
             
-            {/* MODAL DE CRIAÇÃO / EDIÇÃO */}
+            {/* MODAL NOVA QUESTÃO */}
             <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={newQ.id ? "Editar Questão" : "Nova Questão"} footer={<Button onClick={handleSave} disabled={!newQ.disciplineId || !newQ.chapterId}>Salvar</Button>}>
                 <div className="space-y-4">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -798,25 +931,21 @@ const QuestionBank = () => {
                             <option value="">Selecione...</option>
                             {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </Select>
-
                         <Select label="Capítulo *" value={newQ.chapterId || ''} onChange={e => setNewQ({...newQ, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!newQ.disciplineId}>
                             <option value="">Selecione...</option>
                             {selectedDiscipline?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </Select>
                      </div>
-
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Select label="Unidade (Opcional)" value={newQ.unitId || ''} onChange={e => setNewQ({...newQ, unitId: e.target.value, topicId: ''})} disabled={!newQ.chapterId}>
                             <option value="">Selecione...</option>
                             {selectedChapter?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </Select>
-
                         <Select label="Tópico (Opcional)" value={newQ.topicId || ''} onChange={e => setNewQ({...newQ, topicId: e.target.value})} disabled={!newQ.unitId}>
                             <option value="">Selecione...</option>
                             {selectedUnit?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </Select>
                      </div>
-
                      <div className="flex gap-4 items-end border-t pt-4">
                          <div className="flex-1">
                              <Select label="Tipo de Questão" value={newQ.type} onChange={e => setNewQ({...newQ, type: e.target.value as QuestionType, options: []})}>
@@ -827,18 +956,11 @@ const QuestionBank = () => {
                                  <option value={QuestionType.ASSOCIATION}>Associação</option>
                              </Select>
                          </div>
-                         <Button variant="secondary" onClick={handleGenerateAI} disabled={isGenerating || !newQ.disciplineId || !newQ.chapterId} className="shrink-0">
-                            <Icons.Sparkles /> {isGenerating ? 'Gerando...' : 'Gerar com IA'}
-                         </Button>
+                         <Button variant="secondary" onClick={handleGenerateAI} disabled={isGenerating || !newQ.disciplineId || !newQ.chapterId} className="shrink-0"><Icons.Sparkles /> {isGenerating ? 'Gerando...' : 'Gerar com IA'}</Button>
                      </div>
-                     
-                     {/* ENUNCIADO AGORA CONTÉM A IMAGEM INTEGRADA */}
-                     <RichTextEditor label="Enunciado da Questão (Use o ícone de imagem na barra para inserir)" value={newQ.enunciado || ''} onChange={(html) => setNewQ({...newQ, enunciado: html})} />
-                     
-                     {/* ÁREA DE EDIÇÃO MANUAL DE RESPOSTAS */}
+                     <RichTextEditor label="Enunciado da Questão" value={newQ.enunciado || ''} onChange={(html) => setNewQ({...newQ, enunciado: html})} />
                      <div className="bg-slate-50 p-4 rounded border border-slate-200 space-y-3">
                         <label className="text-xs font-bold text-slate-700 uppercase">Alternativas / Gabarito</label>
-                        
                         {newQ.type === QuestionType.MULTIPLE_CHOICE && (
                             <div className="space-y-2">
                                 {(newQ.options || []).map((opt, idx) => (
@@ -851,7 +973,6 @@ const QuestionBank = () => {
                                 <Button variant="outline" onClick={handleAddOption} className="w-full text-xs py-2">+ Adicionar Alternativa</Button>
                             </div>
                         )}
-
                         {newQ.type === QuestionType.TRUE_FALSE && (
                             <div className="space-y-2">
                                 <div className="flex gap-2 items-center p-2 bg-white border rounded">
@@ -864,21 +985,133 @@ const QuestionBank = () => {
                                 </div>
                             </div>
                         )}
-
                         {(newQ.type === QuestionType.SHORT_ANSWER || newQ.type === QuestionType.NUMERIC) && (
                             <div>
                                 <Input label="Resposta Correta (Gabarito)" value={newQ.options?.[0]?.text || ''} onChange={e => handleAnswerChange(e.target.value)} placeholder={newQ.type === QuestionType.NUMERIC ? "Ex: 42" : "Digite a resposta esperada..."} />
                             </div>
                         )}
-
-                        {newQ.type === QuestionType.ASSOCIATION && (
-                             <div className="text-sm text-slate-500 italic text-center p-2">Use a IA para gerar pares de associação complexos ou implemente a edição manual futura.</div>
-                        )}
                      </div>
                 </div>
             </Modal>
 
-            {/* MODAL DE VISUALIZAÇÃO */}
+            {/* MODAL IMPORTAR PDF */}
+            <Modal isOpen={showPdfModal} onClose={() => setShowPdfModal(false)} title="Importar Questões de PDF" footer={
+                <div className="flex gap-2">
+                    <Button variant="ghost" onClick={() => setShowPdfModal(false)}>Cancelar</Button>
+                    <Button onClick={handleSaveImport} disabled={extractedQuestions.length === 0 || isProcessingPdf}>Salvar {extractedQuestions.length} Questões</Button>
+                </div>
+            } maxWidth="max-w-4xl">
+                <div className="space-y-6">
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icons.Pdf /> Como funciona</h4>
+                        <p className="text-sm text-blue-700">A IA irá ler o PDF e tentar identificar as questões automaticamente. Para melhores resultados, selecione a disciplina e o capítulo de destino.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select label="Disciplina de Destino *" value={pdfContext.disciplineId} onChange={e => setPdfContext({...pdfContext, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}>
+                            <option value="">Selecione...</option>
+                            {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </Select>
+                        <Select label="Capítulo de Destino *" value={pdfContext.chapterId} onChange={e => setPdfContext({...pdfContext, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!pdfContext.disciplineId}>
+                            <option value="">Selecione...</option>
+                            {pdfSelectedDiscipline?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </Select>
+                    </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select label="Unidade (Opcional)" value={pdfContext.unitId} onChange={e => setPdfContext({...pdfContext, unitId: e.target.value, topicId: ''})} disabled={!pdfContext.chapterId}>
+                            <option value="">Selecione...</option>
+                            {pdfSelectedChapter?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </Select>
+                        <Select label="Tópico (Opcional)" value={pdfContext.topicId} onChange={e => setPdfContext({...pdfContext, topicId: e.target.value})} disabled={!pdfContext.unitId}>
+                            <option value="">Selecione...</option>
+                            {pdfSelectedUnit?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </Select>
+                    </div>
+
+                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors">
+                        <input type="file" accept="application/pdf" className="hidden" ref={pdfInputRef} onChange={handlePdfUpload} />
+                        <div className="flex flex-col items-center gap-2">
+                             {isProcessingPdf ? (
+                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+                             ) : (
+                                 <Button onClick={() => pdfInputRef.current?.click()} disabled={!pdfContext.chapterId}><Icons.Upload /> Selecionar Arquivo PDF</Button>
+                             )}
+                             <p className="text-xs text-slate-500 mt-2">{isProcessingPdf ? 'Lendo arquivo e processando com IA... isso pode levar alguns segundos.' : 'Selecione o arquivo para iniciar a conversão.'}</p>
+                        </div>
+                    </div>
+
+                    {extractedQuestions.length > 0 && (
+                        <div className="space-y-6">
+                            <h4 className="font-bold text-brand-dark border-b pb-2 flex justify-between">
+                                <span>Questões Encontradas ({extractedQuestions.length})</span>
+                                <span className="text-xs font-normal text-slate-500">Revise e edite as questões antes de salvar.</span>
+                            </h4>
+                            {extractedQuestions.map((q, qIdx) => (
+                                <div key={qIdx} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative group space-y-4">
+                                    <div className="flex justify-between items-start">
+                                        <Badge>{QuestionTypeLabels[q.type!]}</Badge>
+                                        <Button variant="ghost" onClick={() => removeExtractedQuestion(qIdx)} className="text-red-400 hover:text-red-600 hover:bg-red-50 text-xs px-2 py-1 flex gap-1 items-center">
+                                            <Icons.Trash /> Descartar
+                                        </Button>
+                                    </div>
+                                    
+                                    {/* Editor de Enunciado */}
+                                    <RichTextEditor 
+                                        label="Enunciado" 
+                                        value={q.enunciado || ''} 
+                                        onChange={(html) => updateExtractedQuestion(qIdx, { enunciado: html })} 
+                                    />
+
+                                    {/* Editor de Alternativas / Gabarito */}
+                                    <div className="bg-slate-50 p-3 rounded border border-slate-200 space-y-3">
+                                        <label className="text-xs font-bold text-slate-700 uppercase">Alternativas / Gabarito</label>
+                                        
+                                        {q.type === QuestionType.MULTIPLE_CHOICE && (
+                                            <div className="space-y-2">
+                                                {(q.options || []).map((opt, optIdx) => (
+                                                    <div key={optIdx} className="flex gap-2 items-center">
+                                                        <input 
+                                                            type="radio" 
+                                                            name={`correct-${qIdx}`} 
+                                                            checked={opt.isCorrect} 
+                                                            onChange={() => handleExtractedCorrectOption(qIdx, optIdx)} 
+                                                            className="w-4 h-4 text-brand-blue" 
+                                                        />
+                                                        <Input 
+                                                            value={opt.text} 
+                                                            onChange={e => handleExtractedOptionChange(qIdx, optIdx, e.target.value)} 
+                                                            placeholder={`Alternativa ${String.fromCharCode(65 + optIdx)}`} 
+                                                            className="flex-1" 
+                                                        />
+                                                        <button onClick={() => removeExtractedOption(qIdx, optIdx)} className="text-red-400 hover:text-red-600 p-2"><Icons.Trash /></button>
+                                                    </div>
+                                                ))}
+                                                <Button variant="outline" onClick={() => addExtractedOption(qIdx)} className="w-full text-xs py-2">+ Adicionar Alternativa</Button>
+                                            </div>
+                                        )}
+
+                                        {(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && (
+                                            <div>
+                                                 <Input 
+                                                    label="Resposta Correta" 
+                                                    value={q.options?.[0]?.text || ''} 
+                                                    onChange={e => {
+                                                        const newOpts = [{ id: 'ans', text: e.target.value, isCorrect: true }];
+                                                        updateExtractedQuestion(qIdx, { options: newOpts });
+                                                    }} 
+                                                    placeholder="Digite a resposta esperada..." 
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* MODAL DETALHES */}
             <Modal isOpen={!!viewingQuestion} onClose={() => setViewingQuestion(null)} title="Detalhes da Questão" footer={<Button onClick={() => setViewingQuestion(null)}>Fechar</Button>}>
                 {viewingQuestion && (
                     <div className="space-y-6">
@@ -887,12 +1120,7 @@ const QuestionBank = () => {
                             <Badge color="yellow">{viewingQuestion.difficulty}</Badge>
                             <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{FirebaseService.getFullHierarchyString(viewingQuestion, hierarchy)}</span>
                         </div>
-                        
-                        <div className="prose prose-sm max-w-none bg-slate-50 p-4 rounded-lg border border-slate-100">
-                            {/* A imagem já faz parte do HTML do enunciado agora */}
-                            <div dangerouslySetInnerHTML={{ __html: viewingQuestion.enunciado }} />
-                        </div>
-
+                        <div className="prose prose-sm max-w-none bg-slate-50 p-4 rounded-lg border border-slate-100"><div dangerouslySetInnerHTML={{ __html: viewingQuestion.enunciado }} /></div>
                         {viewingQuestion.options && viewingQuestion.options.length > 0 && (
                             <div>
                                 <h4 className="font-bold text-sm text-slate-700 mb-2">Alternativas / Gabarito</h4>

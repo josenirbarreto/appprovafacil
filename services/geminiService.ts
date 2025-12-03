@@ -78,5 +78,77 @@ export const GeminiService = {
             console.error("Gemini Generation Error:", error);
             return null;
         }
+    },
+
+    parseQuestionsFromText: async (text: string): Promise<Partial<Question>[]> => {
+        try {
+            const ai = getClient();
+            
+            // Schema para retornar uma lista de questões
+            const schema: Schema = {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        enunciado: { type: Type.STRING },
+                        type: { type: Type.STRING, enum: [QuestionType.MULTIPLE_CHOICE, QuestionType.TRUE_FALSE, QuestionType.SHORT_ANSWER, QuestionType.NUMERIC] },
+                        options: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    text: { type: Type.STRING },
+                                    isCorrect: { type: Type.BOOLEAN }
+                                }
+                            }
+                        }
+                    },
+                    required: ["enunciado", "type", "options"]
+                }
+            };
+
+            const prompt = `
+                Analise o texto abaixo extraído de um arquivo PDF de prova.
+                Identifique todas as questões, suas alternativas e, se possível, a resposta correta (gabarito).
+                Se não encontrar a resposta correta explicitamente, marque todas as isCorrect como false.
+                Tente inferir o tipo da questão (MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER).
+                
+                Texto do PDF:
+                """
+                ${text.substring(0, 30000)} 
+                """
+                (O texto foi truncado se for muito longo).
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema,
+                    systemInstruction: "Você é um especialista em estruturar dados de provas escolares. Extraia as questões com precisão.",
+                    temperature: 0.4 // Temperatura baixa para ser mais fiel ao texto
+                }
+            });
+
+            if (response.text) {
+                const data = JSON.parse(response.text);
+                // Adiciona IDs temporários
+                return data.map((q: any) => ({
+                    ...q,
+                    difficulty: 'Medium', // Padrão
+                    options: q.options?.map((opt: any, idx: number) => ({
+                        id: `imp-${Date.now()}-${Math.random()}-${idx}`,
+                        text: opt.text,
+                        isCorrect: opt.isCorrect
+                    })) || []
+                }));
+            }
+            return [];
+
+        } catch (error) {
+            console.error("Gemini Parse Error:", error);
+            return [];
+        }
     }
 };
