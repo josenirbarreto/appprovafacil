@@ -739,13 +739,25 @@ const QuestionBank = () => {
     }
     const handleDelete = async (id: string) => { if (confirm('Tem certeza que deseja excluir esta questão?')) { await FirebaseService.deleteQuestion(id); load(); } };
     const handleEdit = (q: Question) => { setNewQ({ ...q }); setShowModal(true); };
+    
+    // Tratamento de erro específico para chave de API
     const handleGenerateAI = async () => {
         if (!newQ.disciplineId || !newQ.chapterId) { alert('Selecione Disciplina e Capítulo para dar contexto à IA.'); return; }
         setIsGenerating(true);
-        const contextString = getContextString();
-        const res = await GeminiService.generateQuestion(contextString, newQ.type || QuestionType.MULTIPLE_CHOICE, 'Medium');
-        if(res) setNewQ(prev => ({...prev, ...res}));
-        setIsGenerating(false);
+        try {
+            const contextString = getContextString();
+            const res = await GeminiService.generateQuestion(contextString, newQ.type || QuestionType.MULTIPLE_CHOICE, 'Medium');
+            if(res) setNewQ(prev => ({...prev, ...res}));
+        } catch (error: any) {
+            console.error(error);
+            if (error.message && error.message.includes('API key')) {
+                alert("⚠️ CONFIGURAÇÃO AUSENTE:\n\nA chave de API do Gemini (API_KEY) não foi encontrada.\n\n-> Se estiver no Vercel: Vá em Settings > Environment Variables e adicione a chave 'API_KEY'.\n-> Se estiver local: Crie um arquivo .env na raiz com 'API_KEY=sua_chave'.");
+            } else {
+                alert("Erro ao gerar questão. Tente novamente.");
+            }
+        } finally {
+            setIsGenerating(false);
+        }
     }
     const handleAddOption = () => { setNewQ(prev => ({ ...prev, options: [...(prev.options || []), { id: Date.now().toString(), text: '', isCorrect: false }] })); };
     const handleOptionChange = (idx: number, text: string) => { const newOpts = [...(newQ.options || [])]; newOpts[idx].text = text; setNewQ({ ...newQ, options: newOpts }); };
@@ -781,10 +793,18 @@ const QuestionBank = () => {
             // 2. Parse with AI
             const parsedQuestions = await GeminiService.parseQuestionsFromText(text);
             
-            setExtractedQuestions(parsedQuestions);
-        } catch (error) {
+            if (!parsedQuestions || parsedQuestions.length === 0) {
+                alert("A IA não conseguiu identificar nenhuma questão no arquivo. Verifique se o PDF contém texto selecionável.");
+            } else {
+                setExtractedQuestions(parsedQuestions);
+            }
+        } catch (error: any) {
             console.error(error);
-            alert("Erro ao processar PDF. Verifique se o arquivo é válido.");
+            if (error.message && error.message.includes('API key')) {
+                alert("⚠️ CONFIGURAÇÃO AUSENTE:\n\nA chave de API do Gemini (API_KEY) não foi encontrada.\n\n-> Se estiver no Vercel: Vá em Settings > Environment Variables e adicione a chave 'API_KEY'.\n-> Se estiver local: Crie um arquivo .env na raiz com 'API_KEY=sua_chave'.");
+            } else {
+                alert(`Erro ao processar PDF: ${error.message || "Verifique se o arquivo é válido."}`);
+            }
         } finally {
             setIsProcessingPdf(false);
             if (pdfInputRef.current) pdfInputRef.current.value = '';

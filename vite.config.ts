@@ -19,7 +19,8 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       // Define process.env.API_KEY para ser substituído pelo valor real durante o build
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      // Usa || '' para garantir que não fique undefined se a variável não existir
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || ''),
     },
   };
 });
