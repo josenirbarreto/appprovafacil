@@ -1,3 +1,4 @@
+
 import * as pdfjsLib from 'pdfjs-dist';
 
 // --- POLYFILL PARA CORRIGIR ERRO 'Q0' (Promise.withResolvers) ---
@@ -13,8 +14,10 @@ if (typeof (Promise as any).withResolvers === 'undefined') {
   };
 }
 
-// Configura o worker do PDF.js usando UNPKG (mais estável para arquivos estáticos)
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+// Configura o worker do PDF.js dinamicamente baseado na versão instalada
+// Isso previne o erro "The API version does not match the Worker version"
+const pdfVersion = pdfjsLib.version;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfVersion}/build/pdf.worker.min.mjs`;
 
 export const PdfService = {
   extractText: async (file: File): Promise<string> => {
