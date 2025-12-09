@@ -87,30 +87,79 @@ export const Modal: React.FC<{
 };
 
 // --- RICH TEXT EDITOR ---
-const EditorButton = ({ command, icon, active = false, arg = null, onClick }: { command?: string, icon: React.ReactNode, active?: boolean, arg?: string | null, onClick?: () => void }) => (
+const EditorButton = ({ 
+    command, 
+    icon, 
+    active = false, 
+    arg = null, 
+    onClick, 
+    title,
+    children 
+}: { 
+    command?: string, 
+    icon?: React.ReactNode, 
+    active?: boolean, 
+    arg?: string | null, 
+    onClick?: () => void,
+    title?: string,
+    children?: React.ReactNode 
+}) => (
     <button
         type="button"
+        title={title}
         onMouseDown={(e) => {
             e.preventDefault(); // Prevent losing focus
             if(onClick) onClick();
             else if(command) document.execCommand(command, false, arg || '');
         }}
-        className={`p-1.5 rounded hover:bg-slate-200 text-slate-600 transition-colors ${active ? 'bg-slate-200 text-brand-blue' : ''}`}
+        // Atualizado para contrastar com o fundo azul mais forte. Active: Azul forte + Texto Branco.
+        className={`p-1.5 rounded min-w-[28px] h-[28px] flex items-center justify-center transition-colors ${
+            active 
+            ? 'bg-brand-blue text-white shadow-inner ring-1 ring-blue-700' 
+            : 'hover:bg-blue-200 text-slate-700 hover:text-brand-blue'
+        }`}
     >
         {icon}
+        {children}
     </button>
 );
 
 export const RichTextEditor: React.FC<{ label?: string, value: string, onChange: (html: string) => void, className?: string }> = ({ label, value, onChange, className = '' }) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const colorInputRef = useRef<HTMLInputElement>(null);
+    const bgInputRef = useRef<HTMLInputElement>(null);
     const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
+    
+    // States para Modais e Formatos
+    const [showTableModal, setShowTableModal] = useState(false);
+    const [showLinkModal, setShowLinkModal] = useState(false);
+    const [linkUrl, setLinkUrl] = useState('');
+    
+    // Ref para controlar estado de edição de link (novo vs existente)
+    const linkStateRef = useRef<{ isNew: boolean, tempUrl: string, editingNode: HTMLAnchorElement | null }>({
+        isNew: false,
+        tempUrl: 'http://rte-temp-link-marker/',
+        editingNode: null
+    });
+    
+    // Estado para botões ativos (negrito, itálico, etc.)
+    const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
+
+    const [tableConfig, setTableConfig] = useState({
+        rows: 3,
+        cols: 3,
+        width: 100,
+        align: 'left',
+        padding: 8,
+        header: true
+    });
 
     // Sync external value changes
     useEffect(() => {
         if (editorRef.current && editorRef.current.innerHTML !== value) {
              if (value === '' && editorRef.current.innerHTML === '<br>') return;
-             // Simple check to avoid cursor jumping if content is identical
+             // Evita re-render loops se o HTML for semanticamente igual mas string diferente
              if (editorRef.current.innerHTML !== value) {
                 editorRef.current.innerHTML = value;
              }
@@ -120,94 +169,336 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
     const handleInput = () => {
         if (editorRef.current) {
             onChange(editorRef.current.innerHTML);
+            checkFormats();
         }
     };
 
-    // Image Upload Handler
+    // Função para verificar quais formatações estão ativas no cursor
+    const checkFormats = () => {
+        if (!document.queryCommandState) return;
+        setActiveFormats({
+            bold: document.queryCommandState('bold'),
+            italic: document.queryCommandState('italic'),
+            underline: document.queryCommandState('underline'),
+            justifyLeft: document.queryCommandState('justifyLeft'),
+            justifyCenter: document.queryCommandState('justifyCenter'),
+            justifyRight: document.queryCommandState('justifyRight'),
+            justifyFull: document.queryCommandState('justifyFull'),
+            insertOrderedList: document.queryCommandState('insertOrderedList'),
+            insertUnorderedList: document.queryCommandState('insertUnorderedList'),
+        });
+    };
+
+    // --- HANDLERS ESPECÍFICOS ---
+
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file && editorRef.current) {
             const reader = new FileReader();
             reader.onload = (ev) => {
-                // Insert with default styling
                 const imgTag = `<img src="${ev.target?.result}" style="max-width: 50%; display: block; margin: 10px 0;" />`;
                 editorRef.current?.focus();
-                // Execute insert
                 document.execCommand('insertHTML', false, imgTag);
                 handleInput();
             };
             reader.readAsDataURL(file);
         }
-        // Reset input to allow selecting same file again
         if(fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // Detect Image Selection
+    // --- LINK HANDLER ROBUSTO (Estratégia Placeholder) ---
+
+    const handleLinkClick = () => {
+        const selection = window.getSelection();
+        if (!editorRef.current) return;
+        
+        // Reset state
+        linkStateRef.current = { isNew: false, tempUrl: 'http://rte-temp-link-marker/', editingNode: null };
+
+        // 1. Verificar se já estamos editando um link existente
+        let node = selection?.anchorNode;
+        while (node && node.nodeName !== 'A' && node !== editorRef.current) {
+            node = node.parentNode;
+        }
+
+        if (node && node.nodeName === 'A') {
+            // EDITANDO EXISTENTE
+            const anchor = node as HTMLAnchorElement;
+            setLinkUrl(anchor.getAttribute('href') || '');
+            linkStateRef.current.editingNode = anchor;
+            setShowLinkModal(true);
+        } else {
+            // CRIANDO NOVO
+            // O segredo aqui é criar o link no DOM *ANTES* de abrir o modal,
+            // assim não perdemos a seleção quando o foco for para o input do modal.
+            
+            // Verifica se tem algo selecionado
+            if (selection && !selection.isCollapsed) {
+                document.execCommand('createLink', false, linkStateRef.current.tempUrl);
+                // Verifica se o comando funcionou (criou o link placeholder)
+                const createdLinks = editorRef.current.querySelectorAll(`a[href="${linkStateRef.current.tempUrl}"]`);
+                
+                if (createdLinks.length > 0) {
+                    linkStateRef.current.isNew = true;
+                    setLinkUrl('https://');
+                    setShowLinkModal(true);
+                } else {
+                    // Fallback estranho do navegador
+                    alert("Selecione o texto para transformar em link.");
+                }
+            } else {
+                // Nada selecionado: Inserir um link novo onde o cursor está
+                const id = "link-" + Date.now();
+                const tempHtml = `<a href="${linkStateRef.current.tempUrl}" id="${id}">Link</a>`;
+                document.execCommand('insertHTML', false, tempHtml);
+                
+                const insertedLink = editorRef.current.querySelector(`#${id}`);
+                if (insertedLink) {
+                    insertedLink.removeAttribute('id'); // Limpa ID temporário
+                    linkStateRef.current.isNew = true;
+                    setLinkUrl('https://');
+                    setShowLinkModal(true);
+                    
+                    // Opcional: Selecionar o texto "Link" inserido para que o usuário possa sobrescrever se quiser?
+                    // Por enquanto deixamos assim.
+                }
+            }
+        }
+    };
+
+    const closeLinkModal = (isSave: boolean) => {
+        setShowLinkModal(false);
+        if (!editorRef.current) return;
+
+        const { isNew, tempUrl, editingNode } = linkStateRef.current;
+
+        // Função auxiliar para remover links temporários (desfazer criação)
+        const unwrapTempLinks = () => {
+            const tempLinks = editorRef.current?.querySelectorAll(`a[href="${tempUrl}"]`);
+            tempLinks?.forEach(link => {
+                // Move os filhos para antes do link e remove o link
+                const parent = link.parentNode;
+                while (link.firstChild) parent?.insertBefore(link.firstChild, link);
+                parent?.removeChild(link);
+            });
+        };
+
+        if (isSave && linkUrl) {
+            // SALVAR
+            if (isNew) {
+                // Busca os placeholders e atualiza a URL
+                const tempLinks = editorRef.current.querySelectorAll(`a[href="${tempUrl}"]`);
+                tempLinks.forEach(link => {
+                    link.setAttribute('href', linkUrl);
+                    link.setAttribute('target', '_blank');
+                });
+            } else if (editingNode) {
+                // Atualiza nó existente
+                editingNode.setAttribute('href', linkUrl);
+                editingNode.setAttribute('target', '_blank');
+            }
+        } else {
+            // CANCELAR OU URL VAZIA (Remover Link)
+            if (isNew) {
+                // Se era novo, desfazemos a criação (removemos a tag A mas mantemos o texto)
+                unwrapTempLinks();
+            } else if (editingNode && isSave && !linkUrl) {
+                // Se estava editando e salvou vazio -> unlink
+                const parent = editingNode.parentNode;
+                while (editingNode.firstChild) parent?.insertBefore(editingNode.firstChild, editingNode);
+                parent?.removeChild(editingNode);
+            }
+            // Se estava editando e cancelou -> não faz nada (mantém original)
+        }
+        
+        // Garante que o editor salve o estado final
+        handleInput();
+    };
+
+    // --- TABLE HANDLER ---
+    const handleTableOpen = () => setShowTableModal(true);
+
+    const insertCustomTable = () => {
+        let style = `width: ${tableConfig.width}%; border-collapse: collapse; border: 1px solid #cbd5e1; margin-bottom: 1em;`;
+        if (tableConfig.align === 'center') style += ' margin-left: auto; margin-right: auto;';
+        else if (tableConfig.align === 'right') style += ' float: right; margin-left: 1em;';
+        else style += ' margin-right: auto;';
+
+        const cellStyle = `border: 1px solid #cbd5e1; padding: ${tableConfig.padding}px;`;
+        const headerStyle = `border: 1px solid #cbd5e1; padding: ${tableConfig.padding}px; background-color: #f1f5f9; font-weight: bold; text-align: left;`;
+
+        let html = `<table style="${style}">`;
+        if (tableConfig.header) {
+            html += '<thead><tr>';
+            for (let c = 0; c < tableConfig.cols; c++) html += `<th style="${headerStyle}">Cabeçalho ${c + 1}</th>`;
+            html += '</tr></thead>';
+        }
+        html += '<tbody>';
+        for (let r = 0; r < tableConfig.rows; r++) {
+            html += '<tr>';
+            for (let c = 0; c < tableConfig.cols; c++) html += `<td style="${cellStyle}">&nbsp;</td>`;
+            html += '</tr>';
+        }
+        html += '</tbody></table><p><br/></p>';
+
+        editorRef.current?.focus();
+        document.execCommand('insertHTML', false, html);
+        handleInput();
+        setShowTableModal(false);
+    };
+
+    const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'foreColor' | 'hiliteColor') => {
+        editorRef.current?.focus();
+        document.execCommand(type, false, e.target.value);
+        handleInput();
+    };
+
+    const handleFontSize = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        editorRef.current?.focus();
+        document.execCommand('fontSize', false, e.target.value);
+        handleInput();
+    };
+
     const handleMouseUp = (e: React.MouseEvent) => {
+        checkFormats(); // Atualiza status dos botões
         if ((e.target as HTMLElement).tagName === 'IMG') {
             setSelectedImg(e.target as HTMLImageElement);
         } else {
-            // Only deselect if clicking outside the overlay menu
-            // (Handled by the fact the overlay is outside the contentEditable div usually, 
-            // but we need to be careful not to deselect immediately if clicking the menu)
-            // For simplicity, we deselect on editor click if it's not an image.
             setSelectedImg(null);
         }
     };
 
-    // Image Modification Actions
+    const handleKeyUp = () => {
+        checkFormats(); // Atualiza status dos botões ao digitar/navegar
+    };
+
     const updateImageStyle = (styles: Partial<CSSStyleDeclaration> & { float?: string }) => {
         if (selectedImg) {
-            // Apply styles directly to the element
             Object.keys(styles).forEach((key) => {
                 // @ts-ignore
                 selectedImg.style[key] = styles[key];
             });
-
-            // Special case for centering (reset float, set margins)
             if (styles.margin === '0 auto') {
                  selectedImg.style.display = 'block';
                  selectedImg.style.marginLeft = 'auto';
                  selectedImg.style.marginRight = 'auto';
                  selectedImg.style.float = 'none';
             }
-
-            handleInput(); // Trigger onChange to save the HTML
-            setSelectedImg(null); // Hide menu
+            handleInput();
+            setSelectedImg(null);
         }
     };
 
+    // --- ÍCONES SVG ---
     const Icons = {
-        Bold: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6V4zm0 8h9a4 4 0 014 4 4 4 0 01-4 4H6v-8z" /></svg>,
-        ItalicReal: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 4h-9l-4 16h9" /></svg>,
-        Underline: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 3v7a6 6 0 006 6 6 6 0 006-6V3M4 21h16" /></svg>,
-        Left: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h16" /></svg>,
-        Center: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M7 12h10M4 18h16" /></svg>,
-        Right: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M10 12h10M4 18h16" /></svg>,
-        Justify: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
-        Image: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        Undo: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>,
+        Redo: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 3.7"/></svg>,
+        Bold: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>,
+        Italic: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>,
+        Underline: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="4" y1="21" x2="20" y2="21"></line></svg>,
+        AlignLeft: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>,
+        AlignCenter: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>,
+        AlignRight: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>,
+        AlignJustify: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg>,
+        ListOrdered: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>,
+        ListBullet: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>,
+        Indent: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 8 7 12 3 16"></polyline><line x1="21" y1="12" x2="7" y2="12"></line><line x1="21" y1="6" x2="7" y2="6"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>,
+        Outdent: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 8 3 12 7 16"></polyline><line x1="21" y1="12" x2="3" y2="12"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg>,
+        Link: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>,
+        Image: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>,
+        Table: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M12 3v18"/></svg>,
+        Eraser: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>,
+        TextColor: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16"/><path d="m6 16 6-14 6 14"/><path d="M8 12h8"/></svg>,
+        BgColor: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 7.5l0 .01"/><path d="M19 11l-8-8-9 9 8 8 5-5 9-9-5-5Z"/><path d="m21 21-9-9"/><path d="m9 9 5-5"/></svg>,
     };
 
     return (
         <div className={`flex flex-col gap-1 w-full ${className}`}>
              {label && <label className="text-sm font-semibold text-slate-700">{label}</label>}
-             <div className="border border-slate-300 rounded-md bg-white focus-within:ring-2 focus-within:ring-brand-blue focus-within:border-brand-blue transition-all relative">
-                {/* Toolbar */}
-                <div className="flex flex-wrap items-center gap-1 p-2 bg-slate-50 border-b border-slate-200">
-                    <EditorButton command="bold" icon={Icons.Bold} />
-                    <EditorButton command="italic" icon={Icons.ItalicReal} />
-                    <EditorButton command="underline" icon={Icons.Underline} />
-                    <div className="w-px h-4 bg-slate-300 mx-1" />
-                    <EditorButton command="justifyLeft" icon={Icons.Left} />
-                    <EditorButton command="justifyCenter" icon={Icons.Center} />
-                    <EditorButton command="justifyRight" icon={Icons.Right} />
-                    <EditorButton command="justifyFull" icon={Icons.Justify} />
-                    <div className="w-px h-4 bg-slate-300 mx-1" />
-                    <EditorButton command="insertOrderedList" icon={<span>1.</span>} />
-                    <EditorButton command="insertUnorderedList" icon={<span>•</span>} />
-                    <div className="w-px h-4 bg-slate-300 mx-1" />
-                    <EditorButton onClick={() => fileInputRef.current?.click()} icon={Icons.Image} />
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+             <div className="border border-slate-300 rounded-md bg-white focus-within:ring-2 focus-within:ring-brand-blue focus-within:border-brand-blue transition-all relative overflow-hidden">
+                
+                {/* Estilos específicos para corrigir o reset do Tailwind em listas dentro do editor */}
+                <style>{`
+                    /* Listas Não Ordenadas (Bullets) */
+                    .rte-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
+                    .rte-content ul ul { list-style-type: circle !important; }
+                    .rte-content ul ul ul { list-style-type: square !important; }
+
+                    /* Listas Ordenadas (Números) */
+                    .rte-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
+                    .rte-content ol ol { list-style-type: lower-alpha !important; }
+                    .rte-content ol ol ol { list-style-type: lower-roman !important; }
+
+                    .rte-content li { margin-bottom: 0.25rem; }
+                `}</style>
+
+                {/* --- TOOLBAR (Fundo Azul Mais Forte) --- */}
+                <div className="flex flex-wrap items-center p-2 bg-blue-100 border-b border-blue-300 gap-y-2">
+                    
+                    {/* Grupo 1: Histórico */}
+                    <div className="flex items-center gap-1 pr-2 border-r border-blue-300">
+                        <EditorButton command="undo" icon={Icons.Undo} title="Desfazer" />
+                        <EditorButton command="redo" icon={Icons.Redo} title="Refazer" />
+                    </div>
+
+                    {/* Grupo 2: Fonte e Cores */}
+                    <div className="flex items-center gap-1 px-2 border-r border-blue-300">
+                        <select 
+                            className="h-[28px] text-xs border border-blue-300 rounded px-1 outline-none bg-white cursor-pointer hover:border-brand-blue w-20 text-slate-700"
+                            onChange={handleFontSize}
+                            title="Tamanho da Fonte"
+                            defaultValue="3"
+                        >
+                            <option value="1">Pequeno</option>
+                            <option value="2">Normal</option>
+                            <option value="3">Padrão</option>
+                            <option value="4">Médio</option>
+                            <option value="5">Grande</option>
+                            <option value="6">Enorme</option>
+                            <option value="7">Máximo</option>
+                        </select>
+                        
+                        <div className="relative">
+                             <EditorButton icon={Icons.TextColor} onClick={() => colorInputRef.current?.click()} title="Cor do Texto" />
+                             <input type="color" ref={colorInputRef} onChange={(e) => handleColorChange(e, 'foreColor')} className="absolute opacity-0 w-0 h-0" />
+                        </div>
+                        <div className="relative">
+                             <EditorButton icon={Icons.BgColor} onClick={() => bgInputRef.current?.click()} title="Cor de Fundo (Realce)" />
+                             <input type="color" ref={bgInputRef} onChange={(e) => handleColorChange(e, 'hiliteColor')} className="absolute opacity-0 w-0 h-0" />
+                        </div>
+                        <EditorButton command="removeFormat" icon={Icons.Eraser} title="Limpar Formatação" />
+                    </div>
+
+                    {/* Grupo 3: Estilo de Texto (Com Destaque Ativo) */}
+                    <div className="flex items-center gap-1 px-2 border-r border-blue-300">
+                        <EditorButton command="bold" icon={Icons.Bold} title="Negrito" active={activeFormats.bold} />
+                        <EditorButton command="italic" icon={Icons.Italic} title="Itálico" active={activeFormats.italic} />
+                        <EditorButton command="underline" icon={Icons.Underline} title="Sublinhado" active={activeFormats.underline} />
+                    </div>
+
+                    {/* Grupo 4: Alinhamento */}
+                    <div className="flex items-center gap-1 px-2 border-r border-blue-300">
+                        <EditorButton command="justifyLeft" icon={Icons.AlignLeft} title="Alinhar à Esquerda" active={activeFormats.justifyLeft} />
+                        <EditorButton command="justifyCenter" icon={Icons.AlignCenter} title="Centralizar" active={activeFormats.justifyCenter} />
+                        <EditorButton command="justifyRight" icon={Icons.AlignRight} title="Alinhar à Direita" active={activeFormats.justifyRight} />
+                        <EditorButton command="justifyFull" icon={Icons.AlignJustify} title="Justificar" active={activeFormats.justifyFull} />
+                    </div>
+
+                    {/* Grupo 5: Listas e Indentação */}
+                    <div className="flex items-center gap-1 px-2 border-r border-blue-300">
+                        <EditorButton command="insertOrderedList" icon={Icons.ListOrdered} title="Lista Ordenada" active={activeFormats.insertOrderedList} />
+                        <EditorButton command="insertUnorderedList" icon={Icons.ListBullet} title="Lista Não Ordenada" active={activeFormats.insertUnorderedList} />
+                        <EditorButton command="indent" icon={Icons.Indent} title="Aumentar Recuo" />
+                        <EditorButton command="outdent" icon={Icons.Outdent} title="Diminuir Recuo" />
+                    </div>
+
+                    {/* Grupo 6: Inserção */}
+                    <div className="flex items-center gap-1 pl-2">
+                        <EditorButton onClick={handleLinkClick} icon={Icons.Link} title="Inserir Link" />
+                        <EditorButton onClick={handleTableOpen} icon={Icons.Table} title="Inserir Tabela" />
+                        <EditorButton onClick={() => fileInputRef.current?.click()} icon={Icons.Image} title="Inserir Imagem" />
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                    </div>
                 </div>
                 
                 {/* Editable Area */}
@@ -216,8 +507,9 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                     contentEditable
                     onInput={handleInput}
                     onMouseUp={handleMouseUp}
-                    // onBlur handling is tricky with overlays, keeping it simple
-                    className="p-3 min-h-[150px] max-h-[400px] overflow-y-auto text-slate-900 outline-none prose prose-sm max-w-none custom-scrollbar"
+                    onKeyUp={handleKeyUp}
+                    onClick={checkFormats} // Garante atualização do estado dos botões ao clicar
+                    className="rte-content p-4 min-h-[150px] max-h-[500px] overflow-y-auto text-slate-900 outline-none prose prose-sm max-w-none custom-scrollbar"
                     style={{ lineHeight: '1.5' }}
                 />
 
@@ -240,6 +532,55 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                     </div>
                 )}
              </div>
+
+             {/* MODAL INSERIR TABELA */}
+             <Modal isOpen={showTableModal} onClose={() => setShowTableModal(false)} title="Inserir Tabela" maxWidth="max-w-md" footer={
+                 <div className="flex gap-2">
+                     <Button variant="ghost" onClick={() => setShowTableModal(false)}>Cancelar</Button>
+                     <Button onClick={insertCustomTable}>Inserir</Button>
+                 </div>
+             }>
+                 <div className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4">
+                         <Input label="Linhas" type="number" min="1" max="20" value={tableConfig.rows} onChange={(e) => setTableConfig({...tableConfig, rows: parseInt(e.target.value)})} />
+                         <Input label="Colunas" type="number" min="1" max="10" value={tableConfig.cols} onChange={(e) => setTableConfig({...tableConfig, cols: parseInt(e.target.value)})} />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <Select label="Alinhamento" value={tableConfig.align} onChange={(e) => setTableConfig({...tableConfig, align: e.target.value})}>
+                            <option value="left">Esquerda</option>
+                            <option value="center">Centro</option>
+                            <option value="right">Direita</option>
+                        </Select>
+                        <Input label="Largura (%)" type="number" min="10" max="100" value={tableConfig.width} onChange={(e) => setTableConfig({...tableConfig, width: parseInt(e.target.value)})} />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4 items-end">
+                        <Input label="Padding das células (px)" type="number" min="0" value={tableConfig.padding} onChange={(e) => setTableConfig({...tableConfig, padding: parseInt(e.target.value)})} />
+                        <div className="flex items-center gap-2 mb-3">
+                             <input type="checkbox" id="headerRow" className="w-4 h-4 text-brand-blue" checked={tableConfig.header} onChange={(e) => setTableConfig({...tableConfig, header: e.target.checked})} />
+                             <label htmlFor="headerRow" className="text-sm text-slate-700">Incluir linha de cabeçalho</label>
+                        </div>
+                     </div>
+                 </div>
+             </Modal>
+
+             {/* MODAL INSERIR LINK */}
+             <Modal isOpen={showLinkModal} onClose={() => closeLinkModal(false)} title="Inserir / Editar Link" maxWidth="max-w-sm" footer={
+                 <div className="flex gap-2">
+                     <Button variant="ghost" onClick={() => closeLinkModal(false)}>Cancelar</Button>
+                     <Button type="button" onClick={() => closeLinkModal(true)}>Salvar Link</Button>
+                 </div>
+             }>
+                 <div className="space-y-4">
+                     <p className="text-sm text-slate-500">Insira a URL para onde o texto selecionado deve apontar.</p>
+                     <Input 
+                        label="URL" 
+                        value={linkUrl} 
+                        onChange={(e) => setLinkUrl(e.target.value)} 
+                        placeholder="https://exemplo.com"
+                        autoFocus
+                     />
+                 </div>
+             </Modal>
         </div>
     );
 };
