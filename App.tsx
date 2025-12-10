@@ -652,6 +652,7 @@ const ExamsPage = () => {
     // Filtros do Passo 3 (Questões)
     const [genMode, setGenMode] = useState<'manual'|'auto'>('manual');
     const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
+    const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
 
     useEffect(() => { loadData(); }, []);
 
@@ -887,25 +888,37 @@ const ExamsPage = () => {
                     <h4 className="font-bold text-slate-700 mb-2">Conteúdos Selecionados ({draftExam.contentScopes?.length})</h4>
                     <div className="space-y-2">
                         {draftExam.contentScopes?.length === 0 && <p className="text-slate-400 italic text-sm">Nenhum conteúdo adicionado.</p>}
-                        {draftExam.contentScopes?.map(scope => (
-                            <div key={scope.id} className="flex justify-between items-center bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                <div className="text-sm flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Badge color="blue">{scope.questionCount} questões</Badge>
-                                        <span className="font-bold text-brand-blue">{scope.disciplineName}</span>
+                        {draftExam.contentScopes?.map(scope => {
+                            const available = allQuestions.filter(q => {
+                                if (q.disciplineId !== scope.disciplineId) return false;
+                                if (scope.chapterId && q.chapterId !== scope.chapterId) return false;
+                                if (scope.unitId && q.unitId !== scope.unitId) return false;
+                                if (scope.topicId && q.topicId !== scope.topicId) return false;
+                                return true;
+                            }).length;
+
+                            return (
+                                <div key={scope.id} className="flex justify-between items-center bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                    <div className="text-sm flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Badge color={scope.questionCount > available ? 'red' : 'blue'}>
+                                                {scope.questionCount} / {available} disp.
+                                            </Badge>
+                                            <span className="font-bold text-brand-blue">{scope.disciplineName}</span>
+                                        </div>
+                                        <div className="text-slate-500 text-xs">
+                                            {scope.chapterName && <span> &gt; {scope.chapterName}</span>}
+                                            {scope.unitName && <span> &gt; {scope.unitName}</span>}
+                                            {scope.topicName && <span> &gt; {scope.topicName}</span>}
+                                            <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-semibold">
+                                                {scope.topicName ? 'Tópico Específico' : scope.unitName ? 'Toda a Unidade' : scope.chapterName ? 'Todo o Capítulo' : 'Toda a Disciplina'}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="text-slate-500 text-xs">
-                                        {scope.chapterName && <span> &gt; {scope.chapterName}</span>}
-                                        {scope.unitName && <span> &gt; {scope.unitName}</span>}
-                                        {scope.topicName && <span> &gt; {scope.topicName}</span>}
-                                        <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-semibold">
-                                            {scope.topicName ? 'Tópico Específico' : scope.unitName ? 'Toda a Unidade' : scope.chapterName ? 'Todo o Capítulo' : 'Toda a Disciplina'}
-                                        </span>
-                                    </div>
+                                    <button onClick={() => handleRemoveScope(scope.id)} className="text-red-400 hover:text-red-600 p-1"><Icons.Trash /></button>
                                 </div>
-                                <button onClick={() => handleRemoveScope(scope.id)} className="text-red-400 hover:text-red-600 p-1"><Icons.Trash /></button>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -935,15 +948,33 @@ const ExamsPage = () => {
 
                 {genMode === 'manual' ? (
                     <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                        <p className="text-sm text-slate-500 mb-2 shrink-0">Selecione as questões que deseja incluir na prova. Mostrando {filteredQuestions.length} questões encontradas com base nos conteúdos do Passo 2.</p>
+                        <div className="flex justify-between items-center mb-2 px-1 shrink-0">
+                           <span className="text-sm text-slate-500">
+                               Selecione as questões que deseja incluir. 
+                               <span className="text-brand-blue font-semibold ml-1">Selecionadas no topo.</span>
+                           </span>
+                           {draftExam.questions && draftExam.questions.length > 0 && (
+                               <button 
+                                   onClick={() => setDraftExam(prev => ({...prev, questions: []}))}
+                                   className="text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded transition-colors"
+                               >
+                                   Desmarcar Todas
+                               </button>
+                           )}
+                        </div>
                         <div className="flex-1 overflow-y-auto custom-scrollbar border rounded-lg bg-white divide-y divide-slate-100">
                             {filteredQuestions.length === 0 ? (
                                 <div className="p-8 text-center text-slate-400">Nenhuma questão encontrada para os conteúdos selecionados.</div>
                             ) : (
-                                filteredQuestions.map(q => {
+                                // SORTING LOGIC: Selected First
+                                [...filteredQuestions].sort((a, b) => {
+                                    const isA = draftExam.questions?.some(sel => sel.id === a.id) ? 1 : 0;
+                                    const isB = draftExam.questions?.some(sel => sel.id === b.id) ? 1 : 0;
+                                    return isB - isA;
+                                }).map(q => {
                                     const isSelected = draftExam.questions?.some(sel => sel.id === q.id);
                                     return (
-                                        <div key={q.id} onClick={() => toggleQuestionSelection(q)} className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors flex gap-3 ${isSelected ? 'bg-blue-50/50' : ''}`}>
+                                        <div key={q.id} onClick={() => toggleQuestionSelection(q)} className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors flex gap-3 ${isSelected ? 'bg-blue-50/70' : ''}`}>
                                             <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-1 transition-colors ${isSelected ? 'bg-brand-blue border-brand-blue text-white' : 'border-slate-300 bg-white'}`}>
                                                 {isSelected && <Icons.Check />}
                                             </div>
@@ -954,6 +985,13 @@ const ExamsPage = () => {
                                                 </div>
                                                 <div className="text-sm text-slate-800 line-clamp-3 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                             </div>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setViewingQuestion(q); }}
+                                                className="self-center p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-full transition-colors flex-shrink-0"
+                                                title="Visualizar questão completa"
+                                            >
+                                                <Icons.Eye />
+                                            </button>
                                         </div>
                                     );
                                 })
@@ -964,7 +1002,7 @@ const ExamsPage = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto custom-scrollbar">
                         <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-center mb-4 shrink-0">
                             <Icons.Sparkles />
                             <h3 className="text-lg font-bold text-blue-800 mt-2">Geração Automática de Prova</h3>
@@ -978,11 +1016,11 @@ const ExamsPage = () => {
                         </div>
 
                         {draftExam.questions && draftExam.questions.length > 0 && (
-                            <div className="flex-1 flex flex-col overflow-hidden animate-fade-in min-h-0">
+                            <div className="flex-1 flex flex-col animate-fade-in min-h-0">
                                 <h4 className="font-bold text-slate-700 mb-2 shrink-0">Resultado da Geração ({draftExam.questions.length} questões):</h4>
-                                <div className="flex-1 overflow-y-auto custom-scrollbar border rounded-lg bg-white divide-y divide-slate-100">
+                                <div className="border rounded-lg bg-white divide-y divide-slate-100">
                                     {draftExam.questions.map((q, idx) => (
-                                        <div key={q.id} className="p-4 flex gap-3 relative group">
+                                        <div key={q.id} className="p-4 flex gap-3 relative group hover:bg-slate-50 transition-colors">
                                             <span className="font-bold text-slate-400 w-6 text-right shrink-0">{idx + 1}.</span>
                                             <div className="flex-1">
                                                 <div className="flex gap-2 text-xs mb-1">
@@ -991,13 +1029,22 @@ const ExamsPage = () => {
                                                 </div>
                                                 <div className="text-sm text-slate-800 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                             </div>
-                                            <button 
-                                                onClick={() => toggleQuestionSelection(q)}
-                                                className="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
-                                                title="Remover questão"
-                                            >
-                                                <Icons.Trash />
-                                            </button>
+                                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all bg-white/80 backdrop-blur-sm rounded p-1">
+                                                <button 
+                                                    onClick={() => setViewingQuestion(q)}
+                                                    className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded"
+                                                    title="Visualizar"
+                                                >
+                                                    <Icons.Eye />
+                                                </button>
+                                                <button 
+                                                    onClick={() => toggleQuestionSelection(q)}
+                                                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded"
+                                                    title="Remover questão"
+                                                >
+                                                    <Icons.Trash />
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -1033,7 +1080,7 @@ const ExamsPage = () => {
                             </div>
                         </div>
 
-                        {/* CAMPOS DE IDENTIFICAÇÃO (Refatorado para remover linhas duplas) */}
+                        {/* CAMPOS DE IDENTIFICAÇÃO (Atualizado para 3 colunas na segunda linha) */}
                         <div className="grid grid-cols-12 gap-4 mb-6 text-sm font-medium">
                             <div className="col-span-8 flex items-end gap-2">
                                 <span className="mb-1">Nome:</span>
@@ -1043,11 +1090,16 @@ const ExamsPage = () => {
                                 <span className="mb-1">Data:</span>
                                 <div className="flex-1 border-b border-black"></div>
                             </div>
-                            <div className="col-span-6 flex items-end gap-2">
+                            {/* Segunda Linha: 3 Colunas */}
+                            <div className="col-span-4 flex items-end gap-2">
                                 <span className="mb-1">Turma:</span>
                                 <div className="flex-1 border-b border-black"></div>
                             </div>
-                            <div className="col-span-6 flex items-end gap-2">
+                            <div className="col-span-4 flex items-end gap-2">
+                                <span className="mb-1">Matrícula:</span>
+                                <div className="flex-1 border-b border-black"></div>
+                            </div>
+                            <div className="col-span-4 flex items-end gap-2">
                                 <span className="mb-1">Nota:</span>
                                 <div className="flex-1 border-b border-black"></div>
                             </div>
@@ -1062,7 +1114,7 @@ const ExamsPage = () => {
                         )}
 
                         {/* QUESTÕES */}
-                        <div className={`${draftExam.columns === 2 ? 'columns-2 gap-8' : ''}`}>
+                        <div className={`${draftExam.columns === 2 ? 'columns-2 gap-8 [column-rule:1px_solid_#000]' : ''}`}>
                             {draftExam.questions?.map((q, idx) => (
                                 <div key={q.id} className="mb-6 break-inside-avoid">
                                     <div className="flex gap-2 mb-1">
@@ -1172,6 +1224,34 @@ const ExamsPage = () => {
                         {step === 4 && renderStep4()}
                     </div>
                 </div>
+            </Modal>
+
+            {/* Modal de Visualização de Questão */}
+            <Modal isOpen={!!viewingQuestion} onClose={() => setViewingQuestion(null)} title="Detalhes da Questão" maxWidth="max-w-2xl">
+                 {viewingQuestion && (
+                     <div className="space-y-4">
+                         <div className="flex gap-2">
+                             <Badge>{QuestionTypeLabels[viewingQuestion.type]}</Badge>
+                             <Badge color={viewingQuestion.difficulty === 'Hard' ? 'red' : viewingQuestion.difficulty === 'Medium' ? 'yellow' : 'green'}>{viewingQuestion.difficulty}</Badge>
+                         </div>
+                         <div className="bg-slate-50 p-6 rounded-lg border border-slate-200">
+                             <div className="rich-text-content text-lg" dangerouslySetInnerHTML={{__html: viewingQuestion.enunciado}} />
+                         </div>
+                         
+                         {viewingQuestion.type === QuestionType.MULTIPLE_CHOICE && (
+                             <div className="space-y-2 mt-4">
+                                 <h4 className="font-bold text-slate-700">Alternativas:</h4>
+                                 {viewingQuestion.options?.map((opt, idx) => (
+                                     <div key={idx} className={`p-3 rounded border flex gap-3 ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
+                                         <span className="font-bold">({String.fromCharCode(97 + idx)})</span>
+                                         <span>{opt.text}</span>
+                                         {opt.isCorrect && <span className="ml-auto text-green-600 text-xs font-bold bg-green-100 px-2 py-0.5 rounded-full h-fit">Correta</span>}
+                                     </div>
+                                 ))}
+                             </div>
+                         )}
+                     </div>
+                 )}
             </Modal>
         </div>
     );
