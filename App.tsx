@@ -31,7 +31,7 @@ const Icons = {
   ChevronDown: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
   Pdf: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>,
   Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-  Printer: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+  Printer: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
 };
 
 // Traduções dos Tipos de Questão
@@ -1362,9 +1362,12 @@ const ExamsPage = () => {
                         )}
 
                         {/* QUESTÕES */}
-                        <div className={`${draftExam.columns === 2 ? 'columns-2 gap-8 [column-rule:1px_solid_#000]' : ''}`}>
+                        <div 
+                            className={`${draftExam.columns === 2 ? 'columns-2 gap-8 [column-rule:1px_solid_#000] [column-fill:auto]' : ''}`}
+                            style={{ columnFill: 'auto' }}
+                        >
                             {draftExam.questions?.map((q, idx) => (
-                                <div key={q.id} className="mb-6 break-inside-avoid">
+                                <div key={q.id} className="mb-6">
                                     <div className="flex gap-2 mb-1">
                                         <span className="font-bold text-lg">{idx + 1}.</span>
                                         <div className="rich-text-content text-sm text-justify" dangerouslySetInnerHTML={{ __html: q.enunciado }} />
