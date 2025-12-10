@@ -1,3 +1,4 @@
+
 import { 
     collection, 
     getDocs, 
@@ -312,8 +313,17 @@ export const FirebaseService = {
 
     saveExam: async (exam: Exam) => {
         const { id, ...rest } = exam;
-        const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), rest);
-        return { ...exam, id: docRef.id };
+        if (id) {
+            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), rest);
+            return exam;
+        } else {
+            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), rest);
+            return { ...exam, id: docRef.id };
+        }
+    },
+
+    deleteExam: async (id: string) => {
+        await deleteDoc(doc(db, COLLECTIONS.EXAMS, id));
     },
 
     getFullHierarchyString: (q: Question, hierarchy: Discipline[]) => {

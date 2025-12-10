@@ -112,7 +112,6 @@ const EditorButton = ({
             if(onClick) onClick();
             else if(command) document.execCommand(command, false, arg || '');
         }}
-        // Atualizado para contrastar com o fundo azul mais forte. Active: Azul forte + Texto Branco.
         className={`p-1.5 rounded min-w-[28px] h-[28px] flex items-center justify-center transition-colors ${
             active 
             ? 'bg-brand-blue text-white shadow-inner ring-1 ring-blue-700' 
@@ -129,6 +128,10 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
     const fileInputRef = useRef<HTMLInputElement>(null);
     const colorInputRef = useRef<HTMLInputElement>(null);
     const bgInputRef = useRef<HTMLInputElement>(null);
+    
+    // useRef para controlar o estado interno sem re-renderizar
+    const isEditing = useRef(false);
+    
     const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
     
     // States para Modais
@@ -137,14 +140,12 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
     
     // Estado do Link
     const [linkUrl, setLinkUrl] = useState('');
-    // Armazena metadados sobre o link que está sendo editado (URL temporária, se é novo ou existente)
     const linkStateRef = useRef<{ isNew: boolean, tempUrl: string, originalUrl: string }>({
         isNew: false,
         tempUrl: '',
         originalUrl: ''
     });
     
-    // Estado para botões ativos (negrito, itálico, etc.)
     const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
 
     const [tableConfig, setTableConfig] = useState({
@@ -156,42 +157,45 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         header: true
     });
 
-    // Sincronização de valor externo
+    // Inicialização e Sincronização
     useEffect(() => {
-        // Se o modal de link estiver aberto, NÃO atualize o HTML vindo de fora.
-        // Isso previne que o React sobrescreva o DOM (e nossos placeholders temporários)
-        // enquanto o usuário está digitando no modal.
-        if (showLinkModal) return;
+        if (editorRef.current) {
+            // Se o editor estiver vazio e houver um valor inicial, define-o.
+            // Se o valor externo mudar drasticamente e não estivermos editando, atualiza.
+            const shouldUpdate = 
+                editorRef.current.innerHTML !== value && 
+                document.activeElement !== editorRef.current;
 
-        if (editorRef.current && editorRef.current.innerHTML !== value) {
-             if (value === '' && editorRef.current.innerHTML === '<br>') return;
-             if (editorRef.current.innerHTML !== value) {
+            if (shouldUpdate) {
                 editorRef.current.innerHTML = value;
-             }
+            }
         }
-    }, [value, showLinkModal]); // Adicionado showLinkModal como dependência
+    }, [value]);
 
     const handleInput = () => {
         if (editorRef.current) {
+            isEditing.current = true;
             onChange(editorRef.current.innerHTML);
             checkFormats();
+            isEditing.current = false;
         }
     };
 
-    // Função para verificar quais formatações estão ativas no cursor
     const checkFormats = () => {
         if (!document.queryCommandState) return;
-        setActiveFormats({
-            bold: document.queryCommandState('bold'),
-            italic: document.queryCommandState('italic'),
-            underline: document.queryCommandState('underline'),
-            justifyLeft: document.queryCommandState('justifyLeft'),
-            justifyCenter: document.queryCommandState('justifyCenter'),
-            justifyRight: document.queryCommandState('justifyRight'),
-            justifyFull: document.queryCommandState('justifyFull'),
-            insertOrderedList: document.queryCommandState('insertOrderedList'),
-            insertUnorderedList: document.queryCommandState('insertUnorderedList'),
-        });
+        try {
+            setActiveFormats({
+                bold: document.queryCommandState('bold'),
+                italic: document.queryCommandState('italic'),
+                underline: document.queryCommandState('underline'),
+                justifyLeft: document.queryCommandState('justifyLeft'),
+                justifyCenter: document.queryCommandState('justifyCenter'),
+                justifyRight: document.queryCommandState('justifyRight'),
+                justifyFull: document.queryCommandState('justifyFull'),
+                insertOrderedList: document.queryCommandState('insertOrderedList'),
+                insertUnorderedList: document.queryCommandState('insertUnorderedList'),
+            });
+        } catch(e) {}
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,91 +213,63 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         if(fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // --- LINK HANDLER ROBUSTO (Estratégia Placeholder) ---
-
+    // --- LINK HANDLER ---
     const handleLinkClick = () => {
         const selection = window.getSelection();
         if (!editorRef.current) return;
         
-        // Gera uma URL temporária única para identificar este link no DOM
         const uniqueTempUrl = `http://temp-link-${Date.now()}.com/`;
-        
-        // Verifica se o usuário está clicando dentro de um link já existente
         let node = selection?.anchorNode;
         while (node && node.nodeName !== 'A' && node !== editorRef.current) {
             node = node.parentNode;
         }
 
         if (node && node.nodeName === 'A') {
-            // EDITANDO LINK EXISTENTE
             const anchor = node as HTMLAnchorElement;
             const originalUrl = anchor.getAttribute('href') || '';
-            
-            // Marca o link existente com a URL temporária para encontrá-lo depois
             anchor.setAttribute('href', uniqueTempUrl);
-            
-            // Configura estado
             setLinkUrl(originalUrl);
             linkStateRef.current = { isNew: false, tempUrl: uniqueTempUrl, originalUrl: originalUrl };
         } else {
-            // CRIANDO NOVO LINK
             setLinkUrl('https://');
             linkStateRef.current = { isNew: true, tempUrl: uniqueTempUrl, originalUrl: '' };
-
             if (selection && !selection.isCollapsed) {
-                // Se tem texto selecionado, transforma em link
                 document.execCommand('createLink', false, uniqueTempUrl);
             } else {
-                // Se não tem texto, insere um link padrão "Link"
                 const tempHtml = `<a href="${uniqueTempUrl}">Link</a>`;
                 document.execCommand('insertHTML', false, tempHtml);
             }
         }
-
-        // Sincroniza o estado do React com o novo DOM (contendo o placeholder)
         handleInput();
-        
-        // Abre o modal
         setShowLinkModal(true);
     };
 
     const closeLinkModal = (isSave: boolean) => {
         if (!editorRef.current) return;
-
         const { isNew, tempUrl, originalUrl } = linkStateRef.current;
-        
-        // Encontra todos os links que tenham nossa URL temporária
         const tempLinks = editorRef.current.querySelectorAll(`a[href="${tempUrl}"]`);
         
         tempLinks.forEach(link => {
             if (isSave && linkUrl) {
-                // SALVAR: Atualiza href e target
                 link.setAttribute('href', linkUrl);
                 link.setAttribute('target', '_blank');
                 link.setAttribute('rel', 'noopener noreferrer');
             } else {
-                // CANCELAR ou SALVAR VAZIO
                 if (isNew) {
-                    // Se era novo, removemos o link mas mantemos o texto (unwrap)
                     const parent = link.parentNode;
                     while (link.firstChild) parent?.insertBefore(link.firstChild, link);
                     parent?.removeChild(link);
                 } else {
-                    // Se era edição, restauramos a URL original
                     if (isSave && !linkUrl) {
-                        // Usuário apagou a URL -> remover link
                         const parent = link.parentNode;
                         while (link.firstChild) parent?.insertBefore(link.firstChild, link);
                         parent?.removeChild(link);
                     } else {
-                        // Cancelou -> voltar ao original
                         link.setAttribute('href', originalUrl);
                     }
                 }
             }
         });
-        
-        // Atualiza estado final
         handleInput();
         setShowLinkModal(false);
     };
@@ -372,7 +348,6 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         }
     };
 
-    // --- ÍCONES SVG ---
     const Icons = {
         Undo: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>,
         Redo: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 3.7"/></svg>,
@@ -400,86 +375,50 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
              {label && <label className="text-sm font-semibold text-slate-700">{label}</label>}
              <div className="border border-slate-300 rounded-md bg-white focus-within:ring-2 focus-within:ring-brand-blue focus-within:border-brand-blue transition-all relative overflow-hidden">
                 
-                {/* Estilos específicos para corrigir o reset do Tailwind em listas dentro do editor */}
+                {/* Estilos específicos para o editor */}
                 <style>{`
-                    /* Listas Não Ordenadas (Bullets) */
                     .rich-text-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
                     .rich-text-content ul ul { list-style-type: circle !important; }
                     .rich-text-content ul ul ul { list-style-type: square !important; }
-
-                    /* Listas Ordenadas (Números) */
                     .rich-text-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
                     .rich-text-content ol ol { list-style-type: lower-alpha !important; }
                     .rich-text-content ol ol ol { list-style-type: lower-roman !important; }
-
                     .rich-text-content li { margin-bottom: 0.25rem; }
-
-                    /* Links: Força estilo azul e sublinhado */
                     .rich-text-content a { color: #3A72EC !important; text-decoration: underline !important; cursor: pointer; }
                     .rich-text-content a:hover { color: #1d4ed8 !important; }
                 `}</style>
 
-                {/* --- TOOLBAR (Fundo Azul Mais Forte) --- */}
+                {/* --- TOOLBAR --- */}
                 <div className="flex flex-wrap items-center p-2 bg-blue-100 border-b border-blue-300 gap-y-2">
-                    
-                    {/* Grupo 1: Histórico */}
                     <div className="flex items-center gap-1 pr-2 border-r border-blue-300">
                         <EditorButton command="undo" icon={Icons.Undo} title="Desfazer" />
                         <EditorButton command="redo" icon={Icons.Redo} title="Refazer" />
                     </div>
-
-                    {/* Grupo 2: Fonte e Cores */}
                     <div className="flex items-center gap-1 px-2 border-r border-blue-300">
-                        <select 
-                            className="h-[28px] text-xs border border-blue-300 rounded px-1 outline-none bg-white cursor-pointer hover:border-brand-blue w-20 text-slate-700"
-                            onChange={handleFontSize}
-                            title="Tamanho da Fonte"
-                            defaultValue="3"
-                        >
-                            <option value="1">Pequeno</option>
-                            <option value="2">Normal</option>
-                            <option value="3">Padrão</option>
-                            <option value="4">Médio</option>
-                            <option value="5">Grande</option>
-                            <option value="6">Enorme</option>
-                            <option value="7">Máximo</option>
+                        <select className="h-[28px] text-xs border border-blue-300 rounded px-1 outline-none bg-white cursor-pointer hover:border-brand-blue w-20 text-slate-700" onChange={handleFontSize} title="Tamanho da Fonte" defaultValue="3">
+                            <option value="1">Pequeno</option><option value="2">Normal</option><option value="3">Padrão</option><option value="4">Médio</option><option value="5">Grande</option><option value="6">Enorme</option><option value="7">Máximo</option>
                         </select>
-                        
-                        <div className="relative">
-                             <EditorButton icon={Icons.TextColor} onClick={() => colorInputRef.current?.click()} title="Cor do Texto" />
-                             <input type="color" ref={colorInputRef} onChange={(e) => handleColorChange(e, 'foreColor')} className="absolute opacity-0 w-0 h-0" />
-                        </div>
-                        <div className="relative">
-                             <EditorButton icon={Icons.BgColor} onClick={() => bgInputRef.current?.click()} title="Cor de Fundo (Realce)" />
-                             <input type="color" ref={bgInputRef} onChange={(e) => handleColorChange(e, 'hiliteColor')} className="absolute opacity-0 w-0 h-0" />
-                        </div>
+                        <div className="relative"><EditorButton icon={Icons.TextColor} onClick={() => colorInputRef.current?.click()} title="Cor do Texto" /><input type="color" ref={colorInputRef} onChange={(e) => handleColorChange(e, 'foreColor')} className="absolute opacity-0 w-0 h-0" /></div>
+                        <div className="relative"><EditorButton icon={Icons.BgColor} onClick={() => bgInputRef.current?.click()} title="Cor de Fundo (Realce)" /><input type="color" ref={bgInputRef} onChange={(e) => handleColorChange(e, 'hiliteColor')} className="absolute opacity-0 w-0 h-0" /></div>
                         <EditorButton command="removeFormat" icon={Icons.Eraser} title="Limpar Formatação" />
                     </div>
-
-                    {/* Grupo 3: Estilo de Texto (Com Destaque Ativo) */}
                     <div className="flex items-center gap-1 px-2 border-r border-blue-300">
                         <EditorButton command="bold" icon={Icons.Bold} title="Negrito" active={activeFormats.bold} />
                         <EditorButton command="italic" icon={Icons.Italic} title="Itálico" active={activeFormats.italic} />
                         <EditorButton command="underline" icon={Icons.Underline} title="Sublinhado" active={activeFormats.underline} />
                     </div>
-
-                    {/* Grupo 4: Alinhamento */}
                     <div className="flex items-center gap-1 px-2 border-r border-blue-300">
                         <EditorButton command="justifyLeft" icon={Icons.AlignLeft} title="Alinhar à Esquerda" active={activeFormats.justifyLeft} />
                         <EditorButton command="justifyCenter" icon={Icons.AlignCenter} title="Centralizar" active={activeFormats.justifyCenter} />
                         <EditorButton command="justifyRight" icon={Icons.AlignRight} title="Alinhar à Direita" active={activeFormats.justifyRight} />
                         <EditorButton command="justifyFull" icon={Icons.AlignJustify} title="Justificar" active={activeFormats.justifyFull} />
                     </div>
-
-                    {/* Grupo 5: Listas e Indentação */}
                     <div className="flex items-center gap-1 px-2 border-r border-blue-300">
                         <EditorButton command="insertOrderedList" icon={Icons.ListOrdered} title="Lista Ordenada" active={activeFormats.insertOrderedList} />
                         <EditorButton command="insertUnorderedList" icon={Icons.ListBullet} title="Lista Não Ordenada" active={activeFormats.insertUnorderedList} />
                         <EditorButton command="indent" icon={Icons.Indent} title="Aumentar Recuo" />
                         <EditorButton command="outdent" icon={Icons.Outdent} title="Diminuir Recuo" />
                     </div>
-
-                    {/* Grupo 6: Inserção */}
                     <div className="flex items-center gap-1 pl-2">
                         <EditorButton onClick={handleLinkClick} icon={Icons.Link} title="Inserir Link" />
                         <EditorButton onClick={handleTableOpen} icon={Icons.Table} title="Inserir Tabela" />
@@ -488,7 +427,6 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                     </div>
                 </div>
                 
-                {/* Editable Area */}
                 <div
                     ref={editorRef}
                     contentEditable
@@ -500,7 +438,6 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                     style={{ lineHeight: '1.5' }}
                 />
 
-                {/* Image Edit Overlay Menu */}
                 {selectedImg && (
                     <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white p-1.5 rounded-lg shadow-xl flex gap-3 z-10 text-xs items-center animate-fade-in ring-1 ring-slate-700">
                         <span className="font-bold text-slate-300 border-r border-slate-600 pr-2">IMG</span>
@@ -520,53 +457,16 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                 )}
              </div>
 
-             {/* MODAL INSERIR TABELA */}
-             <Modal isOpen={showTableModal} onClose={() => setShowTableModal(false)} title="Inserir Tabela" maxWidth="max-w-md" footer={
-                 <div className="flex gap-2">
-                     <Button variant="ghost" onClick={() => setShowTableModal(false)}>Cancelar</Button>
-                     <Button onClick={insertCustomTable}>Inserir</Button>
-                 </div>
-             }>
+             <Modal isOpen={showTableModal} onClose={() => setShowTableModal(false)} title="Inserir Tabela" maxWidth="max-w-md" footer={<div className="flex gap-2"><Button variant="ghost" onClick={() => setShowTableModal(false)}>Cancelar</Button><Button onClick={insertCustomTable}>Inserir</Button></div>}>
                  <div className="space-y-4">
-                     <div className="grid grid-cols-2 gap-4">
-                         <Input label="Linhas" type="number" min="1" max="20" value={tableConfig.rows} onChange={(e) => setTableConfig({...tableConfig, rows: parseInt(e.target.value)})} />
-                         <Input label="Colunas" type="number" min="1" max="10" value={tableConfig.cols} onChange={(e) => setTableConfig({...tableConfig, cols: parseInt(e.target.value)})} />
-                     </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <Select label="Alinhamento" value={tableConfig.align} onChange={(e) => setTableConfig({...tableConfig, align: e.target.value})}>
-                            <option value="left">Esquerda</option>
-                            <option value="center">Centro</option>
-                            <option value="right">Direita</option>
-                        </Select>
-                        <Input label="Largura (%)" type="number" min="10" max="100" value={tableConfig.width} onChange={(e) => setTableConfig({...tableConfig, width: parseInt(e.target.value)})} />
-                     </div>
-                     <div className="grid grid-cols-2 gap-4 items-end">
-                        <Input label="Padding das células (px)" type="number" min="0" value={tableConfig.padding} onChange={(e) => setTableConfig({...tableConfig, padding: parseInt(e.target.value)})} />
-                        <div className="flex items-center gap-2 mb-3">
-                             <input type="checkbox" id="headerRow" className="w-4 h-4 text-brand-blue" checked={tableConfig.header} onChange={(e) => setTableConfig({...tableConfig, header: e.target.checked})} />
-                             <label htmlFor="headerRow" className="text-sm text-slate-700">Incluir linha de cabeçalho</label>
-                        </div>
-                     </div>
+                     <div className="grid grid-cols-2 gap-4"><Input label="Linhas" type="number" min="1" max="20" value={tableConfig.rows} onChange={(e) => setTableConfig({...tableConfig, rows: parseInt(e.target.value)})} /><Input label="Colunas" type="number" min="1" max="10" value={tableConfig.cols} onChange={(e) => setTableConfig({...tableConfig, cols: parseInt(e.target.value)})} /></div>
+                     <div className="grid grid-cols-2 gap-4"><Select label="Alinhamento" value={tableConfig.align} onChange={(e) => setTableConfig({...tableConfig, align: e.target.value})}><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></Select><Input label="Largura (%)" type="number" min="10" max="100" value={tableConfig.width} onChange={(e) => setTableConfig({...tableConfig, width: parseInt(e.target.value)})} /></div>
+                     <div className="grid grid-cols-2 gap-4 items-end"><Input label="Padding das células (px)" type="number" min="0" value={tableConfig.padding} onChange={(e) => setTableConfig({...tableConfig, padding: parseInt(e.target.value)})} /><div className="flex items-center gap-2 mb-3"><input type="checkbox" id="headerRow" className="w-4 h-4 text-brand-blue" checked={tableConfig.header} onChange={(e) => setTableConfig({...tableConfig, header: e.target.checked})} /><label htmlFor="headerRow" className="text-sm text-slate-700">Incluir linha de cabeçalho</label></div></div>
                  </div>
              </Modal>
 
-             {/* MODAL INSERIR LINK */}
-             <Modal isOpen={showLinkModal} onClose={() => closeLinkModal(false)} title="Inserir / Editar Link" maxWidth="max-w-sm" footer={
-                 <div className="flex gap-2">
-                     <Button variant="ghost" onClick={() => closeLinkModal(false)}>Cancelar</Button>
-                     <Button type="button" onClick={() => closeLinkModal(true)}>Salvar Link</Button>
-                 </div>
-             }>
-                 <div className="space-y-4">
-                     <p className="text-sm text-slate-500">Insira a URL para onde o texto selecionado deve apontar.</p>
-                     <Input 
-                        label="URL" 
-                        value={linkUrl} 
-                        onChange={(e) => setLinkUrl(e.target.value)} 
-                        placeholder="https://exemplo.com"
-                        autoFocus
-                     />
-                 </div>
+             <Modal isOpen={showLinkModal} onClose={() => closeLinkModal(false)} title="Inserir / Editar Link" maxWidth="max-w-sm" footer={<div className="flex gap-2"><Button variant="ghost" onClick={() => closeLinkModal(false)}>Cancelar</Button><Button type="button" onClick={() => closeLinkModal(true)}>Salvar Link</Button></div>}>
+                 <div className="space-y-4"><p className="text-sm text-slate-500">Insira a URL para onde o texto selecionado deve apontar.</p><Input label="URL" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://exemplo.com" autoFocus /></div>
              </Modal>
         </div>
     );

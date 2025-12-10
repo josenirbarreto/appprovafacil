@@ -74,13 +74,35 @@ export interface Question {
   createdAt: string;
 }
 
+// Exam Configuration Scope
+export interface ExamContentScope {
+  id: string; // Unique ID for the scope entry
+  disciplineId: string;
+  disciplineName: string;
+  chapterId?: string;
+  chapterName?: string;
+  unitId?: string;
+  unitName?: string;
+  topicId?: string;
+  topicName?: string;
+  questionCount: number; // Quantidade de questões desejadas deste tópico
+}
+
 // Exam
 export interface Exam {
   id: string;
   title: string;
-  headerText: string;
-  questions: Question[];
+  headerText: string; // Subtítulo ou cabeçalho textual
+  institutionId?: string;
+  
+  // Configurações de Layout e Instruções
+  columns: 1 | 2;
+  instructions: string; // HTML rich text
+  
+  // Conteúdo
+  contentScopes: ExamContentScope[]; // O que cai na prova
+  questions: Question[]; // As questões selecionadas
+  
   createdAt: string;
   showAnswerKey: boolean;
-  institutionId?: string; // Link to institution for logo
 }
