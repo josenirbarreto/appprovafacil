@@ -31,12 +31,54 @@
     </script>
     <style>
       @media print {
-        .no-print { display: none !important; }
-        .print-only { display: block !important; }
-        body { background: white; color: black; }
-        .page-break { page-break-before: always; }
+        /* Regras Gerais de Impressão */
+        @page {
+          margin: 1cm;
+          size: auto; 
+        }
+
+        /* Esconde todos os elementos por padrão */
+        body * {
+          visibility: hidden;
+        }
+
+        /* Exibe apenas a área da prova e seus descendentes */
+        #printable-section, #printable-section * {
+          visibility: visible;
+        }
+
+        /* Posiciona a prova no topo absoluto, cobrindo tudo */
+        #printable-section {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100% !important;
+          max-width: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: white !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+          min-height: auto !important;
+        }
+
+        /* Garante que quebras de página não cortem elementos ao meio */
+        .break-inside-avoid {
+          page-break-inside: avoid;
+        }
+
+        /* Utilitários específicos para ocultar na impressão */
+        .no-print { 
+          display: none !important; 
+        }
+        
+        .print-only { 
+          display: block !important; 
+        }
       }
+
       .print-only { display: none; }
+      
       /* Custom Scrollbar for nicer UI */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

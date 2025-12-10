@@ -619,6 +619,302 @@ const HierarchyPage = () => {
     );
 };
 
+// PAGE: QUESTIONS
+const QuestionsPage = () => {
+    const [questions, setQuestions] = useState<Question[]>([]);
+    const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
+    const [showModal, setShowModal] = useState(false);
+    const [currentQ, setCurrentQ] = useState<Partial<Question>>({});
+    const [loading, setLoading] = useState(false);
+
+    // AI Generation State
+    const [genTopic, setGenTopic] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    // PDF Import State
+    const [showPdfModal, setShowPdfModal] = useState(false);
+    const [importing, setImporting] = useState(false);
+
+    useEffect(() => { loadData(); }, []);
+
+    const loadData = async () => {
+        const qs = await FirebaseService.getQuestions();
+        const hier = await FirebaseService.getHierarchy();
+        setQuestions(qs);
+        setHierarchy(hier);
+    };
+
+    const handleSave = async () => {
+        if (!currentQ.enunciado || !currentQ.disciplineId) return alert('Preencha os campos obrigatórios');
+        
+        // Validation for MC
+        if (currentQ.type === QuestionType.MULTIPLE_CHOICE) {
+             if (!currentQ.options || currentQ.options.length < 2) return alert('Adicione pelo menos 2 alternativas.');
+             if (!currentQ.options.some(o => o.isCorrect)) return alert('Marque a alternativa correta.');
+        }
+
+        setLoading(true);
+        const qToSave = {
+            ...currentQ,
+            createdAt: currentQ.createdAt || new Date().toISOString()
+        } as Question;
+
+        if (currentQ.id) await FirebaseService.updateQuestion(qToSave);
+        else await FirebaseService.addQuestion(qToSave);
+
+        setLoading(false);
+        setShowModal(false);
+        loadData();
+    };
+
+    const handleDelete = async (id: string) => {
+        if(confirm('Excluir questão?')) {
+            await FirebaseService.deleteQuestion(id);
+            loadData();
+        }
+    };
+
+    const handleNew = () => {
+        setCurrentQ({
+            type: QuestionType.MULTIPLE_CHOICE,
+            difficulty: 'Medium',
+            options: [
+                { id: '1', text: '', isCorrect: false },
+                { id: '2', text: '', isCorrect: false },
+                { id: '3', text: '', isCorrect: false },
+                { id: '4', text: '', isCorrect: false }
+            ],
+            disciplineId: '', chapterId: '', unitId: '', topicId: ''
+        });
+        setShowModal(true);
+    };
+
+    const handleEdit = (q: Question) => {
+        setCurrentQ(JSON.parse(JSON.stringify(q)));
+        setShowModal(true);
+    };
+
+    const handleGenerateAI = async () => {
+        if (!genTopic) return alert('Digite um tópico para gerar a questão.');
+        setIsGenerating(true);
+        const generated = await GeminiService.generateQuestion(genTopic, currentQ.type || QuestionType.MULTIPLE_CHOICE, currentQ.difficulty || 'Medium');
+        setIsGenerating(false);
+        
+        if (generated) {
+            setCurrentQ(prev => ({
+                ...prev,
+                enunciado: generated.enunciado,
+                options: generated.options
+            }));
+        } else {
+            alert('Falha ao gerar questão. Tente novamente.');
+        }
+    };
+
+    const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setImporting(true);
+        try {
+            const text = await PdfService.extractText(file);
+            const parsed = await GeminiService.parseQuestionsFromText(text);
+            
+            if(parsed.length > 0) {
+                if(confirm(`${parsed.length} questões encontradas. Deseja importar todas?`)) {
+                    for(const q of parsed) {
+                         const qToAdd = {
+                             ...q,
+                             id: '', // Dummy ID
+                             createdAt: new Date().toISOString(),
+                             disciplineId: hierarchy[0]?.id || '', // Fallback
+                             chapterId: '', unitId: '', topicId: '',
+                             difficulty: q.difficulty || 'Medium'
+                         } as Question;
+                         await FirebaseService.addQuestion(qToAdd);
+                    }
+                    loadData();
+                    setShowPdfModal(false);
+                    alert('Importação concluída!');
+                }
+            } else {
+                alert('Nenhuma questão identificada no PDF.');
+            }
+
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao processar PDF.');
+        }
+        setImporting(false);
+    };
+
+    // Helper to render hierarchy selectors in Modal
+    const renderHierarchySelectors = () => {
+        const d = hierarchy.find(x => x.id === currentQ.disciplineId);
+        const c = d?.chapters.find(x => x.id === currentQ.chapterId);
+        const u = c?.units.find(x => x.id === currentQ.unitId);
+
+        return (
+            <div className="grid grid-cols-2 gap-4">
+                <Select label="Disciplina" value={currentQ.disciplineId || ''} onChange={e => setCurrentQ({...currentQ, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}>
+                    <option value="">Selecione...</option>
+                    {hierarchy.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                </Select>
+                <Select label="Capítulo" value={currentQ.chapterId || ''} onChange={e => setCurrentQ({...currentQ, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!currentQ.disciplineId}>
+                    <option value="">Selecione...</option>
+                    {d?.chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                </Select>
+                <Select label="Unidade" value={currentQ.unitId || ''} onChange={e => setCurrentQ({...currentQ, unitId: e.target.value, topicId: ''})} disabled={!currentQ.chapterId}>
+                    <option value="">Selecione...</option>
+                    {c?.units.map(un => <option key={un.id} value={un.id}>{un.name}</option>)}
+                </Select>
+                <Select label="Tópico" value={currentQ.topicId || ''} onChange={e => setCurrentQ({...currentQ, topicId: e.target.value})} disabled={!currentQ.unitId}>
+                    <option value="">Selecione...</option>
+                    {u?.topics.map(tp => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
+                </Select>
+            </div>
+        );
+    };
+
+    return (
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
+            <div className="flex justify-between items-center">
+                 <h2 className="text-3xl font-display font-bold text-brand-dark">Banco de Questões</h2>
+                 <div className="flex gap-2">
+                     <Button variant="secondary" onClick={() => setShowPdfModal(true)}><Icons.Pdf /> Importar PDF</Button>
+                     <Button onClick={handleNew}><Icons.Plus /> Nova Questão</Button>
+                 </div>
+            </div>
+
+            {/* List */}
+            <div className="grid grid-cols-1 gap-4">
+                {questions.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                        <Icons.Questions />
+                        <p className="mt-2">Nenhuma questão cadastrada.</p>
+                    </div>
+                ) : (
+                    questions.map(q => (
+                        <div key={q.id} className="bg-white p-4 rounded-lg border hover:shadow-md transition-shadow flex gap-4 group">
+                            <div className="flex-1">
+                                 <div className="flex gap-2 mb-2 text-xs">
+                                     <Badge color="blue">{QuestionTypeLabels[q.type]}</Badge>
+                                     <Badge color={q.difficulty === 'Hard' ? 'red' : q.difficulty === 'Medium' ? 'yellow' : 'green'}>{q.difficulty}</Badge>
+                                     <span className="text-slate-400 font-medium ml-2">{FirebaseService.getFullHierarchyString(q, hierarchy)}</span>
+                                 </div>
+                                 <div className="text-slate-800 rich-text-content line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                            </div>
+                            <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity justify-center">
+                                <Button variant="ghost" onClick={() => handleEdit(q)}><Icons.Edit /></Button>
+                                <Button variant="ghost" onClick={() => handleDelete(q.id)} className="text-red-500"><Icons.Trash /></Button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* Modal Edit/Create */}
+            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Questão" maxWidth="max-w-4xl" footer={<Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
+                    {/* Left: Configuration */}
+                    <div className="md:col-span-1 space-y-4 border-r pr-4 overflow-y-auto custom-scrollbar">
+                        <h4 className="font-bold text-slate-700">Classificação</h4>
+                        {renderHierarchySelectors()}
+                        
+                        <div className="border-t pt-4"></div>
+                        <h4 className="font-bold text-slate-700">Detalhes</h4>
+                        <Select label="Tipo" value={currentQ.type} onChange={e => setCurrentQ({...currentQ, type: e.target.value as QuestionType})}>
+                             {Object.entries(QuestionTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                        </Select>
+                        <Select label="Dificuldade" value={currentQ.difficulty} onChange={e => setCurrentQ({...currentQ, difficulty: e.target.value as any})}>
+                            <option value="Easy">Fácil</option>
+                            <option value="Medium">Média</option>
+                            <option value="Hard">Difícil</option>
+                        </Select>
+
+                        <div className="bg-blue-50 p-4 rounded-lg mt-6 border border-blue-100">
+                             <h4 className="font-bold text-blue-800 text-sm mb-2 flex items-center gap-2"><Icons.Sparkles /> IA Gemini</h4>
+                             <p className="text-xs text-blue-600 mb-3">Gere o enunciado e alternativas automaticamente.</p>
+                             <Input placeholder="Tópico (ex: Revolução Francesa)" value={genTopic} onChange={e => setGenTopic(e.target.value)} className="mb-2 text-sm" />
+                             <Button onClick={handleGenerateAI} disabled={isGenerating} className="w-full text-xs" variant="secondary">
+                                 {isGenerating ? 'Gerando...' : 'Gerar Questão'}
+                             </Button>
+                        </div>
+                    </div>
+
+                    {/* Right: Content */}
+                    <div className="md:col-span-2 space-y-4 overflow-y-auto custom-scrollbar">
+                        <RichTextEditor label="Enunciado da Questão" value={currentQ.enunciado || ''} onChange={(html) => setCurrentQ({...currentQ, enunciado: html})} />
+                        
+                        {currentQ.type === QuestionType.MULTIPLE_CHOICE && (
+                            <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                <h4 className="font-bold text-slate-700">Alternativas</h4>
+                                {currentQ.options?.map((opt, idx) => (
+                                    <div key={idx} className="flex gap-2 items-center">
+                                        <input 
+                                            type="radio" 
+                                            name="correctOpt" 
+                                            checked={opt.isCorrect} 
+                                            onChange={() => {
+                                                const newOpts = currentQ.options?.map((o, i) => ({ ...o, isCorrect: i === idx }));
+                                                setCurrentQ({...currentQ, options: newOpts});
+                                            }}
+                                            className="w-4 h-4 text-brand-blue"
+                                        />
+                                        <Input 
+                                            value={opt.text} 
+                                            onChange={e => {
+                                                const newOpts = [...(currentQ.options || [])];
+                                                newOpts[idx].text = e.target.value;
+                                                setCurrentQ({...currentQ, options: newOpts});
+                                            }}
+                                            placeholder={`Alternativa ${String.fromCharCode(65+idx)}`}
+                                        />
+                                        <button onClick={() => {
+                                            const newOpts = currentQ.options?.filter((_, i) => i !== idx);
+                                            setCurrentQ({...currentQ, options: newOpts});
+                                        }} className="text-red-400 hover:text-red-600"><Icons.Trash /></button>
+                                    </div>
+                                ))}
+                                <Button variant="ghost" onClick={() => setCurrentQ({...currentQ, options: [...(currentQ.options || []), {id: Date.now().toString(), text: '', isCorrect: false}]})} className="text-xs">+ Adicionar Alternativa</Button>
+                            </div>
+                        )}
+                        
+                        {currentQ.type === QuestionType.TRUE_FALSE && (
+                            <div className="p-4 bg-slate-50 rounded text-sm text-slate-600">
+                                O aluno deverá marcar Verdadeiro ou Falso. (Configure o gabarito se necessário).
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Modal PDF Import */}
+            <Modal isOpen={showPdfModal} onClose={() => setShowPdfModal(false)} title="Importar de PDF" maxWidth="max-w-md">
+                <div className="space-y-4 text-center p-6">
+                    <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Icons.Pdf />
+                    </div>
+                    <p className="text-slate-600">Selecione um arquivo PDF contendo provas ou listas de exercícios. A IA tentará identificar e extrair as questões automaticamente.</p>
+                    
+                    <label className="block">
+                        <span className="sr-only">Escolher arquivo</span>
+                        <input type="file" accept=".pdf" onChange={handlePdfUpload} className="block w-full text-sm text-slate-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-full file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-brand-blue file:text-white
+                          hover:file:bg-blue-700
+                        "/>
+                    </label>
+
+                    {importing && <p className="text-brand-blue font-bold animate-pulse">Processando arquivo e analisando com IA...</p>}
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
 // PAGE: EXAMS (Gerenciador de Provas)
 const ExamsPage = () => {
     const [exams, setExams] = useState<Exam[]>([]);
@@ -1068,7 +1364,7 @@ const ExamsPage = () => {
                 
                 <div className="flex-1 overflow-y-auto bg-slate-200 p-4 md:p-8 custom-scrollbar">
                     {/* FOLHA DA PROVA (A4 simulated) */}
-                    <div className="bg-white mx-auto max-w-[210mm] min-h-[297mm] p-[15mm] shadow-lg print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 text-black">
+                    <div id="printable-section" className="bg-white mx-auto max-w-[210mm] min-h-[297mm] p-[15mm] shadow-lg print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 text-black">
                         
                         {/* CABEÇALHO */}
                         <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
@@ -1252,262 +1548,6 @@ const ExamsPage = () => {
                          )}
                      </div>
                  )}
-            </Modal>
-        </div>
-    );
-};
-
-// GESTÃO DE QUESTÕES
-const QuestionsPage = () => {
-    const [questions, setQuestions] = useState<Question[]>([]);
-    const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
-    const [showModal, setShowModal] = useState(false);
-    const [loading, setLoading] = useState(false);
-    
-    // Estado do Formulário
-    const [currentQ, setCurrentQ] = useState<Partial<Question>>({
-        type: QuestionType.MULTIPLE_CHOICE,
-        difficulty: 'Medium',
-        options: [{ id: '1', text: '', isCorrect: false }, { id: '2', text: '', isCorrect: false }]
-    });
-    
-    // Estado de Geração AI
-    const [aiTab, setAiTab] = useState<'MANUAL' | 'GENERATE' | 'IMPORT'>('MANUAL');
-    const [aiTopic, setAiTopic] = useState('');
-
-    useEffect(() => { loadData(); }, []);
-
-    const loadData = async () => {
-        setLoading(true);
-        const [qs, hs] = await Promise.all([FirebaseService.getQuestions(), FirebaseService.getHierarchy()]);
-        setQuestions(qs);
-        setHierarchy(hs);
-        setLoading(false);
-    };
-
-    const handleCreateNew = () => {
-        setCurrentQ({
-            type: QuestionType.MULTIPLE_CHOICE,
-            difficulty: 'Medium',
-            options: [{ id: '1', text: '', isCorrect: false }, { id: '2', text: '', isCorrect: false }, { id: '3', text: '', isCorrect: false }, { id: '4', text: '', isCorrect: false }],
-            createdAt: new Date().toISOString()
-        });
-        setAiTab('MANUAL');
-        setShowModal(true);
-    };
-
-    const handleEdit = (q: Question) => {
-        setCurrentQ({ ...q });
-        setAiTab('MANUAL');
-        setShowModal(true);
-    };
-
-    const handleDelete = async (id: string) => {
-        if(confirm('Tem certeza?')) { await FirebaseService.deleteQuestion(id); loadData(); }
-    };
-
-    const handleSave = async () => {
-        if (!currentQ.enunciado || !currentQ.disciplineId) return alert('Preencha enunciado e disciplina.');
-        setLoading(true);
-        try {
-            if (currentQ.id) await FirebaseService.updateQuestion(currentQ as Question);
-            else await FirebaseService.addQuestion(currentQ as Question);
-            setShowModal(false);
-            loadData();
-        } catch (e) { alert('Erro ao salvar.'); }
-        setLoading(false);
-    };
-
-    // AI Generation
-    const handleGenerate = async () => {
-        if (!aiTopic) return alert('Digite um tópico.');
-        setLoading(true);
-        const res = await GeminiService.generateQuestion(aiTopic, currentQ.type || QuestionType.MULTIPLE_CHOICE, currentQ.difficulty || 'Medium');
-        setLoading(false);
-        if (res) {
-            setCurrentQ(prev => ({ ...prev, ...res }));
-            setAiTab('MANUAL');
-        } else {
-            alert('Não foi possível gerar a questão. Tente novamente.');
-        }
-    };
-
-    // PDF Import
-    const handlePdfImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setLoading(true);
-        try {
-            const text = await PdfService.extractText(file);
-            const parsedQuestions = await GeminiService.parseQuestionsFromText(text);
-            
-            // Auto-save imported questions (simplified for this demo)
-            // Assign to first available discipline/topic as fallback
-            const defaultDisc = hierarchy[0];
-            const defaultChap = defaultDisc?.chapters[0];
-            const defaultUnit = defaultChap?.units[0];
-            const defaultTopic = defaultUnit?.topics[0];
-
-            let count = 0;
-            for (const pq of parsedQuestions) {
-                await FirebaseService.addQuestion({
-                    ...pq,
-                    disciplineId: defaultDisc?.id || '',
-                    chapterId: defaultChap?.id || '',
-                    unitId: defaultUnit?.id || '',
-                    topicId: defaultTopic?.id || '',
-                    difficulty: 'Medium',
-                    createdAt: new Date().toISOString()
-                } as Question);
-                count++;
-            }
-            alert(`${count} questões importadas com sucesso!`);
-            loadData();
-            setShowModal(false);
-        } catch (err) {
-            console.error(err);
-            alert('Erro ao processar PDF.');
-        }
-        setLoading(false);
-    };
-
-    // Helper for Hierarchy Selects
-    const selDisc = hierarchy.find(d => d.id === currentQ.disciplineId);
-    const selChap = selDisc?.chapters.find(c => c.id === currentQ.chapterId);
-    const selUnit = selChap?.units.find(u => u.id === currentQ.unitId);
-
-    return (
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-display font-bold text-brand-dark">Banco de Questões</h2>
-                <Button onClick={handleCreateNew}><Icons.Plus /> Nova Questão</Button>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                {questions.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500">Nenhuma questão cadastrada.</div>
-                ) : (
-                    <div className="divide-y divide-slate-100">
-                        {questions.map(q => (
-                            <div key={q.id} className="p-4 hover:bg-slate-50 transition-colors flex gap-4">
-                                <div className="flex-1">
-                                    <div className="flex gap-2 text-xs mb-2">
-                                        <Badge>{QuestionTypeLabels[q.type]}</Badge>
-                                        <Badge color={q.difficulty === 'Easy' ? 'green' : q.difficulty === 'Medium' ? 'yellow' : 'red'}>{q.difficulty}</Badge>
-                                        <span className="text-slate-400 flex items-center gap-1">• {FirebaseService.getFullHierarchyString(q, hierarchy)}</span>
-                                    </div>
-                                    <div className="text-sm font-medium text-slate-800 rich-text-content line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button variant="ghost" onClick={() => handleEdit(q)}><Icons.Edit /></Button>
-                                    <Button variant="ghost" onClick={() => handleDelete(q.id)} className="text-red-400"><Icons.Trash /></Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Questão" maxWidth="max-w-4xl" footer={<Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar Questão'}</Button>}>
-                <div className="space-y-6">
-                    {/* Tabs */}
-                    <div className="flex border-b">
-                        <button onClick={() => setAiTab('MANUAL')} className={`px-4 py-2 text-sm font-bold ${aiTab === 'MANUAL' ? 'border-b-2 border-brand-blue text-brand-blue' : 'text-slate-500'}`}>Manual</button>
-                        <button onClick={() => setAiTab('GENERATE')} className={`px-4 py-2 text-sm font-bold ${aiTab === 'GENERATE' ? 'border-b-2 border-brand-blue text-brand-blue' : 'text-slate-500'}`}>✨ Gerar com IA</button>
-                        <button onClick={() => setAiTab('IMPORT')} className={`px-4 py-2 text-sm font-bold ${aiTab === 'IMPORT' ? 'border-b-2 border-brand-blue text-brand-blue' : 'text-slate-500'}`}>📄 Importar PDF</button>
-                    </div>
-
-                    {aiTab === 'GENERATE' && (
-                        <div className="bg-blue-50 p-4 rounded-lg space-y-3">
-                            <Input label="Tópico da Questão" value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="Ex: Revolução Francesa, Equação de 2º Grau..." />
-                            <div className="flex gap-4">
-                                <Select label="Tipo" value={currentQ.type} onChange={e => setCurrentQ({...currentQ, type: e.target.value as QuestionType})}>
-                                    {Object.entries(QuestionTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                </Select>
-                                <Select label="Dificuldade" value={currentQ.difficulty} onChange={e => setCurrentQ({...currentQ, difficulty: e.target.value as any})}>
-                                    <option value="Easy">Fácil</option><option value="Medium">Médio</option><option value="Hard">Difícil</option>
-                                </Select>
-                            </div>
-                            <Button onClick={handleGenerate} disabled={loading} className="w-full justify-center">Gerar Rascunho</Button>
-                        </div>
-                    )}
-
-                    {aiTab === 'IMPORT' && (
-                        <div className="bg-slate-50 p-6 rounded-lg border-2 border-dashed border-slate-300 text-center">
-                            <Icons.Pdf />
-                            <p className="mt-2 text-sm text-slate-600 font-medium">Selecione um arquivo PDF (prova antiga, lista de exercícios)</p>
-                            <input type="file" accept=".pdf" onChange={handlePdfImport} className="mt-4" />
-                            <p className="mt-2 text-xs text-slate-400">A IA irá ler o arquivo e tentar extrair as questões automaticamente.</p>
-                        </div>
-                    )}
-
-                    {aiTab === 'MANUAL' && (
-                        <div className="space-y-4 animate-fade-in">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <Select label="Disciplina" value={currentQ.disciplineId} onChange={e => setCurrentQ({...currentQ, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}>
-                                    <option value="">Selecione...</option>
-                                    {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                </Select>
-                                <Select label="Capítulo" value={currentQ.chapterId} onChange={e => setCurrentQ({...currentQ, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!currentQ.disciplineId}>
-                                    <option value="">Selecione...</option>
-                                    {selDisc?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </Select>
-                                <Select label="Unidade" value={currentQ.unitId} onChange={e => setCurrentQ({...currentQ, unitId: e.target.value, topicId: ''})} disabled={!currentQ.chapterId}>
-                                    <option value="">Selecione...</option>
-                                    {selChap?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                </Select>
-                                <Select label="Tópico" value={currentQ.topicId} onChange={e => setCurrentQ({...currentQ, topicId: e.target.value})} disabled={!currentQ.unitId}>
-                                    <option value="">Selecione...</option>
-                                    {selUnit?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                </Select>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-4">
-                                <Select label="Tipo" value={currentQ.type} onChange={e => setCurrentQ({...currentQ, type: e.target.value as QuestionType})}>
-                                    {Object.entries(QuestionTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                </Select>
-                                <Select label="Dificuldade" value={currentQ.difficulty} onChange={e => setCurrentQ({...currentQ, difficulty: e.target.value as any})}>
-                                    <option value="Easy">Fácil</option><option value="Medium">Médio</option><option value="Hard">Difícil</option>
-                                </Select>
-                            </div>
-
-                            <RichTextEditor label="Enunciado" value={currentQ.enunciado || ''} onChange={(html) => setCurrentQ({...currentQ, enunciado: html})} />
-                            
-                            {currentQ.type === QuestionType.MULTIPLE_CHOICE && (
-                                <div className="space-y-2 bg-slate-50 p-4 rounded border">
-                                    <label className="text-sm font-bold">Alternativas</label>
-                                    {currentQ.options?.map((opt, idx) => (
-                                        <div key={opt.id} className="flex gap-2 items-center">
-                                            <input 
-                                                type="radio" 
-                                                name="correctOpt" 
-                                                checked={opt.isCorrect} 
-                                                onChange={() => {
-                                                    const newOpts = currentQ.options?.map(o => ({ ...o, isCorrect: o.id === opt.id }));
-                                                    setCurrentQ({...currentQ, options: newOpts});
-                                                }}
-                                            />
-                                            <Input 
-                                                value={opt.text} 
-                                                onChange={e => {
-                                                    const newOpts = [...(currentQ.options || [])];
-                                                    newOpts[idx] = { ...opt, text: e.target.value };
-                                                    setCurrentQ({...currentQ, options: newOpts});
-                                                }}
-                                                placeholder={`Opção ${idx + 1}`}
-                                                className="bg-white"
-                                            />
-                                            <button onClick={() => setCurrentQ({...currentQ, options: currentQ.options?.filter(o => o.id !== opt.id)})} className="text-red-400 hover:text-red-600"><Icons.Trash /></button>
-                                        </div>
-                                    ))}
-                                    <Button variant="ghost" onClick={() => setCurrentQ({...currentQ, options: [...(currentQ.options||[]), {id: Date.now().toString(), text: '', isCorrect: false}]})} className="text-xs">+ Adicionar Opção</Button>
-                                </div>
-                            )}
-
-                            {/* Handling other types logic omitted for brevity but necessary for full functionality */}
-                        </div>
-                    )}
-                </div>
             </Modal>
         </div>
     );
