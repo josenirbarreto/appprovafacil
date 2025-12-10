@@ -11,7 +11,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 // Ícones SVG
 const Icons = {
-  Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
+  Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
   Questions: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
   Exams: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
   Users: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
@@ -618,6 +618,76 @@ const HierarchyPage = () => {
     );
 };
 
+// PAGE: EXAMS (Gerenciador de Provas)
+const ExamsPage = () => {
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [showModal, setShowModal] = useState(false);
+    const [newExamTitle, setNewExamTitle] = useState('');
+
+    useEffect(() => { loadData(); }, []);
+
+    const loadData = async () => {
+        const data = await FirebaseService.getExams();
+        setExams(data);
+    };
+
+    const handleCreateExam = async () => {
+        if (!newExamTitle.trim()) return alert("Digite um título.");
+        const newExam: Exam = {
+            id: '',
+            title: newExamTitle,
+            headerText: `Prova: ${newExamTitle}`,
+            questions: [],
+            createdAt: new Date().toISOString(),
+            showAnswerKey: false
+        };
+        await FirebaseService.saveExam(newExam);
+        setShowModal(false);
+        setNewExamTitle('');
+        loadData();
+    };
+
+    return (
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
+            <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-display font-bold text-brand-dark">Minhas Provas</h2>
+                <Button onClick={() => setShowModal(true)}><Icons.Plus /> Nova Prova</Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {exams.length === 0 ? (
+                    <div className="col-span-3 text-center py-20 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                        <div className="mb-3"><Icons.Exams /></div>
+                        <p>Nenhuma prova criada ainda.</p>
+                        <p className="text-sm">Clique em "Nova Prova" para começar.</p>
+                    </div>
+                ) : (
+                    exams.map(exam => (
+                        <Card key={exam.id} className="hover:shadow-md transition-shadow group flex flex-col h-full">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="p-3 bg-orange-100 text-brand-orange rounded-lg"><Icons.Exams /></div>
+                                <Badge color="blue">{new Date(exam.createdAt).toLocaleDateString()}</Badge>
+                            </div>
+                            <h3 className="font-bold text-lg text-brand-dark mb-2">{exam.title}</h3>
+                            <p className="text-sm text-slate-500 mb-4">{exam.questions?.length || 0} questões</p>
+                            <div className="mt-auto pt-4 border-t border-slate-100 flex justify-end gap-2">
+                                <Button variant="ghost" className="text-sm">Editar</Button>
+                                <Button variant="ghost" className="text-sm text-red-500"><Icons.Trash /></Button>
+                            </div>
+                        </Card>
+                    ))
+                )}
+            </div>
+
+            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nova Prova" footer={<Button onClick={handleCreateExam}>Criar</Button>}>
+                <div className="space-y-4">
+                    <Input label="Título da Prova" value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} placeholder="Ex: Avaliação Bimestral de Matemática" autoFocus />
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
 // QUESTION BANK
 const QuestionBank = () => {
     const [questions, setQuestions] = useState<Question[]>([]);
@@ -1140,7 +1210,7 @@ const QuestionBank = () => {
                             <Badge color="yellow">{viewingQuestion.difficulty}</Badge>
                             <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{FirebaseService.getFullHierarchyString(viewingQuestion, hierarchy)}</span>
                         </div>
-                        <div className="prose prose-sm max-w-none bg-slate-50 p-4 rounded-lg border border-slate-100"><div dangerouslySetInnerHTML={{ __html: viewingQuestion.enunciado }} /></div>
+                        <div className="rich-text-content bg-slate-50 p-4 rounded-lg border border-slate-100"><div dangerouslySetInnerHTML={{ __html: viewingQuestion.enunciado }} /></div>
                         {viewingQuestion.options && viewingQuestion.options.length > 0 && (
                             <div>
                                 <h4 className="font-bold text-sm text-slate-700 mb-2">Alternativas / Gabarito</h4>
@@ -1162,101 +1232,94 @@ const QuestionBank = () => {
     );
 };
 
-const NavLink = ({ to, icon, label }: { to: string, icon: React.ReactNode, label: string }) => {
+const NavItem = ({ to, icon, label }: { to: string, icon: React.ReactNode, label: string }) => {
     const location = useLocation();
-    const active = location.pathname === to;
+    const isActive = location.pathname === to;
     return (
-        <Link to={to} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${active ? 'bg-brand-blue text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-            {icon}
-            <span>{label}</span>
+        <Link to={to} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all ${isActive ? 'bg-brand-blue text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+            <span className={isActive ? 'text-white' : 'text-slate-400'}>{icon}</span>
+            {label}
         </Link>
     );
 };
 
 const App = () => {
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-                const userData = await FirebaseService.getCurrentUserData();
-                setUser(userData);
-            } else {
-                setUser(null);
-            }
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
+            const userData = await FirebaseService.getCurrentUserData();
+            setUser(userData);
+        } else {
+            setUser(null);
+        }
+        setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
-    if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500">Carregando...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center text-brand-blue font-bold animate-pulse">Carregando Prova Fácil...</div>;
 
-    if (!user) return <Login />;
+  if (!user) return <Login />;
 
-    return (
-        <AuthContext.Provider value={{ user, loading }}>
-            <HashRouter>
-                <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
-                    {/* Sidebar */}
-                    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col hidden md:flex">
-                        <div className="p-6 border-b border-slate-800">
-                            <h1 className="text-2xl font-display font-bold text-white flex items-center gap-2">
-                                <Icons.BookOpen /> Prova Fácil
-                            </h1>
-                            <span className="text-xs text-slate-500 font-mono mt-1 block">TEACHER PANEL</span>
-                        </div>
+  return (
+    <AuthContext.Provider value={{ user, loading }}>
+        <HashRouter>
+            <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+                {/* SIDEBAR - TEMA ESCURO */}
+                <aside className="w-64 bg-brand-dark border-r border-slate-800 flex flex-col shrink-0 z-20 shadow-xl hidden md:flex text-white">
+                    <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                         <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg">P</div>
+                         <span className="font-display font-bold text-xl text-white tracking-tight">Prova Fácil</span>
+                    </div>
+                    
+                    <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+                        <NavItem to="/" icon={<Icons.Dashboard />} label="Dashboard" />
                         
-                        <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
-                            <NavLink to="/" icon={<Icons.Dashboard />} label="Dashboard" />
-                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Gestão</div>
-                            <NavLink to="/institutions" icon={<Icons.Building />} label="Instituições" />
-                            <NavLink to="/classes" icon={<Icons.UsersGroup />} label="Turmas" />
-                            <NavLink to="/hierarchy" icon={<Icons.BookOpen />} label="Conteúdos (BNCC)" />
-                            
-                            <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Avaliações</div>
-                            <NavLink to="/questions" icon={<Icons.Questions />} label="Banco de Questões" />
-                            <NavLink to="/exams" icon={<Icons.Exams />} label="Provas & Exames" />
-                        </nav>
+                        <div className="pt-6 pb-2 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Gestão</div>
+                        <NavItem to="/institutions" icon={<Icons.Building />} label="Instituições" />
+                        <NavItem to="/classes" icon={<Icons.UsersGroup />} label="Turmas" />
+                        <NavItem to="/hierarchy" icon={<Icons.BookOpen />} label="Conteúdos" />
 
-                        <div className="p-4 border-t border-slate-800">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-full bg-brand-orange text-white flex items-center justify-center font-bold shadow-sm">
-                                    {user.name ? user.name.charAt(0) : 'U'}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-white truncate">{user.name}</p>
-                                    <p className="text-xs text-slate-500 truncate">{user.email}</p>
-                                </div>
+                        <div className="pt-6 pb-2 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Avaliações</div>
+                        <NavItem to="/questions" icon={<Icons.Questions />} label="Banco de Questões" />
+                        <NavItem to="/exams" icon={<Icons.Exams />} label="Minhas Provas" />
+                    </nav>
+
+                    <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+                        <div className="flex items-center gap-3 mb-3 p-2 bg-slate-800 rounded-lg border border-slate-700 shadow-sm">
+                            <div className="w-8 h-8 rounded-full bg-brand-orange text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                                {user.name?.charAt(0) || 'U'}
                             </div>
-                            <Button variant="ghost" className="w-full justify-start text-red-400 hover:bg-slate-800 hover:text-red-300" onClick={() => FirebaseService.logout()}>
-                                <Icons.Logout /> Sair
-                            </Button>
+                            <div className="overflow-hidden flex-1 min-w-0">
+                                <p className="font-bold text-sm truncate text-white">{user.name}</p>
+                                <p className="text-xs text-slate-400 truncate" title={user.email}>{user.email}</p>
+                            </div>
                         </div>
-                    </aside>
+                        <Button variant="ghost" onClick={() => FirebaseService.logout()} className="w-full justify-center text-xs h-9 text-slate-400 hover:bg-red-900/20 hover:text-red-400 hover:border-red-900 group border border-transparent">
+                            <Icons.Logout /> Sair
+                        </Button>
+                    </div>
+                </aside>
 
-                    {/* Main Content */}
-                    <main className="flex-1 flex flex-col overflow-hidden relative">
-                        {/* Mobile Header */}
-                        <div className="md:hidden h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shrink-0 text-white">
-                             <h1 className="font-bold flex items-center gap-2"><Icons.BookOpen /> Prova Fácil</h1>
-                             <Button variant="ghost" onClick={() => FirebaseService.logout()} className="text-white hover:bg-slate-800"><Icons.Logout /></Button>
-                        </div>
-
-                        <Routes>
-                            <Route path="/" element={<Dashboard />} />
-                            <Route path="/institutions" element={<InstitutionPage />} />
-                            <Route path="/classes" element={<ClassesPage />} />
-                            <Route path="/hierarchy" element={<HierarchyPage />} />
-                            <Route path="/questions" element={<QuestionBank />} />
-                            <Route path="/exams" element={<div className="p-8 text-center text-slate-500">Módulo de Provas em Desenvolvimento...</div>} />
-                            <Route path="*" element={<Navigate to="/" />} />
-                        </Routes>
-                    </main>
-                </div>
-            </HashRouter>
-        </AuthContext.Provider>
-    );
+                {/* MAIN CONTENT */}
+                <main className="flex-1 flex flex-col min-w-0 relative bg-white md:bg-slate-50">
+                    <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/questions" element={<QuestionBank />} />
+                        <Route path="/exams" element={<ExamsPage />} />
+                        <Route path="/institutions" element={<InstitutionPage />} />
+                        <Route path="/classes" element={<ClassesPage />} />
+                        <Route path="/hierarchy" element={<HierarchyPage />} />
+                        <Route path="*" element={<Navigate to="/" />} />
+                    </Routes>
+                </main>
+            </div>
+        </HashRouter>
+    </AuthContext.Provider>
+  );
 };
 
 export default App;

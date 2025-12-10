@@ -131,16 +131,17 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
     const bgInputRef = useRef<HTMLInputElement>(null);
     const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
     
-    // States para Modais e Formatos
+    // States para Modais
     const [showTableModal, setShowTableModal] = useState(false);
     const [showLinkModal, setShowLinkModal] = useState(false);
-    const [linkUrl, setLinkUrl] = useState('');
     
-    // Ref para controlar estado de edição de link (novo vs existente)
-    const linkStateRef = useRef<{ isNew: boolean, tempUrl: string, editingNode: HTMLAnchorElement | null }>({
+    // Estado do Link
+    const [linkUrl, setLinkUrl] = useState('');
+    // Armazena metadados sobre o link que está sendo editado (URL temporária, se é novo ou existente)
+    const linkStateRef = useRef<{ isNew: boolean, tempUrl: string, originalUrl: string }>({
         isNew: false,
-        tempUrl: 'http://rte-temp-link-marker/',
-        editingNode: null
+        tempUrl: '',
+        originalUrl: ''
     });
     
     // Estado para botões ativos (negrito, itálico, etc.)
@@ -155,16 +156,20 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         header: true
     });
 
-    // Sync external value changes
+    // Sincronização de valor externo
     useEffect(() => {
+        // Se o modal de link estiver aberto, NÃO atualize o HTML vindo de fora.
+        // Isso previne que o React sobrescreva o DOM (e nossos placeholders temporários)
+        // enquanto o usuário está digitando no modal.
+        if (showLinkModal) return;
+
         if (editorRef.current && editorRef.current.innerHTML !== value) {
              if (value === '' && editorRef.current.innerHTML === '<br>') return;
-             // Evita re-render loops se o HTML for semanticamente igual mas string diferente
              if (editorRef.current.innerHTML !== value) {
                 editorRef.current.innerHTML = value;
              }
         }
-    }, [value]);
+    }, [value, showLinkModal]); // Adicionado showLinkModal como dependência
 
     const handleInput = () => {
         if (editorRef.current) {
@@ -189,8 +194,6 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         });
     };
 
-    // --- HANDLERS ESPECÍFICOS ---
-
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file && editorRef.current) {
@@ -212,107 +215,87 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         const selection = window.getSelection();
         if (!editorRef.current) return;
         
-        // Reset state
-        linkStateRef.current = { isNew: false, tempUrl: 'http://rte-temp-link-marker/', editingNode: null };
-
-        // 1. Verificar se já estamos editando um link existente
+        // Gera uma URL temporária única para identificar este link no DOM
+        const uniqueTempUrl = `http://temp-link-${Date.now()}.com/`;
+        
+        // Verifica se o usuário está clicando dentro de um link já existente
         let node = selection?.anchorNode;
         while (node && node.nodeName !== 'A' && node !== editorRef.current) {
             node = node.parentNode;
         }
 
         if (node && node.nodeName === 'A') {
-            // EDITANDO EXISTENTE
+            // EDITANDO LINK EXISTENTE
             const anchor = node as HTMLAnchorElement;
-            setLinkUrl(anchor.getAttribute('href') || '');
-            linkStateRef.current.editingNode = anchor;
-            setShowLinkModal(true);
-        } else {
-            // CRIANDO NOVO
-            // O segredo aqui é criar o link no DOM *ANTES* de abrir o modal,
-            // assim não perdemos a seleção quando o foco for para o input do modal.
+            const originalUrl = anchor.getAttribute('href') || '';
             
-            // Verifica se tem algo selecionado
+            // Marca o link existente com a URL temporária para encontrá-lo depois
+            anchor.setAttribute('href', uniqueTempUrl);
+            
+            // Configura estado
+            setLinkUrl(originalUrl);
+            linkStateRef.current = { isNew: false, tempUrl: uniqueTempUrl, originalUrl: originalUrl };
+        } else {
+            // CRIANDO NOVO LINK
+            setLinkUrl('https://');
+            linkStateRef.current = { isNew: true, tempUrl: uniqueTempUrl, originalUrl: '' };
+
             if (selection && !selection.isCollapsed) {
-                document.execCommand('createLink', false, linkStateRef.current.tempUrl);
-                // Verifica se o comando funcionou (criou o link placeholder)
-                const createdLinks = editorRef.current.querySelectorAll(`a[href="${linkStateRef.current.tempUrl}"]`);
-                
-                if (createdLinks.length > 0) {
-                    linkStateRef.current.isNew = true;
-                    setLinkUrl('https://');
-                    setShowLinkModal(true);
-                } else {
-                    // Fallback estranho do navegador
-                    alert("Selecione o texto para transformar em link.");
-                }
+                // Se tem texto selecionado, transforma em link
+                document.execCommand('createLink', false, uniqueTempUrl);
             } else {
-                // Nada selecionado: Inserir um link novo onde o cursor está
-                const id = "link-" + Date.now();
-                const tempHtml = `<a href="${linkStateRef.current.tempUrl}" id="${id}">Link</a>`;
+                // Se não tem texto, insere um link padrão "Link"
+                const tempHtml = `<a href="${uniqueTempUrl}">Link</a>`;
                 document.execCommand('insertHTML', false, tempHtml);
-                
-                const insertedLink = editorRef.current.querySelector(`#${id}`);
-                if (insertedLink) {
-                    insertedLink.removeAttribute('id'); // Limpa ID temporário
-                    linkStateRef.current.isNew = true;
-                    setLinkUrl('https://');
-                    setShowLinkModal(true);
-                    
-                    // Opcional: Selecionar o texto "Link" inserido para que o usuário possa sobrescrever se quiser?
-                    // Por enquanto deixamos assim.
-                }
             }
         }
+
+        // Sincroniza o estado do React com o novo DOM (contendo o placeholder)
+        handleInput();
+        
+        // Abre o modal
+        setShowLinkModal(true);
     };
 
     const closeLinkModal = (isSave: boolean) => {
-        setShowLinkModal(false);
         if (!editorRef.current) return;
 
-        const { isNew, tempUrl, editingNode } = linkStateRef.current;
-
-        // Função auxiliar para remover links temporários (desfazer criação)
-        const unwrapTempLinks = () => {
-            const tempLinks = editorRef.current?.querySelectorAll(`a[href="${tempUrl}"]`);
-            tempLinks?.forEach(link => {
-                // Move os filhos para antes do link e remove o link
-                const parent = link.parentNode;
-                while (link.firstChild) parent?.insertBefore(link.firstChild, link);
-                parent?.removeChild(link);
-            });
-        };
-
-        if (isSave && linkUrl) {
-            // SALVAR
-            if (isNew) {
-                // Busca os placeholders e atualiza a URL
-                const tempLinks = editorRef.current.querySelectorAll(`a[href="${tempUrl}"]`);
-                tempLinks.forEach(link => {
-                    link.setAttribute('href', linkUrl);
-                    link.setAttribute('target', '_blank');
-                });
-            } else if (editingNode) {
-                // Atualiza nó existente
-                editingNode.setAttribute('href', linkUrl);
-                editingNode.setAttribute('target', '_blank');
-            }
-        } else {
-            // CANCELAR OU URL VAZIA (Remover Link)
-            if (isNew) {
-                // Se era novo, desfazemos a criação (removemos a tag A mas mantemos o texto)
-                unwrapTempLinks();
-            } else if (editingNode && isSave && !linkUrl) {
-                // Se estava editando e salvou vazio -> unlink
-                const parent = editingNode.parentNode;
-                while (editingNode.firstChild) parent?.insertBefore(editingNode.firstChild, editingNode);
-                parent?.removeChild(editingNode);
-            }
-            // Se estava editando e cancelou -> não faz nada (mantém original)
-        }
+        const { isNew, tempUrl, originalUrl } = linkStateRef.current;
         
-        // Garante que o editor salve o estado final
+        // Encontra todos os links que tenham nossa URL temporária
+        const tempLinks = editorRef.current.querySelectorAll(`a[href="${tempUrl}"]`);
+        
+        tempLinks.forEach(link => {
+            if (isSave && linkUrl) {
+                // SALVAR: Atualiza href e target
+                link.setAttribute('href', linkUrl);
+                link.setAttribute('target', '_blank');
+                link.setAttribute('rel', 'noopener noreferrer');
+            } else {
+                // CANCELAR ou SALVAR VAZIO
+                if (isNew) {
+                    // Se era novo, removemos o link mas mantemos o texto (unwrap)
+                    const parent = link.parentNode;
+                    while (link.firstChild) parent?.insertBefore(link.firstChild, link);
+                    parent?.removeChild(link);
+                } else {
+                    // Se era edição, restauramos a URL original
+                    if (isSave && !linkUrl) {
+                        // Usuário apagou a URL -> remover link
+                        const parent = link.parentNode;
+                        while (link.firstChild) parent?.insertBefore(link.firstChild, link);
+                        parent?.removeChild(link);
+                    } else {
+                        // Cancelou -> voltar ao original
+                        link.setAttribute('href', originalUrl);
+                    }
+                }
+            }
+        });
+        
+        // Atualiza estado final
         handleInput();
+        setShowLinkModal(false);
     };
 
     // --- TABLE HANDLER ---
@@ -360,7 +343,7 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
     };
 
     const handleMouseUp = (e: React.MouseEvent) => {
-        checkFormats(); // Atualiza status dos botões
+        checkFormats(); 
         if ((e.target as HTMLElement).tagName === 'IMG') {
             setSelectedImg(e.target as HTMLImageElement);
         } else {
@@ -369,7 +352,7 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
     };
 
     const handleKeyUp = () => {
-        checkFormats(); // Atualiza status dos botões ao digitar/navegar
+        checkFormats(); 
     };
 
     const updateImageStyle = (styles: Partial<CSSStyleDeclaration> & { float?: string }) => {
@@ -420,16 +403,20 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                 {/* Estilos específicos para corrigir o reset do Tailwind em listas dentro do editor */}
                 <style>{`
                     /* Listas Não Ordenadas (Bullets) */
-                    .rte-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
-                    .rte-content ul ul { list-style-type: circle !important; }
-                    .rte-content ul ul ul { list-style-type: square !important; }
+                    .rich-text-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
+                    .rich-text-content ul ul { list-style-type: circle !important; }
+                    .rich-text-content ul ul ul { list-style-type: square !important; }
 
                     /* Listas Ordenadas (Números) */
-                    .rte-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
-                    .rte-content ol ol { list-style-type: lower-alpha !important; }
-                    .rte-content ol ol ol { list-style-type: lower-roman !important; }
+                    .rich-text-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
+                    .rich-text-content ol ol { list-style-type: lower-alpha !important; }
+                    .rich-text-content ol ol ol { list-style-type: lower-roman !important; }
 
-                    .rte-content li { margin-bottom: 0.25rem; }
+                    .rich-text-content li { margin-bottom: 0.25rem; }
+
+                    /* Links: Força estilo azul e sublinhado */
+                    .rich-text-content a { color: #3A72EC !important; text-decoration: underline !important; cursor: pointer; }
+                    .rich-text-content a:hover { color: #1d4ed8 !important; }
                 `}</style>
 
                 {/* --- TOOLBAR (Fundo Azul Mais Forte) --- */}
@@ -508,8 +495,8 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                     onInput={handleInput}
                     onMouseUp={handleMouseUp}
                     onKeyUp={handleKeyUp}
-                    onClick={checkFormats} // Garante atualização do estado dos botões ao clicar
-                    className="rte-content p-4 min-h-[150px] max-h-[500px] overflow-y-auto text-slate-900 outline-none prose prose-sm max-w-none custom-scrollbar"
+                    onClick={checkFormats} 
+                    className="rich-text-content p-4 min-h-[150px] max-h-[500px] overflow-y-auto text-slate-900 outline-none max-w-none custom-scrollbar"
                     style={{ lineHeight: '1.5' }}
                 />
 

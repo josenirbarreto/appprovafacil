@@ -42,6 +42,53 @@
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+
+      /* ESTILOS GLOBAIS PARA CONTEÚDO RICO (Editor e Visualização) */
+      .rich-text-content h1, .rich-text-content h2, .rich-text-content h3 { font-weight: bold; margin-bottom: 0.5em; }
+      .rich-text-content p { margin-bottom: 0.5em; }
+      
+      /* Links: Azul e Sublinhado */
+      .rich-text-content a { 
+        color: #3A72EC !important; 
+        text-decoration: underline !important; 
+        cursor: pointer; 
+      }
+      .rich-text-content a:hover { 
+        color: #1d4ed8 !important; 
+      }
+
+      /* Listas: Restaurar marcadores */
+      .rich-text-content ul { 
+        list-style-type: disc !important; 
+        padding-left: 1.5rem !important; 
+        margin-left: 0 !important; 
+        text-align: left; 
+      }
+      .rich-text-content ul ul { list-style-type: circle !important; }
+      .rich-text-content ul ul ul { list-style-type: square !important; }
+
+      /* Listas Ordenadas com Níveis (1 -> a -> i) */
+      .rich-text-content ol { 
+        list-style-type: decimal !important; 
+        padding-left: 1.5rem !important; 
+        margin-left: 0 !important; 
+        text-align: left; 
+      }
+      .rich-text-content ol ol { 
+        list-style-type: lower-alpha !important; 
+      }
+      .rich-text-content ol ol ol { 
+        list-style-type: lower-roman !important; 
+      }
+
+      .rich-text-content li { margin-bottom: 0.25rem; }
+      
+      /* Imagens */
+      .rich-text-content img { max-width: 100%; height: auto; }
+      
+      /* Tabelas */
+      .rich-text-content table { border-collapse: collapse; }
+      .rich-text-content td, .rich-text-content th { border: 1px solid #cbd5e1; padding: 4px 8px; }
     </style>
   <script type="importmap">
 {
