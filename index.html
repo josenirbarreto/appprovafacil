@@ -32,53 +32,70 @@
     <style>
       @media print {
         @page {
-          margin: 0; /* Deixa o padding do elemento controlar a margem */
+          margin: 0;
           size: auto;
         }
 
-        /* Reseta restrições de altura e scroll para permitir múltiplas páginas */
-        html, body, #root, main, .h-screen, .h-full, .max-h-\[90vh\], .overflow-hidden, .overflow-y-auto {
+        /* RESET AGRESSIVO DE LAYOUT PARA PAGINAÇÃO */
+        html, body, #root, main {
+          width: 100% !important;
           height: auto !important;
           min-height: 0 !important;
           max-height: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
           overflow: visible !important;
-          position: static !important; /* Desabilita fixed/absolute dos containers pais */
+          position: static !important;
+          display: block !important;
         }
 
-        /* Oculta tudo por padrão */
+        /* Desabilita posicionamento fixo de modais para permitir scroll de impressão */
+        div[class*="fixed"], div[class*="absolute"] {
+          position: static !important;
+          height: auto !important;
+          width: auto !important;
+          overflow: visible !important;
+        }
+
+        /* Oculta visualmente tudo */
         body * {
           visibility: hidden;
         }
 
-        /* Exibe apenas a seção de impressão e seus filhos */
+        /* Exibe apenas a área de impressão */
         #printable-section, #printable-section * {
           visibility: visible;
         }
 
-        /* Posiciona a prova no topo e garante largura total */
+        /* Posiciona a prova no topo da página impressa */
         #printable-section {
           position: absolute;
           left: 0;
           top: 0;
           width: 100% !important;
           margin: 0 !important;
+          padding: 10mm !important; /* Margem de segurança na impressão */
           background: white !important;
           display: block !important;
           box-shadow: none !important;
         }
 
-        /* Garante que quebras de página não cortem elementos ao meio */
+        /* CONTROLE DE QUEBRA DE PÁGINA */
         .break-inside-avoid {
-          break-inside: avoid;
-          page-break-inside: avoid;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+          display: block; /* Ajuda a evitar quebra em alguns browsers */
         }
 
-        /* Utilitários específicos */
+        /* Ajustes para Colunas */
+        .columns-2 {
+          column-fill: auto; /* Preenche sequencialmente para melhorar quebra */
+        }
+
         .no-print { 
           display: none !important; 
         }
         
-        /* Remove scrollbars na impressão */
         ::-webkit-scrollbar {
           display: none;
         }
@@ -92,50 +109,19 @@
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
 
-      /* ESTILOS GLOBAIS PARA CONTEÚDO RICO (Editor e Visualização) */
+      /* ESTILOS GLOBAIS PARA CONTEÚDO RICO */
       .rich-text-content h1, .rich-text-content h2, .rich-text-content h3 { font-weight: bold; margin-bottom: 0.5em; }
       .rich-text-content p { margin-bottom: 0.5em; }
-      
-      /* Links: Azul e Sublinhado */
-      .rich-text-content a { 
-        color: #3A72EC !important; 
-        text-decoration: underline !important; 
-        cursor: pointer; 
-      }
-      .rich-text-content a:hover { 
-        color: #1d4ed8 !important; 
-      }
-
-      /* Listas: Restaurar marcadores */
-      .rich-text-content ul { 
-        list-style-type: disc !important; 
-        padding-left: 1.5rem !important; 
-        margin-left: 0 !important; 
-        text-align: left; 
-      }
+      .rich-text-content a { color: #3A72EC !important; text-decoration: underline !important; cursor: pointer; }
+      .rich-text-content a:hover { color: #1d4ed8 !important; }
+      .rich-text-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
       .rich-text-content ul ul { list-style-type: circle !important; }
       .rich-text-content ul ul ul { list-style-type: square !important; }
-
-      /* Listas Ordenadas com Níveis (1 -> a -> i) */
-      .rich-text-content ol { 
-        list-style-type: decimal !important; 
-        padding-left: 1.5rem !important; 
-        margin-left: 0 !important; 
-        text-align: left; 
-      }
-      .rich-text-content ol ol { 
-        list-style-type: lower-alpha !important; 
-      }
-      .rich-text-content ol ol ol { 
-        list-style-type: lower-roman !important; 
-      }
-
+      .rich-text-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
+      .rich-text-content ol ol { list-style-type: lower-alpha !important; }
+      .rich-text-content ol ol ol { list-style-type: lower-roman !important; }
       .rich-text-content li { margin-bottom: 0.25rem; }
-      
-      /* Imagens */
       .rich-text-content img { max-width: 100%; height: auto; }
-      
-      /* Tabelas */
       .rich-text-content table { border-collapse: collapse; }
       .rich-text-content td, .rich-text-content th { border: 1px solid #cbd5e1; padding: 4px 8px; }
     </style>

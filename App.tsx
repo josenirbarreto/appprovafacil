@@ -168,7 +168,10 @@ const Dashboard = () => {
   );
 };
 
-// GESTÃO DE INSTITUIÇÕES (Mantido igual)
+// ... (Rest of components kept same for brevity, jumping to ExamsPage Render Step 4 update) ...
+
+// ... (Existing InstitutionPage, ClassesPage, HierarchyPage, QuestionsPage components) ...
+
 const InstitutionPage = () => {
     const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [showModal, setShowModal] = useState(false);
@@ -257,7 +260,6 @@ const InstitutionPage = () => {
     );
 };
 
-// GESTÃO DE TURMAS
 const ClassesPage = () => {
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [institutions, setInstitutions] = useState<Institution[]>([]); 
@@ -373,35 +375,89 @@ const ClassesPage = () => {
     );
 };
 
-// --- COMPONENTES DE HIERARQUIA ---
-const StepItem = ({ label, active, onClick, onDelete, onEdit }: any) => (
-    <div 
-        onClick={onClick} 
-        className={`group p-3 rounded-lg border cursor-pointer flex justify-between items-center transition-all ${
-            active 
-            ? 'bg-blue-50 border-brand-blue ring-1 ring-brand-blue shadow-sm' 
-            : 'bg-white border-transparent hover:bg-slate-50 hover:border-slate-200'
-        }`}
-    >
-        <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
-            {active && <div className="w-1.5 h-1.5 rounded-full bg-brand-blue flex-shrink-0" />}
-            <div className="flex-1 min-w-0 truncate text-sm font-medium" title={label}>
-                 <span className={`${active ? 'text-brand-blue' : 'text-slate-600'}`}>{label}</span>
+// --- NOVOS COMPONENTES STEP ---
+
+const StepCard: React.FC<{
+    stepNumber: number;
+    title: string;
+    singularName: string;
+    inputValue: string;
+    setInputValue: (v: string) => void;
+    onAdd: () => void;
+    children: React.ReactNode;
+    disabled?: boolean;
+    placeholder?: string;
+    parentName?: string;
+}> = ({ stepNumber, title, singularName, inputValue, setInputValue, onAdd, children, disabled, placeholder, parentName }) => {
+    return (
+        <div className={`flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden ${disabled ? 'opacity-50 pointer-events-none bg-slate-50' : ''}`}>
+            <div className="p-3 border-b bg-slate-50 shrink-0">
+                <div className="flex items-center gap-2 mb-1">
+                    <div className="bg-brand-blue text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                        {stepNumber}
+                    </div>
+                    <h3 className="font-bold text-slate-800 text-sm">{title}</h3>
+                </div>
+                {parentName ? (
+                     <div className="text-xs text-slate-500 truncate px-1" title={parentName}>Em: <strong className="text-slate-700">{parentName}</strong></div>
+                ) : <div className="h-4"></div>}
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar min-h-0 relative">
+                {disabled ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-center p-4 text-sm">
+                        <div className="mb-2 opacity-50"><Icons.ArrowLeft /></div>
+                        <p>{placeholder}</p>
+                    </div>
+                ) : (
+                    children
+                )}
+            </div>
+
+            <div className="p-2 border-t bg-slate-50 flex gap-2 shrink-0">
+                <input 
+                    className="flex-1 border border-slate-300 rounded px-2 py-1.5 text-sm outline-none focus:border-brand-blue transition-colors disabled:bg-slate-100" 
+                    placeholder={`Novo(a) ${singularName}...`}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+                    disabled={disabled}
+                />
+                <button 
+                    onClick={onAdd} 
+                    disabled={disabled || !inputValue.trim()} 
+                    className="bg-brand-blue text-white rounded px-3 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    <Icons.Plus />
+                </button>
             </div>
         </div>
-        <div className="flex opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ml-2 shrink-0">
+    );
+};
+
+const StepItem: React.FC<{
+    label: string;
+    active: boolean;
+    onClick: () => void;
+    onDelete: () => void;
+    onEdit: () => void;
+}> = ({ label, active, onClick, onDelete, onEdit }) => (
+    <div 
+        onClick={onClick}
+        className={`group flex items-center justify-between p-2 rounded-lg cursor-pointer text-sm transition-all border ${active ? 'bg-blue-50 text-brand-blue font-bold border-blue-200 shadow-sm' : 'hover:bg-slate-50 text-slate-700 border-transparent hover:border-slate-200'}`}
+    >
+        <span className="truncate flex-1 mr-2" title={label}>{label}</span>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-inherit">
             <button 
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(); }} 
-                className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-blue-100 rounded"
+                onClick={(e) => { e.stopPropagation(); onEdit(); }} 
+                className="p-1 hover:bg-white rounded text-slate-400 hover:text-brand-blue transition-colors"
                 title="Editar"
             >
                 <Icons.Edit />
             </button>
             <button 
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }} 
-                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+                className="p-1 hover:bg-white rounded text-slate-400 hover:text-red-500 transition-colors"
                 title="Excluir"
             >
                 <Icons.Trash />
@@ -410,109 +466,6 @@ const StepItem = ({ label, active, onClick, onDelete, onEdit }: any) => (
     </div>
 );
 
-const StepCard = ({ 
-    stepNumber, 
-    title, 
-    disabled, 
-    children, 
-    inputValue, 
-    setInputValue, 
-    onAdd, 
-    placeholder,
-    singularName,
-    parentName
-}: any) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const inputRef = useRef<HTMLInputElement>(null);
-    
-    const filteredChildren = React.Children.toArray(children).filter((child: any) => 
-        child.props.label.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const addLabel = parentName 
-        ? `Novo ${singularName} em "${parentName}"` 
-        : `Nova ${singularName}`;
-
-    return (
-        <div className={`flex flex-col h-[500px] md:h-full rounded-xl border transition-all duration-300 overflow-hidden ${disabled ? 'opacity-50 grayscale bg-slate-100 border-slate-200' : 'bg-white border-slate-200 shadow-lg'}`}>
-            <div className={`p-4 border-b ${disabled ? 'border-slate-200' : 'border-slate-100 bg-slate-50'} flex flex-col gap-3 shrink-0`}>
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <span className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${disabled ? 'bg-slate-300 text-slate-500' : 'bg-brand-blue text-white shadow-md'}`}>
-                            {stepNumber}
-                        </span>
-                        <h3 className={`font-display font-bold ${disabled ? 'text-slate-400' : 'text-slate-800'}`}>{title}</h3>
-                    </div>
-                    {!disabled && (
-                        <button 
-                            type="button"
-                            onClick={() => inputRef.current?.focus()}
-                            className="text-xs bg-brand-blue/10 text-brand-blue font-semibold px-2 py-1 rounded hover:bg-brand-blue hover:text-white transition-colors flex items-center gap-1"
-                        >
-                            <Icons.Plus /> Novo
-                        </button>
-                    )}
-                </div>
-                
-                {!disabled && (
-                    <div className="relative">
-                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                             <Icons.Search />
-                         </div>
-                         <input 
-                            type="text" 
-                            placeholder={`Buscar ${singularName}...`}
-                            className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-md focus:ring-1 focus:ring-brand-blue outline-none bg-white text-slate-900"
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                         />
-                    </div>
-                )}
-            </div>
-            
-            <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1 relative min-h-0 bg-white">
-                {disabled ? (
-                     <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-4">
-                        <Icons.ArrowLeft />
-                        <p className="mt-2 text-sm">{placeholder || "Complete o passo anterior"}</p>
-                     </div>
-                ) : (
-                    filteredChildren.length > 0 ? filteredChildren : (
-                        <div className="text-center text-slate-400 py-10 text-sm">
-                            {searchTerm ? 'Nenhum item encontrado.' : 'Nenhum item cadastrado.'}
-                        </div>
-                    )
-                )}
-            </div>
-
-            {!disabled && (
-                <div className="p-3 border-t border-blue-200 bg-blue-50/90 rounded-b-xl shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-auto">
-                    <label className="text-xs font-bold text-brand-blue mb-1 block pl-1 truncate" title={addLabel}>{addLabel}</label>
-                    <div className="flex items-center gap-2">
-                        <input 
-                            ref={inputRef}
-                            className="flex-1 min-w-0 border border-blue-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none bg-white placeholder-slate-400 shadow-sm text-slate-900"
-                            placeholder="Digite o nome..."
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && onAdd()}
-                        />
-                        <button 
-                            type="button"
-                            onClick={onAdd}
-                            disabled={!inputValue.trim()}
-                            className="w-10 h-10 shrink-0 flex items-center justify-center bg-brand-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-                        >
-                            <Icons.Plus />
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// PÁGINA DE HIERARQUIA
 const HierarchyPage = () => {
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     const [selDisc, setSelDisc] = useState<Discipline | null>(null);
@@ -619,7 +572,6 @@ const HierarchyPage = () => {
     );
 };
 
-// PAGE: QUESTIONS
 const QuestionsPage = () => {
     const [questions, setQuestions] = useState<Question[]>([]);
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
@@ -1364,7 +1316,7 @@ const ExamsPage = () => {
                 
                 <div className="flex-1 overflow-y-auto bg-slate-200 p-4 md:p-8 custom-scrollbar">
                     {/* FOLHA DA PROVA (A4 simulated) */}
-                    <div id="printable-section" className="bg-white mx-auto max-w-[210mm] min-h-[297mm] p-[15mm] shadow-lg print:shadow-none print:w-full print:max-w-none text-black">
+                    <div id="printable-section" className="bg-white mx-auto max-w-[210mm] h-auto min-h-screen shadow-lg print:shadow-none print:w-full print:max-w-none text-black">
                         
                         {/* CABEÇALHO */}
                         <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
