@@ -31,49 +31,56 @@
     </script>
     <style>
       @media print {
-        /* Regras Gerais de Impressão */
         @page {
-          margin: 1cm;
-          size: auto; 
+          margin: 0; /* Deixa o padding do elemento controlar a margem */
+          size: auto;
         }
 
-        /* Esconde todos os elementos por padrão */
+        /* Reseta restrições de altura e scroll para permitir múltiplas páginas */
+        html, body, #root, main, .h-screen, .h-full, .max-h-\[90vh\], .overflow-hidden, .overflow-y-auto {
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          position: static !important; /* Desabilita fixed/absolute dos containers pais */
+        }
+
+        /* Oculta tudo por padrão */
         body * {
           visibility: hidden;
         }
 
-        /* Exibe apenas a área da prova e seus descendentes */
+        /* Exibe apenas a seção de impressão e seus filhos */
         #printable-section, #printable-section * {
           visibility: visible;
         }
 
-        /* Posiciona a prova no topo absoluto, cobrindo tudo */
+        /* Posiciona a prova no topo e garante largura total */
         #printable-section {
           position: absolute;
           left: 0;
           top: 0;
           width: 100% !important;
-          max-width: none !important;
           margin: 0 !important;
-          padding: 0 !important;
           background: white !important;
+          display: block !important;
           box-shadow: none !important;
-          overflow: visible !important;
-          min-height: auto !important;
         }
 
         /* Garante que quebras de página não cortem elementos ao meio */
         .break-inside-avoid {
+          break-inside: avoid;
           page-break-inside: avoid;
         }
 
-        /* Utilitários específicos para ocultar na impressão */
+        /* Utilitários específicos */
         .no-print { 
           display: none !important; 
         }
         
-        .print-only { 
-          display: block !important; 
+        /* Remove scrollbars na impressão */
+        ::-webkit-scrollbar {
+          display: none;
         }
       }
 
