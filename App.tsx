@@ -1309,7 +1309,7 @@ const ExamsPage = () => {
         
         return (
             <div className="h-full flex flex-col animate-fade-in print:block print:h-auto print:overflow-visible">
-                <div className="bg-slate-800 text-white p-3 rounded-t-lg flex justify-between items-center shrink-0 no-print">
+                <div className="bg-slate-800 text-white p-3 rounded-t-lg flex justify-between items-center shrink-0 print:hidden">
                     <span className="font-bold text-sm">Visualização de Impressão</span>
                     <Button variant="secondary" onClick={handlePrint} className="text-xs h-8"><Icons.Printer /> Imprimir</Button>
                 </div>
@@ -1399,13 +1399,13 @@ const ExamsPage = () => {
     };
 
     return (
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
-            <div className="flex justify-between items-center">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6 print:block print:overflow-visible print:h-auto">
+            <div className="flex justify-between items-center print:hidden">
                 <h2 className="text-3xl font-display font-bold text-brand-dark">Minhas Provas</h2>
                 <Button onClick={handleOpenWizard}><Icons.Plus /> Nova Prova</Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:hidden">
                 {exams.length === 0 ? (
                     <div className="col-span-3 text-center py-20 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
                         <div className="mb-3"><Icons.Exams /></div>
@@ -1447,7 +1447,7 @@ const ExamsPage = () => {
             }>
                 <div className="flex flex-col h-[70vh]">
                     {/* Stepper Header */}
-                    <div className="flex justify-between items-center mb-8 px-4 relative shrink-0">
+                    <div className="flex justify-between items-center mb-8 px-4 relative shrink-0 print:hidden">
                         <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-200 -z-10 transform -translate-y-1/2"></div>
                         {[
                             { n: 1, l: 'Dados' },
@@ -1465,7 +1465,7 @@ const ExamsPage = () => {
                     </div>
 
                     {/* Step Content */}
-                    <div className="flex-1 overflow-hidden flex flex-col bg-white">
+                    <div className="flex-1 overflow-hidden flex flex-col bg-white print:overflow-visible print:h-auto print:block">
                         {step === 1 && renderStep1()}
                         {step === 2 && renderStep2()}
                         {step === 3 && renderStep3()}
@@ -1540,8 +1540,8 @@ const App = () => {
     return (
         <AuthContext.Provider value={{ user, loading }}>
             <HashRouter>
-                <div className="flex h-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
-                    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+                <div className="flex h-screen bg-slate-100 font-sans text-slate-900 overflow-hidden print:block print:h-auto print:overflow-visible">
+                    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 print:hidden">
                         <div className="p-6">
                             <h1 className="text-2xl font-display font-bold text-white tracking-tight">Prova Fácil</h1>
                             <p className="text-xs text-slate-500">Gestão Inteligente de Avaliações</p>
@@ -1569,7 +1569,7 @@ const App = () => {
                             </Button>
                         </div>
                     </aside>
-                    <main className="flex-1 flex flex-col min-w-0 relative">
+                    <main className="flex-1 flex flex-col min-w-0 relative print:block print:h-auto print:overflow-visible">
                         <Routes>
                             <Route path="/" element={<Dashboard />} />
                             <Route path="/institutions" element={<InstitutionPage />} />

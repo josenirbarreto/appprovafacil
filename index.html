@@ -32,56 +32,35 @@
     <style>
       @media print {
         @page {
-          margin: 15mm; /* Define margem física padrão na impressora */
+          margin: 15mm;
           size: auto;
         }
 
-        /* RESET TOTAL DE LAYOUT PARA PAGINAÇÃO */
-        /* Força todos os containers pais a terem altura automática e overflow visível */
-        html, body, #root, main, div {
-          width: 100% !important;
+        /* Reset básico para permitir paginação correta */
+        html, body, #root {
           height: auto !important;
           min-height: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          overflow: visible !important; /* CRUCIAL: Permite quebra de página */
-          display: block !important; /* Quebra flexbox que limita altura */
+          overflow: visible !important;
         }
 
-        /* Oculta tudo por padrão */
-        body * {
-          visibility: hidden;
-          height: 0; /* Colapsa elementos ocultos */
-        }
-
-        /* Exibe apenas a área de impressão */
-        #printable-section, #printable-section * {
-          visibility: visible;
-          height: auto; /* Restaura altura do conteúdo */
-        }
-
-        /* Posicionamento do conteúdo impresso */
-        #printable-section {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100% !important;
-          background: white !important;
-          box-shadow: none !important;
-        }
-
-        /* Prevenção de quebra dentro de questões */
-        .break-inside-avoid {
-          break-inside: avoid !important;
-          page-break-inside: avoid !important;
-        }
+        /* 
+           Removido o 'div { display: block }' agressivo que quebrava o header.
+           Agora confiamos nas classes 'print:hidden' do Tailwind no App.tsx.
+        */
 
         .no-print { 
           display: none !important; 
         }
         
+        /* Remove scrollbars visuais na impressão */
         ::-webkit-scrollbar {
           display: none;
+        }
+
+        /* Garante que quebras de página não cortem elementos ao meio */
+        .break-inside-avoid {
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
         }
       }
 
