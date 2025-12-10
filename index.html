@@ -32,64 +32,48 @@
     <style>
       @media print {
         @page {
-          margin: 0;
+          margin: 15mm; /* Define margem física padrão na impressora */
           size: auto;
         }
 
-        /* RESET AGRESSIVO DE LAYOUT PARA PAGINAÇÃO */
-        html, body, #root, main {
+        /* RESET TOTAL DE LAYOUT PARA PAGINAÇÃO */
+        /* Força todos os containers pais a terem altura automática e overflow visível */
+        html, body, #root, main, div {
           width: 100% !important;
           height: auto !important;
           min-height: 0 !important;
-          max-height: none !important;
           margin: 0 !important;
           padding: 0 !important;
-          overflow: visible !important;
-          position: static !important;
-          display: block !important;
+          overflow: visible !important; /* CRUCIAL: Permite quebra de página */
+          display: block !important; /* Quebra flexbox que limita altura */
         }
 
-        /* Desabilita posicionamento fixo de modais para permitir scroll de impressão */
-        div[class*="fixed"], div[class*="absolute"] {
-          position: static !important;
-          height: auto !important;
-          width: auto !important;
-          overflow: visible !important;
-        }
-
-        /* Oculta visualmente tudo */
+        /* Oculta tudo por padrão */
         body * {
           visibility: hidden;
+          height: 0; /* Colapsa elementos ocultos */
         }
 
         /* Exibe apenas a área de impressão */
         #printable-section, #printable-section * {
           visibility: visible;
+          height: auto; /* Restaura altura do conteúdo */
         }
 
-        /* Posiciona a prova no topo da página impressa */
+        /* Posicionamento do conteúdo impresso */
         #printable-section {
           position: absolute;
           left: 0;
           top: 0;
           width: 100% !important;
-          margin: 0 !important;
-          padding: 10mm !important; /* Margem de segurança na impressão */
           background: white !important;
-          display: block !important;
           box-shadow: none !important;
         }
 
-        /* CONTROLE DE QUEBRA DE PÁGINA */
+        /* Prevenção de quebra dentro de questões */
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
-          display: block; /* Ajuda a evitar quebra em alguns browsers */
-        }
-
-        /* Ajustes para Colunas */
-        .columns-2 {
-          column-fill: auto; /* Preenche sequencialmente para melhorar quebra */
         }
 
         .no-print { 
@@ -103,23 +87,19 @@
 
       .print-only { display: none; }
       
-      /* Custom Scrollbar for nicer UI */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
 
-      /* ESTILOS GLOBAIS PARA CONTEÚDO RICO */
+      /* RICH TEXT STYLES */
       .rich-text-content h1, .rich-text-content h2, .rich-text-content h3 { font-weight: bold; margin-bottom: 0.5em; }
       .rich-text-content p { margin-bottom: 0.5em; }
       .rich-text-content a { color: #3A72EC !important; text-decoration: underline !important; cursor: pointer; }
-      .rich-text-content a:hover { color: #1d4ed8 !important; }
       .rich-text-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
       .rich-text-content ul ul { list-style-type: circle !important; }
-      .rich-text-content ul ul ul { list-style-type: square !important; }
       .rich-text-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
       .rich-text-content ol ol { list-style-type: lower-alpha !important; }
-      .rich-text-content ol ol ol { list-style-type: lower-roman !important; }
       .rich-text-content li { margin-bottom: 0.25rem; }
       .rich-text-content img { max-width: 100%; height: auto; }
       .rich-text-content table { border-collapse: collapse; }

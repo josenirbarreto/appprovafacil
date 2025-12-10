@@ -1308,13 +1308,13 @@ const ExamsPage = () => {
         const inst = institutions.find(i => i.id === draftExam.institutionId);
         
         return (
-            <div className="h-full flex flex-col animate-fade-in">
+            <div className="h-full flex flex-col animate-fade-in print:block print:h-auto print:overflow-visible">
                 <div className="bg-slate-800 text-white p-3 rounded-t-lg flex justify-between items-center shrink-0 no-print">
                     <span className="font-bold text-sm">Visualização de Impressão</span>
                     <Button variant="secondary" onClick={handlePrint} className="text-xs h-8"><Icons.Printer /> Imprimir</Button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto bg-slate-200 p-4 md:p-8 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto bg-slate-200 p-4 md:p-8 custom-scrollbar print:block print:overflow-visible print:h-auto print:bg-white print:p-0 print:m-0">
                     {/* FOLHA DA PROVA (A4 simulated) */}
                     <div id="printable-section" className="bg-white mx-auto max-w-[210mm] min-h-[297mm] p-[15mm] shadow-lg print:shadow-none print:w-full print:max-w-none print:p-0 text-black box-border">
                         
