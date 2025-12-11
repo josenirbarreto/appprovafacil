@@ -8,7 +8,6 @@ const MOCK_USERS: User[] = [
   { id: '2', name: 'Prof. Carlos Silva', email: 'carlos@escola.com', role: UserRole.TEACHER, status: 'ACTIVE', plan: 'PREMIUM', subscriptionEnd: '2025-06-15' },
 ];
 
-// Agora é uma lista de instituições, pois um professor pode ter várias
 let MOCK_INSTITUTIONS: Institution[] = [
   {
     id: 'inst1',
@@ -85,25 +84,20 @@ const MOCK_QUESTIONS: Question[] = [
   }
 ];
 
-const MOCK_EXAMS: Exam[] = [];
+let MOCK_EXAMS: Exam[] = [];
 
 // --- FUNÇÕES DO SERVIÇO ---
 export const MockService = {
   getUsers: async () => [...MOCK_USERS],
   
-  // --- Instituições (CRUD Completo) ---
-  
-  // Listar todas
   getInstitutions: async () => [...MOCK_INSTITUTIONS],
   
-  // Adicionar nova
   addInstitution: async (data: Institution) => {
     const newInst = { ...data, id: `inst-${Date.now()}` };
     MOCK_INSTITUTIONS.push(newInst);
     return newInst;
   },
 
-  // Atualizar existente
   updateInstitution: async (data: Institution) => {
     const index = MOCK_INSTITUTIONS.findIndex(i => i.id === data.id);
     if (index !== -1) {
@@ -113,14 +107,11 @@ export const MockService = {
     return null;
   },
 
-  // Remover
   deleteInstitution: async (id: string) => {
     MOCK_INSTITUTIONS = MOCK_INSTITUTIONS.filter(i => i.id !== id);
-    // Também removeria as turmas associadas na vida real
     MOCK_CLASSES = MOCK_CLASSES.filter(c => c.institutionId !== id);
   },
   
-  // --- Turmas ---
   getClasses: async () => [...MOCK_CLASSES],
   
   addClass: async (cls: SchoolClass) => {
@@ -142,8 +133,17 @@ export const MockService = {
     if (idx > -1) MOCK_CLASSES.splice(idx, 1);
   },
 
-  // --- Hierarquia (CRUD) ---
-  getHierarchy: async () => JSON.parse(JSON.stringify(MOCK_HIERARCHY)), // Cópia profunda
+  // Manual deep copy to avoid JSON.stringify issues
+  getHierarchy: async () => MOCK_HIERARCHY.map(d => ({
+      ...d,
+      chapters: d.chapters.map(c => ({
+          ...c,
+          units: c.units.map(u => ({
+              ...u,
+              topics: u.topics.map(t => ({...t}))
+          }))
+      }))
+  })),
   
   addDiscipline: async (name: string) => {
     const newD: Discipline = { id: `d-${Date.now()}`, name, chapters: [] };
@@ -196,7 +196,6 @@ export const MockService = {
     }
   },
 
-  // --- Questões ---
   getQuestions: async () => [...MOCK_QUESTIONS],
   
   addQuestion: async (q: Question) => {
@@ -211,7 +210,6 @@ export const MockService = {
 
   getExams: async () => [...MOCK_EXAMS],
 
-  // Auxiliar para string de hierarquia
   getFullHierarchyString: (q: Question) => {
     const disc = MOCK_HIERARCHY.find(d => d.id === q.disciplineId);
     const chap = disc?.chapters.find(c => c.id === q.chapterId);

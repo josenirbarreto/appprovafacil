@@ -34,6 +34,11 @@ const COLLECTIONS = {
     TOPICS: 'topics'
 };
 
+const safeLog = (message: string, error: any) => {
+    // Avoid logging full Firestore error objects which may contain circular references (e.g. Query objects)
+    console.error(message, error?.code || error?.message || String(error));
+};
+
 export const FirebaseService = {
     // --- AUTENTICAÇÃO ---
     register: async (email: string, pass: string, name: string, role: UserRole) => {
@@ -55,8 +60,8 @@ export const FirebaseService = {
             await setDoc(doc(db, COLLECTIONS.USERS, user.uid), userData);
             return userData;
         } catch (error: any) {
-            console.error("Erro no cadastro Firestore:", error);
-            if (error.code === 'permission-denied') {
+            safeLog("Erro no cadastro Firestore:", error);
+            if (error?.code === 'permission-denied') {
                 throw new Error("Erro de Permissão: O banco de dados recusou a gravação. Verifique as Regras no Firebase Console.");
             }
             try { await deleteUser(user); } catch(e) { }
@@ -65,8 +70,13 @@ export const FirebaseService = {
     },
 
     login: async (email: string, pass: string) => {
-        await signInWithEmailAndPassword(auth, email, pass);
-        return await FirebaseService.getCurrentUserData();
+        try {
+            await signInWithEmailAndPassword(auth, email, pass);
+            return await FirebaseService.getCurrentUserData();
+        } catch (error) {
+            safeLog("Erro no login:", error);
+            throw error;
+        }
     },
 
     logout: async () => {
@@ -98,8 +108,36 @@ export const FirebaseService = {
                 return recoveredUser;
             }
         } catch (error) {
-            console.error("Erro crítico ao recuperar dados do usuário:", error);
+            safeLog("Erro crítico ao recuperar dados do usuário:", error);
             return null;
+        }
+    },
+
+    updateUser: async (uid: string, data: Partial<User>) => {
+        try {
+            // Atualiza no Firestore (Source of Truth principal do App)
+            const docRef = doc(db, COLLECTIONS.USERS, uid);
+            await updateDoc(docRef, data);
+
+            // Tenta atualizar no Auth para sincronizar sessão, se possível
+            if (auth.currentUser) {
+                const profileUpdates: any = {};
+                if (data.name) profileUpdates.displayName = data.name;
+                
+                // Só atualiza photoURL no Auth se NÃO for Base64 (data URI), 
+                // pois o Firebase Auth tem limite restrito de caracteres para URL.
+                // Se for Base64, a imagem fica salva apenas no Firestore e carregada via getCurrentUserData.
+                if (data.photoUrl && !data.photoUrl.startsWith('data:')) {
+                     profileUpdates.photoURL = data.photoUrl;
+                }
+
+                if (Object.keys(profileUpdates).length > 0) {
+                     await updateProfile(auth.currentUser, profileUpdates);
+                }
+            }
+        } catch (error) {
+            safeLog("Erro ao atualizar usuário:", error);
+            throw error;
         }
     },
 
@@ -180,7 +218,7 @@ export const FirebaseService = {
 
             return disciplines;
         } catch (e) {
-            console.error("Erro ao buscar hierarquia:", e);
+            safeLog("Erro ao buscar hierarquia:", e);
             return [];
         }
     },
@@ -212,7 +250,7 @@ export const FirebaseService = {
     },
 
     deleteItem: async (type: 'discipline'|'chapter'|'unit'|'topic', ids: {dId?: string, cId?: string, uId?: string, tId?: string}) => {
-        console.log("Iniciando exclusão:", type, ids);
+        console.log("Iniciando exclusão:", type); // Removido 'ids' do log para evitar possíveis objetos complexos
         const batch = writeBatch(db);
 
         try {
@@ -221,24 +259,16 @@ export const FirebaseService = {
             }
 
             else if (type === 'unit' && ids.uId) {
-                // Delete Unit
                 batch.delete(doc(db, COLLECTIONS.UNITS, ids.uId));
-                
-                // Delete all Topics in this Unit
                 const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", ids.uId));
                 const snapT = await getDocs(qT);
                 snapT.forEach(d => batch.delete(d.ref));
             }
 
             else if (type === 'chapter' && ids.cId) {
-                // Delete Chapter
                 batch.delete(doc(db, COLLECTIONS.CHAPTERS, ids.cId));
-
-                // Get Units
                 const qU = query(collection(db, COLLECTIONS.UNITS), where("chapterId", "==", ids.cId));
                 const snapU = await getDocs(qU);
-                
-                // For each Unit, delete Topics and the Unit itself
                 for (const uDoc of snapU.docs) {
                     batch.delete(uDoc.ref);
                     const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", uDoc.id));
@@ -248,26 +278,15 @@ export const FirebaseService = {
             }
 
             else if (type === 'discipline' && ids.dId) {
-                // Delete Discipline
                 batch.delete(doc(db, COLLECTIONS.DISCIPLINES, ids.dId));
-                
-                // Get Chapters
                 const qC = query(collection(db, COLLECTIONS.CHAPTERS), where("disciplineId", "==", ids.dId));
                 const snapC = await getDocs(qC);
-                
-                // For each Chapter...
                 for (const cDoc of snapC.docs) {
                     batch.delete(cDoc.ref);
-                    
-                    // Get Units
                     const qU = query(collection(db, COLLECTIONS.UNITS), where("chapterId", "==", cDoc.id));
                     const snapU = await getDocs(qU);
-                    
-                    // For each Unit...
                     for (const uDoc of snapU.docs) {
                         batch.delete(uDoc.ref);
-                        
-                        // Get Topics
                         const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", uDoc.id));
                         const snapT = await getDocs(qT);
                         snapT.forEach(t => batch.delete(t.ref));
@@ -276,9 +295,8 @@ export const FirebaseService = {
             }
 
             await batch.commit();
-            console.log("Exclusão concluída com sucesso.");
         } catch (error) {
-            console.error("Erro crítico no deleteItem:", error);
+            safeLog("Erro crítico no deleteItem:", error);
             throw error;
         }
     },

@@ -12,6 +12,7 @@ export interface User {
   status: 'ACTIVE' | 'INACTIVE';
   plan: 'BASIC' | 'PREMIUM';
   subscriptionEnd: string;
+  photoUrl?: string; // URL da foto de perfil
 }
 
 // Institution & Classes
