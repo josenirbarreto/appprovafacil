@@ -878,12 +878,16 @@ const ClassesPage = () => {
     const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<Partial<SchoolClass>>({});
+    
+    // States for Accordion
+    const [expandedInstitutions, setExpandedInstitutions] = useState<Record<string, boolean>>({});
+    const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
 
     useEffect(() => { load(); }, []);
     const load = async () => {
         const [cls, insts] = await Promise.all([FirebaseService.getClasses(), FirebaseService.getInstitutions()]);
         setClasses(cls);
-        setInstitutions(insts);
+        setInstitutions(insts.sort((a,b) => a.name.localeCompare(b.name)));
     };
 
     const handleSave = async () => {
@@ -910,48 +914,120 @@ const ClassesPage = () => {
         }
     };
 
+    const toggleInstitution = (id: string) => {
+        setExpandedInstitutions(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const toggleYear = (id: string) => {
+        setExpandedYears(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
     return (
-        <div className="p-8 h-full flex flex-col">
+        <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-display font-bold text-slate-800">Turmas</h2>
+                <div>
+                    <h2 className="text-3xl font-display font-bold text-slate-800">Turmas</h2>
+                    <p className="text-slate-500 mt-1">Gerencie suas turmas por Instituição e Ano Letivo.</p>
+                </div>
                 <Button onClick={() => { setEditing({ year: new Date().getFullYear() }); setIsModalOpen(true); }}><Icons.Plus /> Nova Turma</Button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                        <tr>
-                            <th className="p-4 font-semibold text-slate-600">Nome</th>
-                            <th className="p-4 font-semibold text-slate-600">Ano</th>
-                            <th className="p-4 font-semibold text-slate-600">Instituição</th>
-                            <th className="p-4 font-semibold text-slate-600 text-right">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {classes.map(c => (
-                            <tr key={c.id} className="hover:bg-slate-50">
-                                <td className="p-4">{c.name}</td>
-                                <td className="p-4">{c.year}</td>
-                                <td className="p-4">{institutions.find(i => i.id === c.institutionId)?.name || 'N/A'}</td>
-                                <td className="p-4 text-right space-x-2">
-                                    <button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue"><Icons.Edit /></button>
-                                    <button onClick={() => handleDelete(c.id)} className="text-slate-400 hover:text-red-500"><Icons.Trash /></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                {classes.length === 0 && <div className="p-8 text-center text-slate-400">Nenhuma turma cadastrada.</div>}
+            <div className="space-y-4">
+                {institutions.length === 0 && <div className="text-center py-10 text-slate-400">Nenhuma instituição cadastrada.</div>}
+                
+                {institutions.map(inst => {
+                    const instClasses = classes.filter(c => c.institutionId === inst.id);
+                    // Get unique years and sort descending
+                    const years = Array.from(new Set(instClasses.map(c => c.year))).sort((a, b) => Number(b) - Number(a));
+                    const isExpandedInst = expandedInstitutions[inst.id];
+
+                    return (
+                        <div key={inst.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            {/* Institution Header */}
+                            <div 
+                                className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors select-none"
+                                onClick={() => toggleInstitution(inst.id)}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`transform transition-transform text-slate-400 ${isExpandedInst ? 'rotate-180' : ''}`}>
+                                        <Icons.ChevronDown />
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        {inst.logoUrl ? (
+                                            <img src={inst.logoUrl} className="w-8 h-8 object-contain rounded bg-white border border-slate-100 p-0.5" />
+                                        ) : (
+                                            <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-slate-400"><Icons.Building /></div>
+                                        )}
+                                        <span className="font-bold text-lg text-slate-800">{inst.name}</span>
+                                    </div>
+                                </div>
+                                <Badge color="blue">{instClasses.length} turmas</Badge>
+                            </div>
+
+                            {/* Institution Body (Years) */}
+                            {isExpandedInst && (
+                                <div className="bg-slate-50 p-4 border-t border-slate-200 space-y-3 animate-fade-in">
+                                    {years.length === 0 && <div className="text-slate-400 italic text-sm ml-10">Nenhuma turma nesta instituição.</div>}
+                                    
+                                    {years.map(year => {
+                                        const yearId = `${inst.id}-${year}`;
+                                        const isExpandedYear = expandedYears[yearId];
+                                        const yearClasses = instClasses.filter(c => c.year === year);
+
+                                        return (
+                                            <div key={yearId} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                                {/* Year Header */}
+                                                <div 
+                                                    className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors select-none pl-6"
+                                                    onClick={() => toggleYear(yearId)}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`transform transition-transform text-slate-400 ${isExpandedYear ? 'rotate-180' : ''}`}>
+                                                            <Icons.ChevronDown />
+                                                        </div>
+                                                        <span className="font-semibold text-slate-700">Ano Letivo {year}</span>
+                                                    </div>
+                                                    <span className="text-xs text-slate-400 mr-2">{yearClasses.length} turmas</span>
+                                                </div>
+
+                                                {/* Year Body (Classes Table) */}
+                                                {isExpandedYear && (
+                                                    <div className="border-t border-slate-100 animate-fade-in">
+                                                        <table className="w-full text-left">
+                                                            <tbody className="divide-y divide-slate-50">
+                                                                {yearClasses.map(c => (
+                                                                    <tr key={c.id} className="hover:bg-blue-50/50 transition-colors group">
+                                                                        <td className="p-3 pl-12 text-sm text-slate-700 font-medium">{c.name}</td>
+                                                                        <td className="p-3 text-right">
+                                                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                <button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue p-1"><Icons.Edit /></button>
+                                                                                <button onClick={() => handleDelete(c.id)} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button>
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? 'Editar Turma' : 'Nova Turma'} footer={<Button onClick={handleSave}>Salvar</Button>}>
                 <div className="space-y-4">
-                    <Input label="Nome da Turma" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" />
-                    <Input label="Ano Letivo" type="number" value={editing.year || ''} onChange={e => setEditing({...editing, year: Number(e.target.value)})} />
                     <Select label="Instituição" value={editing.institutionId || ''} onChange={e => setEditing({...editing, institutionId: e.target.value})}>
                         <option value="">Selecione...</option>
                         {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                     </Select>
+                    <Input label="Ano Letivo" type="number" value={editing.year || ''} onChange={e => setEditing({...editing, year: Number(e.target.value)})} />
+                    <Input label="Nome da Turma" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" />
                 </div>
             </Modal>
         </div>
@@ -1090,16 +1166,20 @@ const Dashboard = () => {
                     label: QuestionTypeLabels[key as QuestionType] || key,
                     value: val,
                     color: '#64748b'
-                })).sort((a,b) => b.value - a.value);
+                })).sort((a,b) => Number(b.value) - Number(a.value));
 
                 const discCounts: Record<string, number> = {};
                 questions.forEach(q => { discCounts[q.disciplineId] = (discCounts[q.disciplineId] || 0) + 1 });
                 const topDisc = Object.entries(discCounts)
                     .map(([id, val]) => ({ label: disciplines.find(d => d.id === id)?.name || 'Desconhecida', value: val }))
-                    .sort((a,b) => b.value - a.value)
+                    .sort((a,b) => Number(b.value) - Number(a.value))
                     .slice(0, 5);
 
-                const recent = [...exams].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+                const recent = [...exams].sort((a,b) => {
+                    const timeA = new Date(a.createdAt).getTime();
+                    const timeB = new Date(b.createdAt).getTime();
+                    return timeB - timeA;
+                }).slice(0, 5);
 
                 setStats({
                     exams: exams.length,
