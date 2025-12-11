@@ -1363,8 +1363,7 @@ const ExamsPage = () => {
 
                         {/* QUESTÕES */}
                         <div 
-                            className={`${draftExam.columns === 2 ? 'columns-2 gap-8 [column-rule:1px_solid_#000] [column-fill:auto]' : ''}`}
-                            style={{ columnFill: 'auto' }}
+                            className={`${draftExam.columns === 2 ? 'columns-2 gap-8 [column-rule:1px_solid_#000]' : ''}`}
                         >
                             {draftExam.questions?.map((q, idx) => (
                                 <div key={q.id} className="mb-6">
