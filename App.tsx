@@ -76,16 +76,295 @@ const Login = () => {
     );
 };
 
+// --- CHART COMPONENTS (Pure CSS/SVG) ---
+
+const SimpleBarChart = ({ data }: { data: { label: string, value: number, color?: string }[] }) => {
+    const max = Math.max(...data.map(d => d.value), 1);
+    return (
+        <div className="flex items-end justify-between h-40 gap-2 w-full pt-6">
+            {data.map((d, i) => (
+                <div key={i} className="flex flex-col items-center flex-1 group relative">
+                     <div className="absolute -top-6 text-xs font-bold text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white px-2 py-1 rounded shadow-sm border border-slate-100 z-10">{d.value}</div>
+                    <div 
+                        className={`w-full max-w-[40px] rounded-t-lg transition-all duration-500 ease-out hover:brightness-110 ${d.color || 'bg-brand-blue'}`}
+                        style={{ height: `${(d.value / max) * 100}%` }}
+                    ></div>
+                    <div className="text-xs text-slate-400 mt-2 truncate max-w-full font-medium">{d.label}</div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const SimpleDonutChart = ({ data }: { data: { label: string, value: number, color: string }[] }) => {
+    const total = data.reduce((acc, curr) => acc + curr.value, 0);
+    let accumulated = 0;
+    
+    // Create Conic Gradient
+    const gradient = data.map(d => {
+        const start = (accumulated / total) * 100;
+        accumulated += d.value;
+        const end = (accumulated / total) * 100;
+        return `${d.color} ${start}% ${end}%`;
+    }).join(', ');
+
+    return (
+        <div className="flex items-center gap-6">
+            <div className="relative w-32 h-32 rounded-full shrink-0" style={{ background: total > 0 ? `conic-gradient(${gradient})` : '#e2e8f0' }}>
+                <div className="absolute inset-4 bg-white rounded-full flex items-center justify-center flex-col">
+                    <span className="text-xl font-bold text-slate-800">{total}</span>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wide">Total</span>
+                </div>
+            </div>
+            <div className="flex flex-col gap-2 w-full">
+                {data.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }}></span>
+                            <span className="text-slate-600">{d.label}</span>
+                        </div>
+                        <span className="font-bold text-slate-800">{d.value}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const HorizontalBarChart = ({ data }: { data: { label: string, value: number, color?: string }[] }) => {
+    const max = Math.max(...data.map(d => d.value), 1);
+    return (
+        <div className="space-y-3 w-full">
+            {data.map((d, i) => (
+                <div key={i} className="w-full">
+                    <div className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-slate-600">{d.label}</span>
+                        <span className="font-bold text-slate-800">{d.value}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div 
+                            className={`h-full rounded-full ${d.color || 'bg-brand-blue'}`} 
+                            style={{ width: `${(d.value / max) * 100}%` }}
+                        ></div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 const Dashboard = () => {
     const { user } = useAuth();
-    return (
-        <div className="p-8">
-            <h2 className="text-3xl font-bold text-slate-800 mb-4">Olá, {user?.name}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card title="Minhas Provas"><div className="text-3xl font-bold text-brand-blue">12</div><p className="text-slate-500">Provas criadas</p></Card>
-                <Card title="Questões"><div className="text-3xl font-bold text-brand-orange">450</div><p className="text-slate-500">No banco de dados</p></Card>
-                <Card title="Turmas"><div className="text-3xl font-bold text-green-600">5</div><p className="text-slate-500">Ativas</p></Card>
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        exams: 0,
+        questions: 0,
+        classes: 0,
+        institutions: 0,
+        questionsByDifficulty: [] as { label: string, value: number, color: string }[],
+        examsByMonth: [] as { label: string, value: number, color: string }[],
+        questionsByType: [] as { label: string, value: number, color: string }[],
+        topDisciplines: [] as { label: string, value: number }[],
+        recentExams: [] as Exam[]
+    });
+
+    useEffect(() => {
+        const loadDashboardData = async () => {
+            try {
+                const [exams, questions, classes, institutions, disciplines] = await Promise.all([
+                    FirebaseService.getExams(),
+                    FirebaseService.getQuestions(),
+                    FirebaseService.getClasses(),
+                    FirebaseService.getInstitutions(),
+                    FirebaseService.getHierarchy()
+                ]);
+
+                // 1. Difficulty Stats
+                const diffCounts = { Easy: 0, Medium: 0, Hard: 0 };
+                questions.forEach(q => { if(diffCounts[q.difficulty] !== undefined) diffCounts[q.difficulty]++ });
+                
+                // 2. Exams by Month (Last 6 Months)
+                const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+                const today = new Date();
+                const last6Months = Array.from({length: 6}, (_, i) => {
+                    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                    return { monthIdx: d.getMonth(), year: d.getFullYear(), label: monthNames[d.getMonth()], value: 0 };
+                }).reverse();
+                
+                exams.forEach(e => {
+                    const d = new Date(e.createdAt);
+                    const bucket = last6Months.find(m => m.monthIdx === d.getMonth() && m.year === d.getFullYear());
+                    if (bucket) bucket.value++;
+                });
+
+                // 3. Questions by Type
+                const typeCounts: Record<string, number> = {};
+                questions.forEach(q => { typeCounts[q.type] = (typeCounts[q.type] || 0) + 1 });
+                const typeData = Object.entries(typeCounts).map(([key, val]) => ({
+                    label: QuestionTypeLabels[key as QuestionType] || key,
+                    value: val,
+                    color: '#64748b' // slate-500
+                })).sort((a,b) => b.value - a.value);
+
+                // 4. Top Disciplines
+                const discCounts: Record<string, number> = {};
+                questions.forEach(q => { discCounts[q.disciplineId] = (discCounts[q.disciplineId] || 0) + 1 });
+                const topDisc = Object.entries(discCounts)
+                    .map(([id, val]) => ({ label: disciplines.find(d => d.id === id)?.name || 'Desconhecida', value: val }))
+                    .sort((a,b) => b.value - a.value)
+                    .slice(0, 5);
+
+                // 5. Recent Exams
+                const recent = [...exams].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+
+                setStats({
+                    exams: exams.length,
+                    questions: questions.length,
+                    classes: classes.length,
+                    institutions: institutions.length,
+                    questionsByDifficulty: [
+                        { label: 'Fácil', value: diffCounts.Easy, color: '#22c55e' }, // green-500
+                        { label: 'Médio', value: diffCounts.Medium, color: '#eab308' }, // yellow-500
+                        { label: 'Difícil', value: diffCounts.Hard, color: '#ef4444' } // red-500
+                    ],
+                    examsByMonth: last6Months.map(m => ({ label: m.label, value: m.value, color: '#3A72EC' })),
+                    questionsByType: typeData,
+                    topDisciplines: topDisc,
+                    recentExams: recent
+                });
+
+                setLoading(false);
+            } catch (e) {
+                console.error("Erro ao carregar dashboard", e);
+                setLoading(false);
+            }
+        };
+
+        loadDashboardData();
+    }, []);
+
+    if (loading) return (
+        <div className="flex h-full items-center justify-center p-8">
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-slate-400 animate-pulse">Carregando estatísticas...</p>
             </div>
+        </div>
+    );
+
+    return (
+        <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar h-full">
+            <div className="flex justify-between items-end mb-8">
+                <div>
+                    <h2 className="text-3xl font-display font-bold text-slate-800">Olá, {user?.name.split(' ')[0]}</h2>
+                    <p className="text-slate-500 mt-1">Aqui está o resumo da sua plataforma hoje.</p>
+                </div>
+                <div className="text-right hidden md:block">
+                    <div className="text-sm font-bold text-brand-blue">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                </div>
+            </div>
+
+            {/* KPI CARDS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-shadow">
+                    <div>
+                        <p className="text-sm text-slate-500 font-medium mb-1">Total de Provas</p>
+                        <h3 className="text-3xl font-bold text-slate-800">{stats.exams}</h3>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-blue-50 text-brand-blue flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Icons.Exams />
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-shadow">
+                    <div>
+                        <p className="text-sm text-slate-500 font-medium mb-1">Banco de Questões</p>
+                        <h3 className="text-3xl font-bold text-slate-800">{stats.questions}</h3>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-orange-50 text-brand-orange flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Icons.Questions />
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-shadow">
+                    <div>
+                        <p className="text-sm text-slate-500 font-medium mb-1">Turmas Ativas</p>
+                        <h3 className="text-3xl font-bold text-slate-800">{stats.classes}</h3>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Icons.UsersGroup />
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-shadow">
+                    <div>
+                        <p className="text-sm text-slate-500 font-medium mb-1">Instituições</p>
+                        <h3 className="text-3xl font-bold text-slate-800">{stats.institutions}</h3>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Icons.Building />
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                {/* CHART: EXAMS OVER TIME */}
+                <Card title="Provas Criadas (6 Meses)" className="lg:col-span-2">
+                    <SimpleBarChart data={stats.examsByMonth} />
+                </Card>
+
+                {/* CHART: QUESTIONS BY DIFFICULTY */}
+                <Card title="Dificuldade das Questões">
+                    <div className="h-40 flex items-center justify-center">
+                        <SimpleDonutChart data={stats.questionsByDifficulty} />
+                    </div>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* LIST: RECENT EXAMS */}
+                <Card title="Provas Recentes" className="lg:col-span-2">
+                    {stats.recentExams.length === 0 ? (
+                        <p className="text-slate-400 italic text-sm">Nenhuma prova criada recentemente.</p>
+                    ) : (
+                        <div className="divide-y divide-slate-100">
+                            {stats.recentExams.map(exam => (
+                                <div key={exam.id} className="py-3 flex items-center justify-between hover:bg-slate-50 rounded px-2 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded bg-blue-50 text-brand-blue flex items-center justify-center font-bold text-xs shrink-0">
+                                            DOC
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-800 text-sm line-clamp-1">{exam.title}</h4>
+                                            <p className="text-xs text-slate-500">{new Date(exam.createdAt).toLocaleDateString()} • {exam.questions?.length || 0} questões</p>
+                                        </div>
+                                    </div>
+                                    <Badge color="blue">Concluída</Badge>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </Card>
+
+                {/* CHART: QUESTIONS BY TYPE */}
+                <Card title="Questões por Tipo">
+                   <div className="h-full flex flex-col justify-center">
+                       <HorizontalBarChart data={stats.questionsByType.slice(0, 5)} />
+                   </div>
+                </Card>
+            </div>
+            
+             {/* TOP DISCIPLINES */}
+             <div className="mt-6">
+                <Card title="Top Disciplinas">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                        {stats.topDisciplines.map((d, i) => (
+                            <div key={i} className="bg-slate-50 rounded-lg p-4 border border-slate-100 text-center">
+                                <div className="text-2xl font-bold text-brand-blue mb-1">{d.value}</div>
+                                <div className="text-xs font-bold text-slate-600 uppercase tracking-wide truncate" title={d.label}>{d.label}</div>
+                            </div>
+                        ))}
+                        {stats.topDisciplines.length === 0 && <p className="text-slate-400 text-sm col-span-5 text-center py-4">Nenhuma disciplina com questões cadastradas.</p>}
+                    </div>
+                </Card>
+             </div>
         </div>
     );
 };
@@ -698,7 +977,7 @@ const ExamsPage = () => {
                             .map(inst => {
                                 const instExams = exams.filter(e => e.institutionId === inst.id);
                                 const years = Array.from(new Set(instExams.map(e => new Date(e.createdAt).getFullYear())))
-                                    .sort((a, b) => b - a);
+                                    .sort((a, b) => Number(b) - Number(a));
                                 
                                 const isExpanded = expandedInsts[inst.id] !== false;
 
@@ -851,8 +1130,8 @@ const NavLink = ({ to, icon, label }: { to: string, icon: React.ReactNode, label
     const location = useLocation();
     const active = location.pathname === to;
     return (
-        <Link to={to} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${active ? 'bg-blue-50 text-brand-blue font-semibold shadow-sm ring-1 ring-blue-100' : 'text-slate-600 hover:bg-slate-50 hover:text-brand-dark'}`}>
-            <span className={`${active ? 'text-brand-blue' : 'text-slate-400 group-hover:text-brand-orange'}`}>{icon}</span>
+        <Link to={to} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${active ? 'bg-brand-blue text-white font-semibold shadow-lg' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+            <span className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-brand-orange'}`}>{icon}</span>
             {label}
         </Link>
     );
@@ -888,35 +1167,35 @@ const App = () => {
     <AuthContext.Provider value={{ user, loading }}>
       <HashRouter>
         <div className="flex h-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
-          <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 print:hidden transition-all duration-300">
-             <div className="p-6 border-b border-slate-100 flex items-center gap-2">
+          <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 print:hidden transition-all duration-300">
+             <div className="p-6 border-b border-slate-800 flex items-center gap-2">
                  <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-xl">P</div>
-                 <h1 className="font-display font-bold text-xl text-brand-dark">Prova Fácil</h1>
+                 <h1 className="font-display font-bold text-xl text-white">Prova Fácil</h1>
              </div>
              
              <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
                  <NavLink to="/" icon={<Icons.Dashboard />} label="Dashboard" />
-                 <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Gestão</div>
+                 <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Gestão</div>
                  <NavLink to="/institutions" icon={<Icons.Building />} label="Instituições" />
                  <NavLink to="/classes" icon={<Icons.UsersGroup />} label="Turmas" />
                  <NavLink to="/hierarchy" icon={<Icons.BookOpen />} label="Conteúdos" />
                  
-                 <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Avaliações</div>
+                 <div className="pt-4 pb-1 pl-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Avaliações</div>
                  <NavLink to="/questions" icon={<Icons.Questions />} label="Banco de Questões" />
                  <NavLink to="/exams" icon={<Icons.Exams />} label="Provas" />
              </nav>
 
-             <div className="p-4 border-t border-slate-100 bg-slate-50">
+             <div className="p-4 border-t border-slate-800 bg-slate-900/50">
                  <div className="flex items-center gap-3 mb-3">
                      <div className="w-10 h-10 bg-brand-orange text-white rounded-full flex items-center justify-center font-bold">
                          {user.name.charAt(0)}
                      </div>
                      <div className="flex-1 min-w-0">
-                         <p className="text-sm font-bold text-brand-dark truncate">{user.name}</p>
-                         <p className="text-xs text-slate-500 truncate">{user.role === 'ADMIN' ? 'Administrador' : 'Professor'}</p>
+                         <p className="text-sm font-bold text-white truncate">{user.name}</p>
+                         <p className="text-xs text-slate-400 truncate">{user.role === 'ADMIN' ? 'Administrador' : 'Professor'}</p>
                      </div>
                  </div>
-                 <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 w-full hover:bg-red-50 p-2 rounded transition-colors">
+                 <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 w-full hover:bg-white/5 p-2 rounded transition-colors">
                      <Icons.Logout /> Sair
                  </button>
              </div>
