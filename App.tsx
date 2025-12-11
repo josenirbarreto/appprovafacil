@@ -195,14 +195,15 @@ const HierarchyPage = () => {
     };
 
     // Paleta de cores para as disciplinas
+    // Adicionado 'unit' para ser uma cor mais forte que o 'body' (accordion bg)
     const colorPalette = [
-        { header: 'bg-blue-600', body: 'bg-blue-50', border: 'border-blue-200' },
-        { header: 'bg-emerald-600', body: 'bg-emerald-50', border: 'border-emerald-200' },
-        { header: 'bg-purple-600', body: 'bg-purple-50', border: 'border-purple-200' },
-        { header: 'bg-amber-600', body: 'bg-amber-50', border: 'border-amber-200' },
-        { header: 'bg-rose-600', body: 'bg-rose-50', border: 'border-rose-200' },
-        { header: 'bg-cyan-600', body: 'bg-cyan-50', border: 'border-cyan-200' },
-        { header: 'bg-indigo-600', body: 'bg-indigo-50', border: 'border-indigo-200' },
+        { header: 'bg-blue-600', body: 'bg-blue-50', unit: 'bg-blue-100', text: 'text-blue-900', border: 'border-blue-200' },
+        { header: 'bg-emerald-600', body: 'bg-emerald-50', unit: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-200' },
+        { header: 'bg-purple-600', body: 'bg-purple-50', unit: 'bg-purple-100', text: 'text-purple-900', border: 'border-purple-200' },
+        { header: 'bg-amber-600', body: 'bg-amber-50', unit: 'bg-amber-100', text: 'text-amber-900', border: 'border-amber-200' },
+        { header: 'bg-rose-600', body: 'bg-rose-50', unit: 'bg-rose-100', text: 'text-rose-900', border: 'border-rose-200' },
+        { header: 'bg-cyan-600', body: 'bg-cyan-50', unit: 'bg-cyan-100', text: 'text-cyan-900', border: 'border-cyan-200' },
+        { header: 'bg-indigo-600', body: 'bg-indigo-50', unit: 'bg-indigo-100', text: 'text-indigo-900', border: 'border-indigo-200' },
     ];
 
     if(loading) return <div className="p-8 flex items-center justify-center text-slate-500">Carregando estrutura...</div>;
@@ -247,17 +248,18 @@ const HierarchyPage = () => {
                                 </div>
                             </div>
 
-                            {/* Chapters List */}
+                            {/* Accordion Body */}
                             {isExpanded && (
                                 <div className={`p-4 ${colors.body} space-y-4 animate-fade-in`}>
                                     {d.chapters.length === 0 ? (
                                         <p className="text-slate-500 text-sm italic text-center py-4">Nenhum capítulo cadastrado nesta disciplina.</p>
                                     ) : (
+                                        // HIERARCHY LEVEL 2: CHAPTERS
                                         d.chapters.map(c => {
                                             const isChapExpanded = expandedChapters[c.id] !== false;
                                             return (
-                                                <div key={c.id} className="bg-white/80 border border-white/50 rounded-lg shadow-sm">
-                                                    <div className="p-3 flex justify-between items-center border-b border-slate-100 cursor-pointer hover:bg-white/50 transition-colors" onClick={() => toggleChapter(c.id)}>
+                                                <div key={c.id} className="bg-white/90 border border-white/60 rounded-lg shadow-sm">
+                                                    <div className="p-3 flex justify-between items-center border-b border-slate-100 cursor-pointer hover:bg-white transition-colors" onClick={() => toggleChapter(c.id)}>
                                                         <div className="flex items-center gap-2">
                                                             <div className={`transform transition-transform duration-200 text-slate-400 ${isChapExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
                                                             <span className="font-semibold text-slate-700">{c.name}</span>
@@ -269,32 +271,35 @@ const HierarchyPage = () => {
                                                     </div>
 
                                                     {isChapExpanded && (
-                                                        <div className="p-4 space-y-4">
-                                                            {c.units.length === 0 ? <p className="text-xs text-slate-400 italic ml-6">Nenhuma unidade.</p> : c.units.map(u => (
-                                                                <div key={u.id} className="ml-2 pl-4 border-l-2 border-slate-200">
-                                                                    <div className="flex justify-between items-center mb-2">
-                                                                        <span className="text-sm font-bold text-slate-600">{u.name}</span>
-                                                                        <div className="flex gap-1">
-                                                                            <button onClick={() => promptAdd('Tópico', (n) => addT(d.id, c.id, u.id, n))} className="text-brand-blue text-xs font-medium hover:underline px-2 py-1">+ Tópico</button>
-                                                                            <button onClick={() => handleDelete('unit', { dId: d.id, cId: c.id, uId: u.id })} className="text-slate-300 hover:text-red-500 p-1"><Icons.Trash /></button>
+                                                        <div className="p-4 space-y-3">
+                                                            {c.units.length === 0 ? <p className="text-xs text-slate-400 italic ml-6">Nenhuma unidade.</p> : (
+                                                                // HIERARCHY LEVEL 3: UNITS
+                                                                c.units.map(u => (
+                                                                    <div key={u.id} className={`p-3 rounded-lg border ${colors.border} ${colors.unit}`}>
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className={`text-sm font-bold ${colors.text}`}>{u.name}</span>
+                                                                            <div className="flex gap-1">
+                                                                                <button onClick={() => promptAdd('Tópico', (n) => addT(d.id, c.id, u.id, n))} className="text-slate-600 hover:text-brand-blue text-xs font-medium hover:underline px-2 py-1">+ Tópico</button>
+                                                                                <button onClick={() => handleDelete('unit', { dId: d.id, cId: c.id, uId: u.id })} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button>
+                                                                            </div>
+                                                                        </div>
+                                                                        
+                                                                        {/* HIERARCHY LEVEL 4: TOPICS */}
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            {u.topics.length === 0 && <span className="text-xs text-slate-400 italic">Sem tópicos</span>}
+                                                                            {u.topics.map(t => (
+                                                                                <div key={t.id} className="group flex items-center gap-2 bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-medium hover:border-slate-300 transition-colors shadow-sm text-slate-700">
+                                                                                    {t.name}
+                                                                                    <button onClick={() => handleDelete('topic', { dId: d.id, cId: c.id, uId: u.id, tId: t.id })} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                        <span className="sr-only">Excluir</span>
+                                                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                                    </button>
+                                                                                </div>
+                                                                            ))}
                                                                         </div>
                                                                     </div>
-                                                                    
-                                                                    {/* Topics as Tags */}
-                                                                    <div className="flex flex-wrap gap-2 mt-2">
-                                                                        {u.topics.length === 0 && <span className="text-xs text-slate-300 italic">Sem tópicos</span>}
-                                                                        {u.topics.map(t => (
-                                                                            <div key={t.id} className="group flex items-center gap-2 bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-medium hover:border-brand-blue hover:text-brand-blue transition-colors shadow-sm">
-                                                                                {t.name}
-                                                                                <button onClick={() => handleDelete('topic', { dId: d.id, cId: c.id, uId: u.id, tId: t.id })} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                    <span className="sr-only">Excluir</span>
-                                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                                                </button>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
+                                                                ))
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -894,397 +899,361 @@ const Dashboard = () => {
     );
 };
 
-// --- PROFILE PAGE ---
+// --- NEW PAGES ---
+
 const ProfilePage = () => {
     const { user, refreshUser } = useAuth();
-    const [name, setName] = useState('');
-    const [photoUrl, setPhotoUrl] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({ name: '', photoUrl: '' });
 
     useEffect(() => {
-        if (user) {
-            setName(user.name || '');
-            setPhotoUrl(user.photoUrl || '');
-        }
+        if (user) setFormData({ name: user.name, photoUrl: user.photoUrl || '' });
     }, [user]);
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        if (file.size > 2 * 1024 * 1024) { // Limite de 2MB
-            setMessage({ type: 'error', text: 'A imagem deve ter no máximo 2MB.' });
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.src = e.target?.result as string;
-            img.onload = () => {
-                // Resize logic: Cria um canvas para redimensionar a imagem
-                // Isso garante que a string Base64 não seja gigante
-                const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 300; 
-                const scaleSize = MAX_WIDTH / img.width;
-                canvas.width = MAX_WIDTH;
-                canvas.height = img.height * scaleSize;
-                
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    // Converte para JPEG com qualidade 0.7 para economizar espaço
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                    setPhotoUrl(dataUrl);
-                }
-            };
-        };
-        reader.readAsDataURL(file);
-    };
 
     const handleSave = async () => {
         if (!user) return;
-        setSaving(true);
-        setMessage(null);
-        try {
-            await FirebaseService.updateUser(user.id, { name, photoUrl });
-            await refreshUser();
-            setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Erro ao atualizar perfil. Tente novamente.' });
-        } finally {
-            setSaving(false);
-        }
+        await FirebaseService.updateUser(user.id, formData);
+        await refreshUser();
+        setIsEditing(false);
     };
 
+    if (!user) return null;
+
     return (
-        <div className="p-6 md:p-8 max-w-2xl mx-auto space-y-6">
-            <h2 className="text-3xl font-display font-bold text-slate-800">Meu Perfil</h2>
-            
-            {message && (
-                <div className={`p-4 rounded-lg text-sm font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {message.text}
-                </div>
-            )}
-
+        <div className="p-8 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-display font-bold text-slate-800 mb-6">Meu Perfil</h2>
             <Card className="space-y-6">
-                <div className="flex flex-col items-center gap-4 py-4">
-                    <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                        {photoUrl ? (
-                            <img src={photoUrl} alt={name} className="w-32 h-32 rounded-full object-cover border-4 border-slate-100 shadow-sm transition-opacity group-hover:opacity-75" />
-                        ) : (
-                            <div className="w-32 h-32 rounded-full bg-brand-blue text-white flex items-center justify-center text-4xl font-bold shadow-sm transition-opacity group-hover:opacity-75">
-                                {name.charAt(0)}
-                            </div>
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="bg-black/50 text-white p-2 rounded-full">
-                                <Icons.Camera />
-                            </div>
-                        </div>
-                    </div>
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept="image/*" 
-                        onChange={handleFileChange} 
-                    />
-                    <div className="text-center">
-                        <Button variant="ghost" onClick={() => fileInputRef.current?.click()}>Alterar Foto</Button>
-                        <p className="text-slate-500 text-xs mt-1">Clique na foto para fazer upload (Máx 2MB)</p>
+                <div className="flex items-center gap-6">
+                    {formData.photoUrl ? (
+                        <img src={formData.photoUrl} className="w-24 h-24 rounded-full object-cover border-4 border-slate-100" />
+                    ) : (
+                        <div className="w-24 h-24 rounded-full bg-brand-orange text-white text-3xl font-bold flex items-center justify-center border-4 border-slate-100">{user.name.charAt(0)}</div>
+                    )}
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-800">{user.name}</h3>
+                        <p className="text-slate-500">{user.email}</p>
+                        <Badge color="blue">{user.role}</Badge>
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    <Input label="Nome Completo" value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome" />
-                    <Input label="Email (Não editável)" value={user?.email || ''} disabled className="bg-slate-50 text-slate-500 cursor-not-allowed" />
+                <div className="grid grid-cols-1 gap-4">
+                    <Input label="Nome Completo" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} disabled={!isEditing} />
+                    <Input label="URL da Foto" value={formData.photoUrl} onChange={e => setFormData({...formData, photoUrl: e.target.value})} disabled={!isEditing} />
+                    <div className="grid grid-cols-2 gap-4">
+                         <Input label="Plano" value={user.plan} disabled />
+                         <Input label="Expira em" value={new Date(user.subscriptionEnd).toLocaleDateString()} disabled />
+                    </div>
                 </div>
 
-                <div className="pt-4 flex justify-end">
-                    <Button onClick={handleSave} disabled={saving}>
-                        {saving ? 'Salvando...' : 'Salvar Alterações'}
-                    </Button>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    {isEditing ? (
+                        <>
+                            <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                            <Button onClick={handleSave}>Salvar Alterações</Button>
+                        </>
+                    ) : (
+                        <Button onClick={() => setIsEditing(true)}>Editar Perfil</Button>
+                    )}
                 </div>
             </Card>
         </div>
     );
 };
 
-// --- INSTITUTION PAGE ---
 const InstitutionPage = () => {
-    const [list, setList] = useState<Institution[]>([]);
+    const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<Partial<Institution>>({});
+
     useEffect(() => { load(); }, []);
-    const load = async () => setList(await FirebaseService.getInstitutions());
+    const load = async () => { setInstitutions(await FirebaseService.getInstitutions()); };
+
     const handleSave = async () => {
         if (!editing.name) return;
-        if (editing.id) await FirebaseService.updateInstitution(editing as Institution); else await FirebaseService.addInstitution(editing as Institution);
-        setIsModalOpen(false); load();
+        if (editing.id) await FirebaseService.updateInstitution(editing as Institution);
+        else await FirebaseService.addInstitution(editing as Institution);
+        setIsModalOpen(false);
+        load();
     };
-    const handleDelete = async (id: string) => { if(confirm('Excluir?')) { await FirebaseService.deleteInstitution(id); load(); } }
+
+    const handleDelete = async (id: string) => {
+        if (confirm('Excluir instituição?')) { await FirebaseService.deleteInstitution(id); load(); }
+    };
 
     return (
-        <div className="p-8 space-y-6">
-            <div className="flex justify-between"><h2 className="text-2xl font-bold">Instituições</h2><Button onClick={() => { setEditing({}); setIsModalOpen(true); }}><Icons.Plus /> Nova</Button></div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {list.map(i => (
-                    <Card key={i.id} className="flex flex-col justify-between">
-                        <div className="flex items-center gap-3 mb-3">
-                             {i.logoUrl ? <img src={i.logoUrl} className="w-12 h-12 object-contain" /> : <div className="w-12 h-12 bg-slate-100 flex items-center justify-center rounded"><Icons.Building /></div>}
-                             <div><h3 className="font-bold">{i.name}</h3><p className="text-xs text-slate-500">{i.address}</p></div>
+        <div className="p-8 overflow-y-auto h-full">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-display font-bold text-slate-800">Instituições</h2>
+                <Button onClick={() => { setEditing({}); setIsModalOpen(true); }}><Icons.Plus /> Nova Instituição</Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {institutions.map(inst => (
+                    <Card key={inst.id} className="relative group">
+                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => { setEditing(inst); setIsModalOpen(true); }} className="p-1 text-slate-400 hover:text-brand-blue"><Icons.Edit /></button>
+                            <button onClick={() => handleDelete(inst.id)} className="p-1 text-slate-400 hover:text-red-500"><Icons.Trash /></button>
                         </div>
-                        <div className="flex justify-end gap-2 mt-4"><Button variant="ghost" onClick={() => { setEditing(i); setIsModalOpen(true); }}><Icons.Edit /></Button><Button variant="ghost" className="text-red-500" onClick={() => handleDelete(i.id)}><Icons.Trash /></Button></div>
+                        <div className="flex items-center gap-4 mb-4">
+                             {inst.logoUrl ? <img src={inst.logoUrl} className="w-12 h-12 object-contain" /> : <div className="w-12 h-12 bg-slate-100 rounded flex items-center justify-center"><Icons.Building /></div>}
+                             <div><h3 className="font-bold text-slate-800">{inst.name}</h3><p className="text-xs text-slate-500">{inst.email || 'Sem email'}</p></div>
+                        </div>
+                        <div className="text-sm text-slate-600 space-y-1">
+                            <p>{inst.phone || 'Sem telefone'}</p>
+                            <p className="truncate">{inst.address || 'Sem endereço'}</p>
+                        </div>
                     </Card>
                 ))}
             </div>
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Instituição" footer={<Button onClick={handleSave}>Salvar</Button>}>
-                <div className="space-y-3"><Input label="Nome" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} /><Input label="Logo URL" value={editing.logoUrl || ''} onChange={e => setEditing({...editing, logoUrl: e.target.value})} /><Input label="Endereço" value={editing.address || ''} onChange={e => setEditing({...editing, address: e.target.value})} /></div>
+                <div className="space-y-4">
+                    <Input label="Nome" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} />
+                    <Input label="Logo URL" value={editing.logoUrl || ''} onChange={e => setEditing({...editing, logoUrl: e.target.value})} />
+                    <Input label="Email" value={editing.email || ''} onChange={e => setEditing({...editing, email: e.target.value})} />
+                    <Input label="Telefone" value={editing.phone || ''} onChange={e => setEditing({...editing, phone: e.target.value})} />
+                    <Input label="Endereço" value={editing.address || ''} onChange={e => setEditing({...editing, address: e.target.value})} />
+                    <Input label="Website" value={editing.website || ''} onChange={e => setEditing({...editing, website: e.target.value})} />
+                </div>
             </Modal>
         </div>
     );
 };
 
-// --- CLASSES PAGE (ACCORDION) ---
 const ClassesPage = () => {
-    const [list, setList] = useState<SchoolClass[]>([]);
-    const [insts, setInsts] = useState<Institution[]>([]);
+    const [classes, setClasses] = useState<SchoolClass[]>([]);
+    const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<Partial<SchoolClass>>({});
-    const [expandedInsts, setExpandedInsts] = useState<Record<string, boolean>>({});
 
     useEffect(() => { load(); }, []);
     const load = async () => {
-        setList(await FirebaseService.getClasses());
-        setInsts(await FirebaseService.getInstitutions());
+        const [cs, is] = await Promise.all([FirebaseService.getClasses(), FirebaseService.getInstitutions()]);
+        setClasses(cs);
+        setInstitutions(is);
     };
-    
+
     const handleSave = async () => {
         if (!editing.name || !editing.institutionId) return;
         if (editing.id) await FirebaseService.updateClass(editing as SchoolClass);
         else await FirebaseService.addClass(editing as SchoolClass);
         setIsModalOpen(false);
         load();
-    }
+    };
 
-    const handleDelete = async (id: string) => { if(confirm('Excluir turma?')) { await FirebaseService.deleteClass(id); load(); } }
-    const toggleAccordion = (instId: string) => { setExpandedInsts(prev => ({ ...prev, [instId]: !prev[instId] })); };
+    const handleDelete = async (id: string) => {
+        if (confirm('Excluir turma?')) { await FirebaseService.deleteClass(id); load(); }
+    };
 
     return (
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6">
-            <div className="flex justify-between items-center"><h2 className="text-3xl font-display font-bold text-brand-dark">Turmas</h2><Button onClick={() => { setEditing({}); setIsModalOpen(true); }}><Icons.Plus /> Nova Turma</Button></div>
-            {list.length === 0 ? <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200"><div className="mb-3 flex justify-center"><Icons.UsersGroup /></div><p>Nenhuma turma cadastrada.</p></div> : (
-                <div className="space-y-6">
-                    {insts.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(inst => {
-                            const instClasses = list.filter(c => c.institutionId === inst.id);
-                            const years = Array.from(new Set(instClasses.map(c => c.year))).sort((a, b) => Number(b) - Number(a));
-                            const isExpanded = expandedInsts[inst.id] !== false;
-                            return (
-                                <div key={inst.id} className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                                    <div onClick={() => toggleAccordion(inst.id)} className="p-6 cursor-pointer hover:bg-slate-50 transition-colors flex justify-between items-center select-none">
-                                        <h3 className="font-bold text-lg flex items-center gap-3">
-                                            {inst.logoUrl ? <img src={inst.logoUrl} alt={inst.name} className="w-10 h-10 object-contain rounded border border-slate-200 bg-white" /> : <div className="p-2 bg-slate-100 rounded text-slate-500"><Icons.Building /></div>}
-                                            <div className="flex flex-col"><span>{inst.name}</span><span className="text-xs font-normal text-slate-500">{instClasses.length} turmas cadastradas</span></div>
-                                        </h3>
-                                        <div className={`transform transition-transform duration-200 text-slate-400 ${isExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
-                                    </div>
-                                    {isExpanded && (
-                                        <div className="px-6 pb-6 border-t border-slate-100 animate-fade-in pt-4">
-                                            {instClasses.length > 0 ? (
-                                                <div className="space-y-8">
-                                                    {years.map(year => {
-                                                        const classesInYear = instClasses.filter(c => c.year === year);
-                                                        return (
-                                                            <div key={year}>
-                                                                <div className="flex items-center gap-2 mb-4"><Badge color="blue">{year.toString()}</Badge><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ano Letivo</span></div>
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-2 border-l-2 border-slate-100 ml-2">
-                                                                    {classesInYear.map(c => (
-                                                                        <Card key={c.id} className="hover:shadow-md transition-shadow group flex flex-col border border-slate-200 bg-white p-0">
-                                                                            <div className="p-5">
-                                                                                <div className="flex justify-between items-start mb-3">
-                                                                                    <div className="p-2 bg-green-50 text-green-600 rounded-lg"><Icons.UsersGroup /></div>
-                                                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                        <button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded transition-colors"><Icons.Edit /></button>
-                                                                                        <button onClick={() => handleDelete(c.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Icons.Trash /></button>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
-                                                                                <p className="text-xs text-slate-500 mt-1">{inst.name}</p>
-                                                                            </div>
-                                                                        </Card>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            ) : <p className="text-sm text-slate-400 italic">Nenhuma turma cadastrada.</p>}
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })}
-                </div>
-            )}
+        <div className="p-8 overflow-y-auto h-full">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-display font-bold text-slate-800">Turmas</h2>
+                <Button onClick={() => { setEditing({ year: new Date().getFullYear() }); setIsModalOpen(true); }}><Icons.Plus /> Nova Turma</Button>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold">
+                        <tr>
+                            <th className="p-4">Nome</th>
+                            <th className="p-4">Ano</th>
+                            <th className="p-4">Instituição</th>
+                            <th className="p-4 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {classes.map(c => (
+                            <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-4 font-medium text-slate-800">{c.name}</td>
+                                <td className="p-4 text-slate-600">{c.year}</td>
+                                <td className="p-4 text-slate-600">{institutions.find(i => i.id === c.institutionId)?.name || 'N/A'}</td>
+                                <td className="p-4 text-right flex justify-end gap-2">
+                                    <button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue"><Icons.Edit /></button>
+                                    <button onClick={() => handleDelete(c.id)} className="text-slate-400 hover:text-red-500"><Icons.Trash /></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {classes.length === 0 && <div className="p-8 text-center text-slate-400">Nenhuma turma cadastrada.</div>}
+            </div>
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Turma" footer={<Button onClick={handleSave}>Salvar</Button>}>
-                <div className="space-y-3">
-                    <Input label="Nome" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" />
-                    <Input label="Ano" type="number" value={editing.year || new Date().getFullYear()} onChange={e => setEditing({...editing, year: parseInt(e.target.value)})} />
+                <div className="space-y-4">
+                    <Input label="Nome da Turma" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" />
+                    <Input label="Ano Letivo" type="number" value={editing.year || ''} onChange={e => setEditing({...editing, year: parseInt(e.target.value)})} />
                     <Select label="Instituição" value={editing.institutionId || ''} onChange={e => setEditing({...editing, institutionId: e.target.value})}>
                         <option value="">Selecione...</option>
-                        {insts.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                        {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                     </Select>
                 </div>
             </Modal>
         </div>
-    )
+    );
 };
 
-// --- EXAMS PAGE ---
 const ExamsPage = () => {
+    const [view, setView] = useState<'list' | 'create'>('list');
     const [exams, setExams] = useState<Exam[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Partial<Exam>>({});
-    const [step, setStep] = useState<number>(1);
     const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [classes, setClasses] = useState<SchoolClass[]>([]);
-    const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
-    const [allQuestions, setAllQuestions] = useState<Question[]>([]);
+    const [questions, setQuestions] = useState<Question[]>([]);
     
-    // Config state
-    const [selDisc, setSelDisc] = useState('');
-    const [selChap, setSelChap] = useState('');
-    const [selUnit, setSelUnit] = useState('');
-    const [selTopic, setSelTopic] = useState('');
-    const [selCount, setSelCount] = useState(1);
-    const [genMode, setGenMode] = useState<'manual'|'auto'>('manual');
-    const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
-    const [expandedInsts, setExpandedInsts] = useState<Record<string, boolean>>({});
-
-    useEffect(() => { loadData(); }, []);
-    const loadData = async () => {
-        const [d1, d2, d3, d4, d5] = await Promise.all([FirebaseService.getExams(), FirebaseService.getInstitutions(), FirebaseService.getClasses(), FirebaseService.getHierarchy(), FirebaseService.getQuestions()]);
-        setExams(d1); setInstitutions(d2); setClasses(d3); setHierarchy(d4); setAllQuestions(d5);
-    };
-
-    const toggleAccordion = (instId: string) => setExpandedInsts(prev => ({ ...prev, [instId]: !prev[instId] }));
+    // Create/Edit State
+    const [currentExam, setCurrentExam] = useState<Partial<Exam>>({
+        questions: [],
+        columns: 1,
+        showAnswerKey: false
+    });
     
-    const handleOpenWizard = () => { 
-        setStep(1); 
-        setEditing({ 
-            title: '', 
-            headerText: '', 
-            institutionId: institutions.length > 0 ? institutions[0].id : '', 
-            classId: '', 
-            columns: 1, 
-            instructions: '<ul><li>Leia atentamente as questões.</li><li>Use caneta azul ou preta.</li></ul>', 
-            contentScopes: [], 
-            questions: [], 
-            showAnswerKey: false 
-        }); 
-        setIsModalOpen(true); 
+    // Question Selection State in Create Mode
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => { load(); }, []);
+    const load = async () => {
+        const [es, is, cs, qs] = await Promise.all([
+            FirebaseService.getExams(),
+            FirebaseService.getInstitutions(),
+            FirebaseService.getClasses(),
+            FirebaseService.getQuestions()
+        ]);
+        setExams(es);
+        setInstitutions(is);
+        setClasses(cs);
+        setQuestions(qs);
     };
 
-    const handleAddContentScope = () => { 
-        if (!selDisc) return; 
-        const d = hierarchy.find(x => x.id === selDisc); 
-        const c = d?.chapters.find(x => x.id === selChap); 
-        const u = c?.units.find(x => x.id === selUnit); 
-        const t = u?.topics.find(x => x.id === selTopic); 
-        setEditing(prev => ({ 
-            ...prev, 
-            contentScopes: [...(prev.contentScopes || []), { id: Date.now().toString(), disciplineId: selDisc, disciplineName: d?.name || '', chapterId: selChap, chapterName: c?.name, unitId: selUnit, unitName: u?.name, topicId: selTopic, topicName: t?.name, questionCount: selCount }] 
-        })); 
+    const handleSaveExam = async () => {
+        if(!currentExam.title || !currentExam.questions?.length) { alert('Preencha o título e adicione questões.'); return; }
+        const examToSave: Exam = {
+            id: currentExam.id || '',
+            title: currentExam.title,
+            headerText: currentExam.headerText || '',
+            institutionId: currentExam.institutionId,
+            classId: currentExam.classId,
+            columns: currentExam.columns || 1,
+            instructions: currentExam.instructions || '',
+            contentScopes: [],
+            questions: currentExam.questions,
+            createdAt: currentExam.createdAt || new Date().toISOString(),
+            showAnswerKey: currentExam.showAnswerKey || false
+        };
+        await FirebaseService.saveExam(examToSave);
+        load();
+        setView('list');
     };
 
-    const handleAutoGenerate = () => { 
-        let newSelectedQuestions: Question[] = []; 
-        editing.contentScopes?.forEach(scope => { 
-            const pool = allQuestions.filter(q => { 
-                if (q.disciplineId !== scope.disciplineId) return false; 
-                if (scope.chapterId && q.chapterId !== scope.chapterId) return false; 
-                if (scope.unitId && q.unitId !== scope.unitId) return false; 
-                if (scope.topicId && q.topicId !== scope.topicId) return false; 
-                return true; 
-            }); 
-            const shuffled = [...pool].sort(() => 0.5 - Math.random()); 
-            newSelectedQuestions = [...newSelectedQuestions, ...shuffled.slice(0, scope.questionCount)]; 
-        }); 
-        setEditing(prev => ({ ...prev, questions: newSelectedQuestions })); 
+    const toggleQuestion = (q: Question) => {
+        const exists = currentExam.questions?.find(eq => eq.id === q.id);
+        let newQuestions = [...(currentExam.questions || [])];
+        if(exists) newQuestions = newQuestions.filter(eq => eq.id !== q.id);
+        else newQuestions.push(q);
+        setCurrentExam({...currentExam, questions: newQuestions});
     };
 
-    const handleFinish = async () => { 
-        if (!editing.title || !editing.questions?.length) return alert("Preencha título e selecione questões."); 
-        await FirebaseService.saveExam({ ...editing, id: editing.id || '', createdAt: editing.createdAt || new Date().toISOString() } as Exam); 
-        setIsModalOpen(false); 
-        loadData(); 
+    const handleDelete = async (id: string) => {
+        if(confirm('Excluir prova?')) { await FirebaseService.deleteExam(id); load(); }
     };
 
-    useEffect(() => {
-        if (step === 3 && editing.contentScopes) {
-            setFilteredQuestions(allQuestions.filter(q => editing.contentScopes?.some(scope => { if (q.disciplineId !== scope.disciplineId) return false; if (scope.chapterId && q.chapterId !== scope.chapterId) return false; if (scope.unitId && q.unitId !== scope.unitId) return false; if (scope.topicId && q.topicId !== scope.topicId) return false; return true; })));
-        }
-    }, [step, editing.contentScopes, allQuestions]);
+    // Filter questions for selection
+    const availableQuestions = questions.filter(q => q.enunciado.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return (
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar space-y-6 print:block print:overflow-visible print:h-auto">
-            <div className="flex justify-between items-center print:hidden"><h2 className="text-3xl font-display font-bold text-brand-dark">Minhas Provas</h2><Button onClick={handleOpenWizard}><Icons.Plus /> Nova Prova</Button></div>
-            <div className="print:hidden">
-                {exams.length === 0 ? <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200"><div className="mb-3 flex justify-center"><Icons.Exams /></div><p>Nenhuma prova criada.</p></div> : (
-                    <div className="space-y-6">
-                        {institutions.map(inst => {
-                                const instExams = exams.filter(e => e.institutionId === inst.id);
-                                const isExpanded = expandedInsts[inst.id] !== false;
-                                return (
-                                    <div key={inst.id} className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                                        <div onClick={() => toggleAccordion(inst.id)} className="p-6 cursor-pointer hover:bg-slate-50 transition-colors flex justify-between items-center select-none"><h3 className="font-bold text-lg flex items-center gap-3">{inst.logoUrl ? <img src={inst.logoUrl} className="w-10 h-10 object-contain rounded border border-slate-200 bg-white" /> : <div className="p-2 bg-slate-100 rounded text-slate-500"><Icons.Building /></div>}<span>{inst.name}</span></h3><Icons.ChevronDown /></div>
-                                        {isExpanded && <div className="px-6 pb-6 border-t border-slate-100 animate-fade-in pt-4"><div className="grid grid-cols-1 md:grid-cols-3 gap-6">{instExams.map(exam => (<Card key={exam.id} title={exam.title} className="hover:shadow-md"><p className="text-sm text-slate-500 mb-4">{exam.questions?.length || 0} questões</p><div className="flex justify-end gap-2"><Button variant="ghost" className="text-sm" onClick={() => { setEditing(exam); setStep(1); setIsModalOpen(true); }}>Editar</Button><Button variant="ghost" className="text-sm text-red-500" onClick={async () => { if(confirm('Excluir?')) { await FirebaseService.deleteExam(exam.id); loadData(); } }}><Icons.Trash /></Button></div></Card>))}</div></div>}
-                                    </div>
-                                )
-                        })}
+    if(view === 'create') {
+        return (
+            <div className="flex flex-col h-full bg-slate-50">
+                 <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setView('list')} className="text-slate-400 hover:text-slate-600"><Icons.ArrowLeft /></button>
+                        <h2 className="text-xl font-bold font-display text-slate-800">{currentExam.id ? 'Editar Prova' : 'Nova Prova'}</h2>
                     </div>
-                )}
-            </div>
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Gerador de Provas" maxWidth={step === 4 ? 'max-w-5xl' : 'max-w-4xl'} footer={<div className="flex justify-between w-full print:hidden"><Button variant="ghost" onClick={() => step > 1 ? setStep(step - 1) : setIsModalOpen(false)}>{step === 1 ? 'Cancelar' : 'Voltar'}</Button><div className="flex gap-2">{step < 4 ? <Button onClick={() => setStep(step + 1)}>Próximo <Icons.ArrowRight /></Button> : <Button onClick={handleFinish} variant="secondary"><Icons.Check /> Salvar</Button>}</div></div>}>
-                <div className="h-[60vh] flex flex-col">
-                    <div className="flex-1 min-h-0 relative overflow-y-auto custom-scrollbar p-1">
-                        {step === 1 && (
-                            <div className="space-y-4">
-                                <Input label="Título" value={editing.title} onChange={e => setEditing({...editing, title: e.target.value})} />
-                                <div className="grid grid-cols-2 gap-4"><Select label="Instituição" value={editing.institutionId} onChange={e => setEditing({...editing, institutionId: e.target.value})}>{institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</Select><Select label="Turma" value={editing.classId} onChange={e => setEditing({...editing, classId: e.target.value})}>{classes.filter(c => c.institutionId === editing.institutionId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>
-                                <Input label="Cabeçalho" value={editing.headerText} onChange={e => setEditing({...editing, headerText: e.target.value})} />
-                                <RichTextEditor label="Instruções" value={editing.instructions || ''} onChange={(html) => setEditing({...editing, instructions: html})} />
-                            </div>
-                        )}
-                        {step === 2 && (
-                             <div className="space-y-6">
-                                <div className="grid grid-cols-12 gap-2 items-end bg-slate-50 p-4 rounded"><div className="col-span-3"><Select value={selDisc} onChange={e => { setSelDisc(e.target.value); setSelChap(''); }}><option value="">Disciplina</option>{hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select></div><div className="col-span-3"><Select value={selChap} onChange={e => setSelChap(e.target.value)}><option value="">Capítulo</option>{hierarchy.find(d => d.id === selDisc)?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div><div className="col-span-2"><Input type="number" value={selCount} onChange={e => setSelCount(parseInt(e.target.value))} /></div><div className="col-span-2"><Button onClick={handleAddContentScope}>+</Button></div></div>
-                                {editing.contentScopes?.map(scope => <div key={scope.id} className="flex justify-between bg-white p-3 border rounded"><span>{scope.disciplineName} ({scope.questionCount}q)</span></div>)}
-                             </div>
-                        )}
-                        {step === 3 && (
-                            <div className="space-y-4">
-                                <div className="flex justify-center gap-4"><Button onClick={() => setGenMode('manual')} variant={genMode === 'manual' ? 'primary' : 'ghost'}>Manual</Button><Button onClick={() => setGenMode('auto')} variant={genMode === 'auto' ? 'primary' : 'ghost'}>Auto</Button></div>
-                                {genMode === 'manual' ? (
-                                    <div className="border rounded bg-white divide-y">{filteredQuestions.map(q => <div key={q.id} onClick={() => setEditing(prev => { const exists = prev.questions?.find(x => x.id === q.id); return { ...prev, questions: exists ? prev.questions?.filter(x => x.id !== q.id) : [...(prev.questions || []), q] }; })} className={`p-4 cursor-pointer ${editing.questions?.some(x => x.id === q.id) ? 'bg-blue-50' : ''}`} dangerouslySetInnerHTML={{__html: q.enunciado}} />)}</div>
-                                ) : (
-                                    <div className="text-center p-8"><Button onClick={handleAutoGenerate}>Gerar Agora</Button><div className="mt-4">{editing.questions?.length} questões geradas</div></div>
-                                )}
-                            </div>
-                        )}
-                        {step === 4 && (
-                            <div className="bg-white p-8 shadow-lg print:shadow-none">
-                                <h1 className="text-center font-bold text-xl uppercase">{institutions.find(i => i.id === editing.institutionId)?.name}</h1>
-                                <h2 className="text-center font-bold text-lg">{editing.title}</h2>
-                                <div className="mt-8 space-y-6">{editing.questions?.map((q, i) => <div key={q.id}><span className="font-bold">{i+1}. </span><span dangerouslySetInnerHTML={{__html: q.enunciado}} /></div>)}</div>
-                            </div>
-                        )}
+                    <div className="flex gap-2">
+                        <span className="text-sm font-bold text-slate-500 py-2 px-3 bg-slate-100 rounded-lg">{currentExam.questions?.length || 0} questões</span>
+                        <Button onClick={handleSaveExam}>Salvar Prova</Button>
                     </div>
                 </div>
-            </Modal>
+                
+                <div className="flex flex-1 overflow-hidden">
+                    {/* Settings Panel */}
+                    <div className="w-1/3 min-w-[300px] border-r border-slate-200 bg-white p-6 overflow-y-auto">
+                        <h3 className="font-bold text-slate-700 mb-4">Configurações</h3>
+                        <div className="space-y-4">
+                            <Input label="Título da Prova" value={currentExam.title || ''} onChange={e => setCurrentExam({...currentExam, title: e.target.value})} />
+                            <Select label="Instituição" value={currentExam.institutionId || ''} onChange={e => setCurrentExam({...currentExam, institutionId: e.target.value})}>
+                                <option value="">Selecione...</option>
+                                {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                            </Select>
+                            <Select label="Turma" value={currentExam.classId || ''} onChange={e => setCurrentExam({...currentExam, classId: e.target.value})} disabled={!currentExam.institutionId}>
+                                <option value="">Selecione...</option>
+                                {classes.filter(c => c.institutionId === currentExam.institutionId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </Select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Select label="Colunas" value={currentExam.columns || 1} onChange={e => setCurrentExam({...currentExam, columns: parseInt(e.target.value) as 1|2})}>
+                                    <option value="1">1 Coluna</option>
+                                    <option value="2">2 Colunas</option>
+                                </Select>
+                                <div className="flex items-center gap-2 pt-6">
+                                    <input type="checkbox" checked={currentExam.showAnswerKey || false} onChange={e => setCurrentExam({...currentExam, showAnswerKey: e.target.checked})} className="w-4 h-4 text-brand-blue" />
+                                    <label className="text-sm text-slate-700">Incluir Gabarito</label>
+                                </div>
+                            </div>
+                            <RichTextEditor label="Cabeçalho / Instruções" value={currentExam.instructions || ''} onChange={h => setCurrentExam({...currentExam, instructions: h})} className="min-h-[200px]" />
+                        </div>
+                    </div>
+
+                    {/* Question Selection Panel */}
+                    <div className="flex-1 bg-slate-50 flex flex-col">
+                        <div className="p-4 border-b border-slate-200 bg-white">
+                             <Input placeholder="Buscar questões para adicionar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                            {availableQuestions.map(q => {
+                                const isSelected = currentExam.questions?.some(eq => eq.id === q.id);
+                                return (
+                                    <div key={q.id} onClick={() => toggleQuestion(q)} className={`p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-brand-blue ring-1 ring-brand-blue' : 'bg-white border-slate-200 hover:border-blue-300'}`}>
+                                        <div className="flex justify-between items-start gap-4">
+                                            <div className="flex-1">
+                                                <div className="flex gap-2 mb-2">
+                                                    <Badge color={q.difficulty === 'Easy' ? 'green' : q.difficulty === 'Hard' ? 'red' : 'yellow'}>{q.difficulty}</Badge>
+                                                    <span className="text-xs font-bold text-slate-500 uppercase">{QuestionTypeLabels[q.type]}</span>
+                                                </div>
+                                                <div className="text-sm text-slate-800 line-clamp-3" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                            </div>
+                                            <div className={`w-6 h-6 rounded-full border flex items-center justify-center ${isSelected ? 'bg-brand-blue border-brand-blue text-white' : 'border-slate-300 text-transparent'}`}>
+                                                <Icons.Check />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-8 overflow-y-auto h-full">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-display font-bold text-slate-800">Provas</h2>
+                <Button onClick={() => { setCurrentExam({questions:[], columns:1}); setView('create'); }}><Icons.Plus /> Nova Prova</Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exams.map(exam => (
+                    <Card key={exam.id} className="relative group hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="w-10 h-10 bg-blue-50 text-brand-blue rounded flex items-center justify-center font-bold text-xs">DOC</div>
+                            <div className="flex gap-1">
+                                <button onClick={() => { setCurrentExam(exam); setView('create'); }} className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-slate-50 rounded"><Icons.Edit /></button>
+                                <button onClick={() => handleDelete(exam.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-slate-50 rounded"><Icons.Trash /></button>
+                            </div>
+                        </div>
+                        <h3 className="font-bold text-slate-800 text-lg mb-1">{exam.title}</h3>
+                        <p className="text-xs text-slate-500 mb-4">{new Date(exam.createdAt).toLocaleDateString()}</p>
+                        <div className="flex items-center justify-between text-sm text-slate-600 pt-4 border-t border-slate-100">
+                             <span>{exam.questions?.length} questões</span>
+                             {exam.classId && <span>{classes.find(c => c.id === exam.classId)?.name}</span>}
+                        </div>
+                    </Card>
+                ))}
+            </div>
         </div>
     );
 };
