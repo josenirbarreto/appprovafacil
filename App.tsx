@@ -195,14 +195,15 @@ const HierarchyPage = () => {
 
     // Paleta de cores para as disciplinas
     // 'unit' agora tem cor mais forte (200) para destaque
+    // 'chapter' tem cor ainda mais forte (300) conforme solicitado
     const colorPalette = [
-        { header: 'bg-blue-600', body: 'bg-blue-50', unit: 'bg-blue-200', text: 'text-blue-900', border: 'border-blue-200' },
-        { header: 'bg-emerald-600', body: 'bg-emerald-50', unit: 'bg-emerald-200', text: 'text-emerald-900', border: 'border-emerald-200' },
-        { header: 'bg-purple-600', body: 'bg-purple-50', unit: 'bg-purple-200', text: 'text-purple-900', border: 'border-purple-200' },
-        { header: 'bg-amber-600', body: 'bg-amber-50', unit: 'bg-amber-200', text: 'text-amber-900', border: 'border-amber-200' },
-        { header: 'bg-rose-600', body: 'bg-rose-50', unit: 'bg-rose-200', text: 'text-rose-900', border: 'border-rose-200' },
-        { header: 'bg-cyan-600', body: 'bg-cyan-50', unit: 'bg-cyan-200', text: 'text-cyan-900', border: 'border-cyan-200' },
-        { header: 'bg-indigo-600', body: 'bg-indigo-50', unit: 'bg-indigo-200', text: 'text-indigo-900', border: 'border-indigo-200' },
+        { header: 'bg-blue-600', body: 'bg-blue-50', chapter: 'bg-blue-300', unit: 'bg-blue-200', text: 'text-blue-900', border: 'border-blue-200' },
+        { header: 'bg-emerald-600', body: 'bg-emerald-50', chapter: 'bg-emerald-300', unit: 'bg-emerald-200', text: 'text-emerald-900', border: 'border-emerald-200' },
+        { header: 'bg-purple-600', body: 'bg-purple-50', chapter: 'bg-purple-300', unit: 'bg-purple-200', text: 'text-purple-900', border: 'border-purple-200' },
+        { header: 'bg-amber-600', body: 'bg-amber-50', chapter: 'bg-amber-300', unit: 'bg-amber-200', text: 'text-amber-900', border: 'border-amber-200' },
+        { header: 'bg-rose-600', body: 'bg-rose-50', chapter: 'bg-rose-300', unit: 'bg-rose-200', text: 'text-rose-900', border: 'border-rose-200' },
+        { header: 'bg-cyan-600', body: 'bg-cyan-50', chapter: 'bg-cyan-300', unit: 'bg-cyan-200', text: 'text-cyan-900', border: 'border-cyan-200' },
+        { header: 'bg-indigo-600', body: 'bg-indigo-50', chapter: 'bg-indigo-300', unit: 'bg-indigo-200', text: 'text-indigo-900', border: 'border-indigo-200' },
     ];
 
     if(loading) return <div className="p-8 flex items-center justify-center text-slate-500">Carregando estrutura...</div>;
@@ -255,23 +256,23 @@ const HierarchyPage = () => {
                                     ) : (
                                         // HIERARCHY LEVEL 2: CHAPTERS
                                         d.chapters.map(c => {
-                                            const isChapExpanded = expandedChapters[c.id] !== false;
+                                            const isChapExpanded = expandedChapters[c.id] === true; // Padrão fechado
                                             return (
-                                                <div key={c.id} className="bg-white/90 border border-white/60 rounded-lg shadow-sm">
-                                                    <div className="p-3 flex justify-between items-center border-b border-slate-100 cursor-pointer hover:bg-white transition-colors" onClick={() => toggleChapter(c.id)}>
+                                                <div key={c.id} className={`${colors.chapter} border border-white/20 rounded-lg shadow-sm`}>
+                                                    <div className="p-3 flex justify-between items-center border-b border-black/5 cursor-pointer hover:bg-black/5 transition-colors" onClick={() => toggleChapter(c.id)}>
                                                         <div className="flex items-center gap-2">
-                                                            <div className={`transform transition-transform duration-200 text-slate-400 ${isChapExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
-                                                            <span className="font-semibold text-slate-700">{c.name}</span>
+                                                            <div className={`transform transition-transform duration-200 text-slate-700 ${isChapExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
+                                                            <span className="font-semibold text-slate-800">{c.name}</span>
                                                         </div>
                                                         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                                            <Button variant="ghost" className="text-xs h-7 px-2" onClick={() => promptAdd('Unidade', (n) => addU(d.id, c.id, n))}>+ Unidade</Button>
-                                                            <button onClick={() => handleDelete('chapter', { dId: d.id, cId: c.id })} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button>
+                                                            <Button variant="ghost" className="text-xs h-7 px-2 bg-white/50 hover:bg-white" onClick={() => promptAdd('Unidade', (n) => addU(d.id, c.id, n))}>+ Unidade</Button>
+                                                            <button onClick={() => handleDelete('chapter', { dId: d.id, cId: c.id })} className="text-slate-600 hover:text-red-600 p-1"><Icons.Trash /></button>
                                                         </div>
                                                     </div>
 
                                                     {isChapExpanded && (
                                                         <div className="p-4 space-y-3">
-                                                            {c.units.length === 0 ? <p className="text-xs text-slate-400 italic ml-6">Nenhuma unidade.</p> : (
+                                                            {c.units.length === 0 ? <p className="text-xs text-slate-600 italic ml-6">Nenhuma unidade.</p> : (
                                                                 // HIERARCHY LEVEL 3: UNITS
                                                                 c.units.map(u => (
                                                                     <div key={u.id} className={`p-3 rounded-lg border ${colors.border} ${colors.unit}`}>
