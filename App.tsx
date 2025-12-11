@@ -159,10 +159,12 @@ const HorizontalBarChart = ({ data }: { data: { label: string, value: number, co
     );
 };
 
-// --- HIERARCHY PAGE ---
+// --- HIERARCHY PAGE (IMPROVED DESIGN) ---
 const HierarchyPage = () => {
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     const [loading, setLoading] = useState(true);
+    const [expandedDisciplines, setExpandedDisciplines] = useState<Record<string, boolean>>({});
+    const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
     
     useEffect(() => { load(); }, []);
     const load = async () => { setHierarchy(await FirebaseService.getHierarchy()); setLoading(false); };
@@ -184,49 +186,126 @@ const HierarchyPage = () => {
         if(name) callback(name);
     }
 
-    if(loading) return <div className="p-8">Carregando...</div>;
+    const toggleDiscipline = (id: string) => {
+        setExpandedDisciplines(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const toggleChapter = (id: string) => {
+        setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    // Paleta de cores para as disciplinas
+    const colorPalette = [
+        { header: 'bg-blue-600', body: 'bg-blue-50', border: 'border-blue-200' },
+        { header: 'bg-emerald-600', body: 'bg-emerald-50', border: 'border-emerald-200' },
+        { header: 'bg-purple-600', body: 'bg-purple-50', border: 'border-purple-200' },
+        { header: 'bg-amber-600', body: 'bg-amber-50', border: 'border-amber-200' },
+        { header: 'bg-rose-600', body: 'bg-rose-50', border: 'border-rose-200' },
+        { header: 'bg-cyan-600', body: 'bg-cyan-50', border: 'border-cyan-200' },
+        { header: 'bg-indigo-600', body: 'bg-indigo-50', border: 'border-indigo-200' },
+    ];
+
+    if(loading) return <div className="p-8 flex items-center justify-center text-slate-500">Carregando estrutura...</div>;
 
     return (
-        <div className="p-8 space-y-6">
-            <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Conteúdos (BNCC)</h2><Button onClick={() => promptAdd('Disciplina', addD)}><Icons.Plus /> Nova Disciplina</Button></div>
-            <div className="space-y-4">
-                {hierarchy.map(d => (
-                    <div key={d.id} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                        <div className="bg-slate-50 p-4 flex justify-between items-center font-bold text-lg border-b border-slate-100">
-                            {d.name}
-                            <div className="flex gap-2"><Button variant="ghost" className="text-xs" onClick={() => promptAdd('Capítulo', (n) => addC(d.id, n))}>+ Cap</Button><button onClick={() => handleDelete('discipline', { dId: d.id })} className="text-red-400 p-1"><Icons.Trash /></button></div>
-                        </div>
-                        <div className="p-4 space-y-4">
-                            {d.chapters.length === 0 && <p className="text-slate-400 text-sm italic">Nenhum capítulo.</p>}
-                            {d.chapters.map(c => (
-                                <div key={c.id} className="pl-4 border-l-2 border-slate-200">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="font-semibold text-slate-700">{c.name}</span>
-                                        <div className="flex gap-2"><Button variant="ghost" className="text-xs" onClick={() => promptAdd('Unidade', (n) => addU(d.id, c.id, n))}>+ Unidade</Button><button onClick={() => handleDelete('chapter', { dId: d.id, cId: c.id })} className="text-red-400 p-1"><Icons.Trash /></button></div>
-                                    </div>
-                                    <div className="pl-4 space-y-2">
-                                        {c.units.map(u => (
-                                            <div key={u.id}>
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-slate-600">{u.name}</span>
-                                                    <div className="flex gap-1"><button onClick={() => promptAdd('Tópico', (n) => addT(d.id, c.id, u.id, n))} className="text-blue-500 text-xs hover:underline">+ Tópico</button><button onClick={() => handleDelete('unit', { dId: d.id, cId: c.id, uId: u.id })} className="text-red-400 p-1"><Icons.Trash /></button></div>
-                                                </div>
-                                                <div className="pl-4 mt-1 grid grid-cols-2 gap-2">
-                                                    {u.topics.map(t => (
-                                                        <div key={t.id} className="bg-slate-50 px-2 py-1 rounded text-xs flex justify-between group">
-                                                            {t.name}
-                                                            <button onClick={() => handleDelete('topic', { dId: d.id, cId: c.id, uId: u.id, tId: t.id })} className="text-red-400 opacity-0 group-hover:opacity-100"><Icons.Trash /></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 bg-slate-50">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-3xl font-display font-bold text-slate-800">Conteúdos</h2>
+                    <p className="text-slate-500 text-sm mt-1">Gerencie a estrutura hierárquica das disciplinas, Capítulos, Unidades e tópicos.</p>
+                </div>
+                <Button onClick={() => promptAdd('Disciplina', addD)}><Icons.Plus /> Nova Disciplina</Button>
+            </div>
+
+            <div className="grid gap-6">
+                {hierarchy.length === 0 && (
+                    <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200 text-slate-400">
+                        <div className="mb-2"><Icons.BookOpen /></div>
+                        <p>Nenhuma disciplina cadastrada.</p>
                     </div>
-                ))}
+                )}
+
+                {hierarchy.map((d, index) => {
+                    const isExpanded = expandedDisciplines[d.id] === true; // Padrão fechado
+                    const colors = colorPalette[index % colorPalette.length];
+
+                    return (
+                        <div key={d.id} className={`bg-white border ${colors.border} rounded-xl shadow-sm overflow-hidden transition-all duration-200`}>
+                            {/* Discipline Header */}
+                            <div className={`${colors.header} text-white p-4 flex justify-between items-center select-none cursor-pointer hover:opacity-90 transition-opacity`} onClick={() => toggleDiscipline(d.id)}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
+                                    <h3 className="text-lg font-bold tracking-wide">{d.name}</h3>
+                                </div>
+                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                    <Button variant="ghost" className="text-white/80 hover:text-white hover:bg-white/20 text-xs py-1 px-2 h-auto" onClick={() => promptAdd('Capítulo', (n) => addC(d.id, n))}>
+                                        + Capítulo
+                                    </Button>
+                                    <button onClick={() => handleDelete('discipline', { dId: d.id })} className="text-white/70 hover:text-white p-1.5 rounded hover:bg-white/20 transition-colors">
+                                        <Icons.Trash />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Chapters List */}
+                            {isExpanded && (
+                                <div className={`p-4 ${colors.body} space-y-4 animate-fade-in`}>
+                                    {d.chapters.length === 0 ? (
+                                        <p className="text-slate-500 text-sm italic text-center py-4">Nenhum capítulo cadastrado nesta disciplina.</p>
+                                    ) : (
+                                        d.chapters.map(c => {
+                                            const isChapExpanded = expandedChapters[c.id] !== false;
+                                            return (
+                                                <div key={c.id} className="bg-white/80 border border-white/50 rounded-lg shadow-sm">
+                                                    <div className="p-3 flex justify-between items-center border-b border-slate-100 cursor-pointer hover:bg-white/50 transition-colors" onClick={() => toggleChapter(c.id)}>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`transform transition-transform duration-200 text-slate-400 ${isChapExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
+                                                            <span className="font-semibold text-slate-700">{c.name}</span>
+                                                        </div>
+                                                        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                                            <Button variant="ghost" className="text-xs h-7 px-2" onClick={() => promptAdd('Unidade', (n) => addU(d.id, c.id, n))}>+ Unidade</Button>
+                                                            <button onClick={() => handleDelete('chapter', { dId: d.id, cId: c.id })} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button>
+                                                        </div>
+                                                    </div>
+
+                                                    {isChapExpanded && (
+                                                        <div className="p-4 space-y-4">
+                                                            {c.units.length === 0 ? <p className="text-xs text-slate-400 italic ml-6">Nenhuma unidade.</p> : c.units.map(u => (
+                                                                <div key={u.id} className="ml-2 pl-4 border-l-2 border-slate-200">
+                                                                    <div className="flex justify-between items-center mb-2">
+                                                                        <span className="text-sm font-bold text-slate-600">{u.name}</span>
+                                                                        <div className="flex gap-1">
+                                                                            <button onClick={() => promptAdd('Tópico', (n) => addT(d.id, c.id, u.id, n))} className="text-brand-blue text-xs font-medium hover:underline px-2 py-1">+ Tópico</button>
+                                                                            <button onClick={() => handleDelete('unit', { dId: d.id, cId: c.id, uId: u.id })} className="text-slate-300 hover:text-red-500 p-1"><Icons.Trash /></button>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    {/* Topics as Tags */}
+                                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                                        {u.topics.length === 0 && <span className="text-xs text-slate-300 italic">Sem tópicos</span>}
+                                                                        {u.topics.map(t => (
+                                                                            <div key={t.id} className="group flex items-center gap-2 bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-medium hover:border-brand-blue hover:text-brand-blue transition-colors shadow-sm">
+                                                                                {t.name}
+                                                                                <button onClick={() => handleDelete('topic', { dId: d.id, cId: c.id, uId: u.id, tId: t.id })} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                    <span className="sr-only">Excluir</span>
+                                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
