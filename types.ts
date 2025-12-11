@@ -94,6 +94,7 @@ export interface Exam {
   title: string;
   headerText: string; // Subtítulo ou cabeçalho textual
   institutionId?: string;
+  classId?: string; // Vínculo com a Turma
   
   // Configurações de Layout e Instruções
   columns: 1 | 2;
