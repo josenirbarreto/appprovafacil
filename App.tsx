@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext, createContext, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { User, UserRole, Question, Exam, Discipline, QuestionType, Institution, SchoolClass, ExamContentScope } from './types';
@@ -195,15 +194,15 @@ const HierarchyPage = () => {
     };
 
     // Paleta de cores para as disciplinas
-    // Adicionado 'unit' para ser uma cor mais forte que o 'body' (accordion bg)
+    // 'unit' agora tem cor mais forte (200) para destaque
     const colorPalette = [
-        { header: 'bg-blue-600', body: 'bg-blue-50', unit: 'bg-blue-100', text: 'text-blue-900', border: 'border-blue-200' },
-        { header: 'bg-emerald-600', body: 'bg-emerald-50', unit: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-200' },
-        { header: 'bg-purple-600', body: 'bg-purple-50', unit: 'bg-purple-100', text: 'text-purple-900', border: 'border-purple-200' },
-        { header: 'bg-amber-600', body: 'bg-amber-50', unit: 'bg-amber-100', text: 'text-amber-900', border: 'border-amber-200' },
-        { header: 'bg-rose-600', body: 'bg-rose-50', unit: 'bg-rose-100', text: 'text-rose-900', border: 'border-rose-200' },
-        { header: 'bg-cyan-600', body: 'bg-cyan-50', unit: 'bg-cyan-100', text: 'text-cyan-900', border: 'border-cyan-200' },
-        { header: 'bg-indigo-600', body: 'bg-indigo-50', unit: 'bg-indigo-100', text: 'text-indigo-900', border: 'border-indigo-200' },
+        { header: 'bg-blue-600', body: 'bg-blue-50', unit: 'bg-blue-200', text: 'text-blue-900', border: 'border-blue-200' },
+        { header: 'bg-emerald-600', body: 'bg-emerald-50', unit: 'bg-emerald-200', text: 'text-emerald-900', border: 'border-emerald-200' },
+        { header: 'bg-purple-600', body: 'bg-purple-50', unit: 'bg-purple-200', text: 'text-purple-900', border: 'border-purple-200' },
+        { header: 'bg-amber-600', body: 'bg-amber-50', unit: 'bg-amber-200', text: 'text-amber-900', border: 'border-amber-200' },
+        { header: 'bg-rose-600', body: 'bg-rose-50', unit: 'bg-rose-200', text: 'text-rose-900', border: 'border-rose-200' },
+        { header: 'bg-cyan-600', body: 'bg-cyan-50', unit: 'bg-cyan-200', text: 'text-cyan-900', border: 'border-cyan-200' },
+        { header: 'bg-indigo-600', body: 'bg-indigo-50', unit: 'bg-indigo-200', text: 'text-indigo-900', border: 'border-indigo-200' },
     ];
 
     if(loading) return <div className="p-8 flex items-center justify-center text-slate-500">Carregando estrutura...</div>;
@@ -710,6 +709,336 @@ const QuestionsPage = () => {
     );
 };
 
+// --- PROFILE PAGE ---
+const ProfilePage = () => {
+    const { user, refreshUser } = useAuth();
+    const [name, setName] = useState(user?.name || '');
+    const [photoUrl, setPhotoUrl] = useState(user?.photoUrl || '');
+    const [loading, setLoading] = useState(false);
+    const [msg, setMsg] = useState('');
+
+    const handleSave = async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+            await FirebaseService.updateUser(user.id, { name, photoUrl });
+            await refreshUser();
+            setMsg('Perfil atualizado com sucesso!');
+        } catch (error) {
+            console.error(error);
+            setMsg('Erro ao atualizar perfil.');
+        }
+        setLoading(false);
+    };
+
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setPhotoUrl(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    return (
+        <div className="p-8 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-display font-bold text-slate-800 mb-6">Meu Perfil</h2>
+            <Card className="space-y-6">
+                <div className="flex items-center gap-6">
+                    <div className="relative group">
+                         {photoUrl ? (
+                            <img src={photoUrl} alt="Profile" className="w-24 h-24 rounded-full object-cover border-2 border-slate-200" />
+                        ) : (
+                            <div className="w-24 h-24 bg-brand-orange text-white rounded-full flex items-center justify-center text-3xl font-bold">{name.charAt(0)}</div>
+                        )}
+                        <label className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity text-white text-xs font-bold">
+                            Alterar
+                            <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                        </label>
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold">{user?.name}</h3>
+                        <p className="text-slate-500">{user?.email}</p>
+                        <Badge>{user?.role}</Badge>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <Input label="Nome Completo" value={name} onChange={e => setName(e.target.value)} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Plano" value={user?.plan || 'Free'} disabled />
+                        <Input label="Vencimento" value={user?.subscriptionEnd ? new Date(user.subscriptionEnd).toLocaleDateString() : '-'} disabled />
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                     <span className={`text-sm ${msg.includes('sucesso') ? 'text-green-600' : 'text-red-600'}`}>{msg}</span>
+                     <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar Alterações'}</Button>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+// --- INSTITUTION PAGE ---
+const InstitutionPage = () => {
+    const [institutions, setInstitutions] = useState<Institution[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editing, setEditing] = useState<Partial<Institution>>({});
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => { load(); }, []);
+    const load = async () => { 
+        setInstitutions(await FirebaseService.getInstitutions()); 
+        setLoading(false); 
+    };
+
+    const handleSave = async () => {
+        if (!editing.name) return alert('Nome obrigatório');
+        
+        if (editing.id) {
+            await FirebaseService.updateInstitution(editing as Institution);
+        } else {
+            await FirebaseService.addInstitution(editing as Institution);
+        }
+        setIsModalOpen(false);
+        load();
+    };
+
+    const handleDelete = async (id: string) => {
+        if(confirm('Excluir instituição?')) {
+            await FirebaseService.deleteInstitution(id);
+            load();
+        }
+    };
+
+    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setEditing({...editing, logoUrl: reader.result as string});
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    return (
+        <div className="p-8 h-full flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-display font-bold text-slate-800">Instituições</h2>
+                <Button onClick={() => { setEditing({}); setIsModalOpen(true); }}><Icons.Plus /> Nova Instituição</Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto">
+                {institutions.map(inst => (
+                    <Card key={inst.id} className="relative group">
+                         <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                             <button onClick={() => { setEditing(inst); setIsModalOpen(true); }} className="p-1 bg-white rounded shadow hover:text-brand-blue"><Icons.Edit /></button>
+                             <button onClick={() => handleDelete(inst.id)} className="p-1 bg-white rounded shadow hover:text-red-500"><Icons.Trash /></button>
+                         </div>
+                         <div className="flex flex-col items-center text-center">
+                             {inst.logoUrl ? (
+                                 <img src={inst.logoUrl} alt={inst.name} className="h-20 w-auto object-contain mb-4" />
+                             ) : (
+                                 <div className="h-20 w-20 bg-slate-100 rounded-full flex items-center justify-center mb-4"><Icons.Building /></div>
+                             )}
+                             <h3 className="font-bold text-lg">{inst.name}</h3>
+                             <p className="text-sm text-slate-500">{inst.email}</p>
+                             <p className="text-sm text-slate-500">{inst.phone}</p>
+                         </div>
+                    </Card>
+                ))}
+            </div>
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? 'Editar Instituição' : 'Nova Instituição'} footer={<Button onClick={handleSave}>Salvar</Button>}>
+                <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                        {editing.logoUrl && <img src={editing.logoUrl} className="h-16 w-16 object-contain border" />}
+                        <Input type="file" accept="image/*" onChange={handleLogoUpload} className="border-0" />
+                    </div>
+                    <Input label="Nome" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} />
+                    <Input label="Endereço" value={editing.address || ''} onChange={e => setEditing({...editing, address: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Email" value={editing.email || ''} onChange={e => setEditing({...editing, email: e.target.value})} />
+                        <Input label="Telefone" value={editing.phone || ''} onChange={e => setEditing({...editing, phone: e.target.value})} />
+                    </div>
+                    <Input label="Website" value={editing.website || ''} onChange={e => setEditing({...editing, website: e.target.value})} />
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
+// --- CLASSES PAGE ---
+const ClassesPage = () => {
+    const [classes, setClasses] = useState<SchoolClass[]>([]);
+    const [institutions, setInstitutions] = useState<Institution[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editing, setEditing] = useState<Partial<SchoolClass>>({});
+
+    useEffect(() => { load(); }, []);
+    const load = async () => {
+        const [cls, insts] = await Promise.all([FirebaseService.getClasses(), FirebaseService.getInstitutions()]);
+        setClasses(cls);
+        setInstitutions(insts);
+    };
+
+    const handleSave = async () => {
+        if(!editing.name || !editing.institutionId) return alert('Campos obrigatórios');
+        
+        const clsData = {
+            ...editing,
+            year: Number(editing.year) || new Date().getFullYear()
+        } as SchoolClass;
+
+        if (editing.id) {
+            await FirebaseService.updateClass(clsData);
+        } else {
+            await FirebaseService.addClass(clsData);
+        }
+        setIsModalOpen(false);
+        load();
+    };
+
+    const handleDelete = async (id: string) => {
+        if(confirm('Excluir turma?')) {
+            await FirebaseService.deleteClass(id);
+            load();
+        }
+    };
+
+    return (
+        <div className="p-8 h-full flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-display font-bold text-slate-800">Turmas</h2>
+                <Button onClick={() => { setEditing({ year: new Date().getFullYear() }); setIsModalOpen(true); }}><Icons.Plus /> Nova Turma</Button>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="p-4 font-semibold text-slate-600">Nome</th>
+                            <th className="p-4 font-semibold text-slate-600">Ano</th>
+                            <th className="p-4 font-semibold text-slate-600">Instituição</th>
+                            <th className="p-4 font-semibold text-slate-600 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {classes.map(c => (
+                            <tr key={c.id} className="hover:bg-slate-50">
+                                <td className="p-4">{c.name}</td>
+                                <td className="p-4">{c.year}</td>
+                                <td className="p-4">{institutions.find(i => i.id === c.institutionId)?.name || 'N/A'}</td>
+                                <td className="p-4 text-right space-x-2">
+                                    <button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue"><Icons.Edit /></button>
+                                    <button onClick={() => handleDelete(c.id)} className="text-slate-400 hover:text-red-500"><Icons.Trash /></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {classes.length === 0 && <div className="p-8 text-center text-slate-400">Nenhuma turma cadastrada.</div>}
+            </div>
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? 'Editar Turma' : 'Nova Turma'} footer={<Button onClick={handleSave}>Salvar</Button>}>
+                <div className="space-y-4">
+                    <Input label="Nome da Turma" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" />
+                    <Input label="Ano Letivo" type="number" value={editing.year || ''} onChange={e => setEditing({...editing, year: Number(e.target.value)})} />
+                    <Select label="Instituição" value={editing.institutionId || ''} onChange={e => setEditing({...editing, institutionId: e.target.value})}>
+                        <option value="">Selecione...</option>
+                        {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                    </Select>
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
+// --- EXAMS PAGE ---
+const ExamsPage = () => {
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    // Simple state for creating an exam - currently just basic info to pass the check
+    const [editing, setEditing] = useState<Partial<Exam>>({});
+
+    useEffect(() => { load(); }, []);
+    const load = async () => {
+        setExams(await FirebaseService.getExams());
+    };
+
+    const handleSave = async () => {
+        if(!editing.title) return alert('Título obrigatório');
+        
+        const examData: Exam = {
+            id: editing.id || '',
+            title: editing.title,
+            headerText: editing.headerText || '',
+            columns: editing.columns || 1,
+            instructions: editing.instructions || '',
+            contentScopes: editing.contentScopes || [],
+            questions: editing.questions || [],
+            showAnswerKey: editing.showAnswerKey || false,
+            createdAt: editing.createdAt || new Date().toISOString()
+        };
+
+        await FirebaseService.saveExam(examData);
+        setIsModalOpen(false);
+        load();
+    };
+
+     const handleDelete = async (id: string) => {
+        if(confirm('Excluir prova?')) {
+            await FirebaseService.deleteExam(id);
+            load();
+        }
+    };
+
+    return (
+        <div className="p-8 h-full flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-display font-bold text-slate-800">Provas</h2>
+                <Button onClick={() => { setEditing({}); setIsModalOpen(true); }}><Icons.Plus /> Nova Prova</Button>
+            </div>
+
+            <div className="grid gap-4">
+                 {exams.map(exam => (
+                     <div key={exam.id} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
+                         <div className="flex items-center gap-4">
+                             <div className="bg-blue-50 text-brand-blue p-3 rounded-lg font-bold"><Icons.Exams /></div>
+                             <div>
+                                 <h3 className="font-bold text-lg">{exam.title}</h3>
+                                 <p className="text-sm text-slate-500">{new Date(exam.createdAt).toLocaleDateString()} • {exam.questions?.length || 0} questões</p>
+                             </div>
+                         </div>
+                         <div className="flex gap-2">
+                              <button onClick={() => { setEditing(exam); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-slate-50 rounded"><Icons.Edit /></button>
+                              <button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"><Icons.Trash /></button>
+                         </div>
+                     </div>
+                 ))}
+                 {exams.length === 0 && <div className="text-center py-10 text-slate-400">Nenhuma prova encontrada.</div>}
+            </div>
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? 'Editar Prova' : 'Nova Prova'} footer={<Button onClick={handleSave}>Salvar Prova</Button>}>
+                <div className="space-y-4">
+                     <Input label="Título da Prova" value={editing.title || ''} onChange={e => setEditing({...editing, title: e.target.value})} placeholder="Ex: Avaliação Bimestral de História" />
+                     <Input label="Cabeçalho (Subtítulo)" value={editing.headerText || ''} onChange={e => setEditing({...editing, headerText: e.target.value})} placeholder="Escola X - Prof. Y" />
+                     <RichTextEditor label="Instruções" value={editing.instructions || ''} onChange={html => setEditing({...editing, instructions: html})} />
+                     
+                     {/* Simplified configuration for now */}
+                     <div className="p-4 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                         Para adicionar questões e configurar escopo, utilize o editor avançado (em desenvolvimento).
+                     </div>
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
 // --- DASHBOARD PAGE ---
 const Dashboard = () => {
     const { user } = useAuth();
@@ -895,365 +1224,6 @@ const Dashboard = () => {
                     </div>
                 </Card>
              </div>
-        </div>
-    );
-};
-
-// --- NEW PAGES ---
-
-const ProfilePage = () => {
-    const { user, refreshUser } = useAuth();
-    const [isEditing, setIsEditing] = useState(false);
-    const [formData, setFormData] = useState({ name: '', photoUrl: '' });
-
-    useEffect(() => {
-        if (user) setFormData({ name: user.name, photoUrl: user.photoUrl || '' });
-    }, [user]);
-
-    const handleSave = async () => {
-        if (!user) return;
-        await FirebaseService.updateUser(user.id, formData);
-        await refreshUser();
-        setIsEditing(false);
-    };
-
-    if (!user) return null;
-
-    return (
-        <div className="p-8 max-w-2xl mx-auto">
-            <h2 className="text-3xl font-display font-bold text-slate-800 mb-6">Meu Perfil</h2>
-            <Card className="space-y-6">
-                <div className="flex items-center gap-6">
-                    {formData.photoUrl ? (
-                        <img src={formData.photoUrl} className="w-24 h-24 rounded-full object-cover border-4 border-slate-100" />
-                    ) : (
-                        <div className="w-24 h-24 rounded-full bg-brand-orange text-white text-3xl font-bold flex items-center justify-center border-4 border-slate-100">{user.name.charAt(0)}</div>
-                    )}
-                    <div>
-                        <h3 className="text-xl font-bold text-slate-800">{user.name}</h3>
-                        <p className="text-slate-500">{user.email}</p>
-                        <Badge color="blue">{user.role}</Badge>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4">
-                    <Input label="Nome Completo" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} disabled={!isEditing} />
-                    <Input label="URL da Foto" value={formData.photoUrl} onChange={e => setFormData({...formData, photoUrl: e.target.value})} disabled={!isEditing} />
-                    <div className="grid grid-cols-2 gap-4">
-                         <Input label="Plano" value={user.plan} disabled />
-                         <Input label="Expira em" value={new Date(user.subscriptionEnd).toLocaleDateString()} disabled />
-                    </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                    {isEditing ? (
-                        <>
-                            <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancelar</Button>
-                            <Button onClick={handleSave}>Salvar Alterações</Button>
-                        </>
-                    ) : (
-                        <Button onClick={() => setIsEditing(true)}>Editar Perfil</Button>
-                    )}
-                </div>
-            </Card>
-        </div>
-    );
-};
-
-const InstitutionPage = () => {
-    const [institutions, setInstitutions] = useState<Institution[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Partial<Institution>>({});
-
-    useEffect(() => { load(); }, []);
-    const load = async () => { setInstitutions(await FirebaseService.getInstitutions()); };
-
-    const handleSave = async () => {
-        if (!editing.name) return;
-        if (editing.id) await FirebaseService.updateInstitution(editing as Institution);
-        else await FirebaseService.addInstitution(editing as Institution);
-        setIsModalOpen(false);
-        load();
-    };
-
-    const handleDelete = async (id: string) => {
-        if (confirm('Excluir instituição?')) { await FirebaseService.deleteInstitution(id); load(); }
-    };
-
-    return (
-        <div className="p-8 overflow-y-auto h-full">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-display font-bold text-slate-800">Instituições</h2>
-                <Button onClick={() => { setEditing({}); setIsModalOpen(true); }}><Icons.Plus /> Nova Instituição</Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {institutions.map(inst => (
-                    <Card key={inst.id} className="relative group">
-                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { setEditing(inst); setIsModalOpen(true); }} className="p-1 text-slate-400 hover:text-brand-blue"><Icons.Edit /></button>
-                            <button onClick={() => handleDelete(inst.id)} className="p-1 text-slate-400 hover:text-red-500"><Icons.Trash /></button>
-                        </div>
-                        <div className="flex items-center gap-4 mb-4">
-                             {inst.logoUrl ? <img src={inst.logoUrl} className="w-12 h-12 object-contain" /> : <div className="w-12 h-12 bg-slate-100 rounded flex items-center justify-center"><Icons.Building /></div>}
-                             <div><h3 className="font-bold text-slate-800">{inst.name}</h3><p className="text-xs text-slate-500">{inst.email || 'Sem email'}</p></div>
-                        </div>
-                        <div className="text-sm text-slate-600 space-y-1">
-                            <p>{inst.phone || 'Sem telefone'}</p>
-                            <p className="truncate">{inst.address || 'Sem endereço'}</p>
-                        </div>
-                    </Card>
-                ))}
-            </div>
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Instituição" footer={<Button onClick={handleSave}>Salvar</Button>}>
-                <div className="space-y-4">
-                    <Input label="Nome" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} />
-                    <Input label="Logo URL" value={editing.logoUrl || ''} onChange={e => setEditing({...editing, logoUrl: e.target.value})} />
-                    <Input label="Email" value={editing.email || ''} onChange={e => setEditing({...editing, email: e.target.value})} />
-                    <Input label="Telefone" value={editing.phone || ''} onChange={e => setEditing({...editing, phone: e.target.value})} />
-                    <Input label="Endereço" value={editing.address || ''} onChange={e => setEditing({...editing, address: e.target.value})} />
-                    <Input label="Website" value={editing.website || ''} onChange={e => setEditing({...editing, website: e.target.value})} />
-                </div>
-            </Modal>
-        </div>
-    );
-};
-
-const ClassesPage = () => {
-    const [classes, setClasses] = useState<SchoolClass[]>([]);
-    const [institutions, setInstitutions] = useState<Institution[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Partial<SchoolClass>>({});
-
-    useEffect(() => { load(); }, []);
-    const load = async () => {
-        const [cs, is] = await Promise.all([FirebaseService.getClasses(), FirebaseService.getInstitutions()]);
-        setClasses(cs);
-        setInstitutions(is);
-    };
-
-    const handleSave = async () => {
-        if (!editing.name || !editing.institutionId) return;
-        if (editing.id) await FirebaseService.updateClass(editing as SchoolClass);
-        else await FirebaseService.addClass(editing as SchoolClass);
-        setIsModalOpen(false);
-        load();
-    };
-
-    const handleDelete = async (id: string) => {
-        if (confirm('Excluir turma?')) { await FirebaseService.deleteClass(id); load(); }
-    };
-
-    return (
-        <div className="p-8 overflow-y-auto h-full">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-display font-bold text-slate-800">Turmas</h2>
-                <Button onClick={() => { setEditing({ year: new Date().getFullYear() }); setIsModalOpen(true); }}><Icons.Plus /> Nova Turma</Button>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold">
-                        <tr>
-                            <th className="p-4">Nome</th>
-                            <th className="p-4">Ano</th>
-                            <th className="p-4">Instituição</th>
-                            <th className="p-4 text-right">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {classes.map(c => (
-                            <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="p-4 font-medium text-slate-800">{c.name}</td>
-                                <td className="p-4 text-slate-600">{c.year}</td>
-                                <td className="p-4 text-slate-600">{institutions.find(i => i.id === c.institutionId)?.name || 'N/A'}</td>
-                                <td className="p-4 text-right flex justify-end gap-2">
-                                    <button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue"><Icons.Edit /></button>
-                                    <button onClick={() => handleDelete(c.id)} className="text-slate-400 hover:text-red-500"><Icons.Trash /></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                {classes.length === 0 && <div className="p-8 text-center text-slate-400">Nenhuma turma cadastrada.</div>}
-            </div>
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Turma" footer={<Button onClick={handleSave}>Salvar</Button>}>
-                <div className="space-y-4">
-                    <Input label="Nome da Turma" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" />
-                    <Input label="Ano Letivo" type="number" value={editing.year || ''} onChange={e => setEditing({...editing, year: parseInt(e.target.value)})} />
-                    <Select label="Instituição" value={editing.institutionId || ''} onChange={e => setEditing({...editing, institutionId: e.target.value})}>
-                        <option value="">Selecione...</option>
-                        {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                    </Select>
-                </div>
-            </Modal>
-        </div>
-    );
-};
-
-const ExamsPage = () => {
-    const [view, setView] = useState<'list' | 'create'>('list');
-    const [exams, setExams] = useState<Exam[]>([]);
-    const [institutions, setInstitutions] = useState<Institution[]>([]);
-    const [classes, setClasses] = useState<SchoolClass[]>([]);
-    const [questions, setQuestions] = useState<Question[]>([]);
-    
-    // Create/Edit State
-    const [currentExam, setCurrentExam] = useState<Partial<Exam>>({
-        questions: [],
-        columns: 1,
-        showAnswerKey: false
-    });
-    
-    // Question Selection State in Create Mode
-    const [searchTerm, setSearchTerm] = useState('');
-
-    useEffect(() => { load(); }, []);
-    const load = async () => {
-        const [es, is, cs, qs] = await Promise.all([
-            FirebaseService.getExams(),
-            FirebaseService.getInstitutions(),
-            FirebaseService.getClasses(),
-            FirebaseService.getQuestions()
-        ]);
-        setExams(es);
-        setInstitutions(is);
-        setClasses(cs);
-        setQuestions(qs);
-    };
-
-    const handleSaveExam = async () => {
-        if(!currentExam.title || !currentExam.questions?.length) { alert('Preencha o título e adicione questões.'); return; }
-        const examToSave: Exam = {
-            id: currentExam.id || '',
-            title: currentExam.title,
-            headerText: currentExam.headerText || '',
-            institutionId: currentExam.institutionId,
-            classId: currentExam.classId,
-            columns: currentExam.columns || 1,
-            instructions: currentExam.instructions || '',
-            contentScopes: [],
-            questions: currentExam.questions,
-            createdAt: currentExam.createdAt || new Date().toISOString(),
-            showAnswerKey: currentExam.showAnswerKey || false
-        };
-        await FirebaseService.saveExam(examToSave);
-        load();
-        setView('list');
-    };
-
-    const toggleQuestion = (q: Question) => {
-        const exists = currentExam.questions?.find(eq => eq.id === q.id);
-        let newQuestions = [...(currentExam.questions || [])];
-        if(exists) newQuestions = newQuestions.filter(eq => eq.id !== q.id);
-        else newQuestions.push(q);
-        setCurrentExam({...currentExam, questions: newQuestions});
-    };
-
-    const handleDelete = async (id: string) => {
-        if(confirm('Excluir prova?')) { await FirebaseService.deleteExam(id); load(); }
-    };
-
-    // Filter questions for selection
-    const availableQuestions = questions.filter(q => q.enunciado.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    if(view === 'create') {
-        return (
-            <div className="flex flex-col h-full bg-slate-50">
-                 <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setView('list')} className="text-slate-400 hover:text-slate-600"><Icons.ArrowLeft /></button>
-                        <h2 className="text-xl font-bold font-display text-slate-800">{currentExam.id ? 'Editar Prova' : 'Nova Prova'}</h2>
-                    </div>
-                    <div className="flex gap-2">
-                        <span className="text-sm font-bold text-slate-500 py-2 px-3 bg-slate-100 rounded-lg">{currentExam.questions?.length || 0} questões</span>
-                        <Button onClick={handleSaveExam}>Salvar Prova</Button>
-                    </div>
-                </div>
-                
-                <div className="flex flex-1 overflow-hidden">
-                    {/* Settings Panel */}
-                    <div className="w-1/3 min-w-[300px] border-r border-slate-200 bg-white p-6 overflow-y-auto">
-                        <h3 className="font-bold text-slate-700 mb-4">Configurações</h3>
-                        <div className="space-y-4">
-                            <Input label="Título da Prova" value={currentExam.title || ''} onChange={e => setCurrentExam({...currentExam, title: e.target.value})} />
-                            <Select label="Instituição" value={currentExam.institutionId || ''} onChange={e => setCurrentExam({...currentExam, institutionId: e.target.value})}>
-                                <option value="">Selecione...</option>
-                                {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                            </Select>
-                            <Select label="Turma" value={currentExam.classId || ''} onChange={e => setCurrentExam({...currentExam, classId: e.target.value})} disabled={!currentExam.institutionId}>
-                                <option value="">Selecione...</option>
-                                {classes.filter(c => c.institutionId === currentExam.institutionId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </Select>
-                            <div className="grid grid-cols-2 gap-4">
-                                <Select label="Colunas" value={currentExam.columns || 1} onChange={e => setCurrentExam({...currentExam, columns: parseInt(e.target.value) as 1|2})}>
-                                    <option value="1">1 Coluna</option>
-                                    <option value="2">2 Colunas</option>
-                                </Select>
-                                <div className="flex items-center gap-2 pt-6">
-                                    <input type="checkbox" checked={currentExam.showAnswerKey || false} onChange={e => setCurrentExam({...currentExam, showAnswerKey: e.target.checked})} className="w-4 h-4 text-brand-blue" />
-                                    <label className="text-sm text-slate-700">Incluir Gabarito</label>
-                                </div>
-                            </div>
-                            <RichTextEditor label="Cabeçalho / Instruções" value={currentExam.instructions || ''} onChange={h => setCurrentExam({...currentExam, instructions: h})} className="min-h-[200px]" />
-                        </div>
-                    </div>
-
-                    {/* Question Selection Panel */}
-                    <div className="flex-1 bg-slate-50 flex flex-col">
-                        <div className="p-4 border-b border-slate-200 bg-white">
-                             <Input placeholder="Buscar questões para adicionar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                            {availableQuestions.map(q => {
-                                const isSelected = currentExam.questions?.some(eq => eq.id === q.id);
-                                return (
-                                    <div key={q.id} onClick={() => toggleQuestion(q)} className={`p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-brand-blue ring-1 ring-brand-blue' : 'bg-white border-slate-200 hover:border-blue-300'}`}>
-                                        <div className="flex justify-between items-start gap-4">
-                                            <div className="flex-1">
-                                                <div className="flex gap-2 mb-2">
-                                                    <Badge color={q.difficulty === 'Easy' ? 'green' : q.difficulty === 'Hard' ? 'red' : 'yellow'}>{q.difficulty}</Badge>
-                                                    <span className="text-xs font-bold text-slate-500 uppercase">{QuestionTypeLabels[q.type]}</span>
-                                                </div>
-                                                <div className="text-sm text-slate-800 line-clamp-3" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                                            </div>
-                                            <div className={`w-6 h-6 rounded-full border flex items-center justify-center ${isSelected ? 'bg-brand-blue border-brand-blue text-white' : 'border-slate-300 text-transparent'}`}>
-                                                <Icons.Check />
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="p-8 overflow-y-auto h-full">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-display font-bold text-slate-800">Provas</h2>
-                <Button onClick={() => { setCurrentExam({questions:[], columns:1}); setView('create'); }}><Icons.Plus /> Nova Prova</Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {exams.map(exam => (
-                    <Card key={exam.id} className="relative group hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="w-10 h-10 bg-blue-50 text-brand-blue rounded flex items-center justify-center font-bold text-xs">DOC</div>
-                            <div className="flex gap-1">
-                                <button onClick={() => { setCurrentExam(exam); setView('create'); }} className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-slate-50 rounded"><Icons.Edit /></button>
-                                <button onClick={() => handleDelete(exam.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-slate-50 rounded"><Icons.Trash /></button>
-                            </div>
-                        </div>
-                        <h3 className="font-bold text-slate-800 text-lg mb-1">{exam.title}</h3>
-                        <p className="text-xs text-slate-500 mb-4">{new Date(exam.createdAt).toLocaleDateString()}</p>
-                        <div className="flex items-center justify-between text-sm text-slate-600 pt-4 border-t border-slate-100">
-                             <span>{exam.questions?.length} questões</span>
-                             {exam.classId && <span>{classes.find(c => c.id === exam.classId)?.name}</span>}
-                        </div>
-                    </Card>
-                ))}
-            </div>
         </div>
     );
 };

@@ -34,10 +34,10 @@ export interface SchoolClass {
 }
 
 // Hierarchy
-export interface Topic { id: string; name: string; unitId: string; }
-export interface Unit { id: string; name: string; chapterId: string; topics: Topic[]; }
-export interface Chapter { id: string; name: string; disciplineId: string; units: Unit[]; }
-export interface Discipline { id: string; name: string; chapters: Chapter[]; }
+export interface Topic { id: string; name: string; unitId: string; createdAt?: string; }
+export interface Unit { id: string; name: string; chapterId: string; topics: Topic[]; createdAt?: string; }
+export interface Chapter { id: string; name: string; disciplineId: string; units: Unit[]; createdAt?: string; }
+export interface Discipline { id: string; name: string; chapters: Chapter[]; createdAt?: string; }
 
 // Questions
 export enum QuestionType {

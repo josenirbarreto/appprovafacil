@@ -201,10 +201,18 @@ export const FirebaseService = {
                 getDocs(collection(db, COLLECTIONS.TOPICS))
             ]);
 
-            const disciplines = dSnap.docs.map(d => ({ ...d.data(), id: d.id, chapters: [] } as Discipline));
-            const chapters = cSnap.docs.map(c => ({ ...c.data(), id: c.id, units: [] } as Chapter));
-            const units = uSnap.docs.map(u => ({ ...u.data(), id: u.id, topics: [] } as Unit));
-            const topics = tSnap.docs.map(t => ({ ...t.data(), id: t.id } as Topic));
+            // Função para ordenar por data de criação
+            const sortByCreated = (a: any, b: any) => {
+                if (!a.createdAt && !b.createdAt) return 0;
+                if (!a.createdAt) return -1; // Itens sem data aparecem primeiro (ou último, dependendo da preferência)
+                if (!b.createdAt) return 1;
+                return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            };
+
+            const disciplines = dSnap.docs.map(d => ({ ...d.data(), id: d.id, chapters: [] } as Discipline)).sort(sortByCreated);
+            const chapters = cSnap.docs.map(c => ({ ...c.data(), id: c.id, units: [] } as Chapter)).sort(sortByCreated);
+            const units = uSnap.docs.map(u => ({ ...u.data(), id: u.id, topics: [] } as Unit)).sort(sortByCreated);
+            const topics = tSnap.docs.map(t => ({ ...t.data(), id: t.id } as Topic)).sort(sortByCreated);
 
             units.forEach(u => {
                 u.topics = topics.filter(t => t.unitId === u.id);
@@ -224,19 +232,19 @@ export const FirebaseService = {
     },
 
     addDiscipline: async (name: string) => {
-        await addDoc(collection(db, COLLECTIONS.DISCIPLINES), { name });
+        await addDoc(collection(db, COLLECTIONS.DISCIPLINES), { name, createdAt: new Date().toISOString() });
     },
 
     addChapter: async (disciplineId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.CHAPTERS), { disciplineId, name });
+        await addDoc(collection(db, COLLECTIONS.CHAPTERS), { disciplineId, name, createdAt: new Date().toISOString() });
     },
 
     addUnit: async (disciplineId: string, chapterId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.UNITS), { chapterId, name });
+        await addDoc(collection(db, COLLECTIONS.UNITS), { chapterId, name, createdAt: new Date().toISOString() });
     },
 
     addTopic: async (disciplineId: string, chapterId: string, unitId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.TOPICS), { unitId, name });
+        await addDoc(collection(db, COLLECTIONS.TOPICS), { unitId, name, createdAt: new Date().toISOString() });
     },
 
     updateHierarchyItem: async (type: 'discipline'|'chapter'|'unit'|'topic', id: string, newName: string) => {
@@ -250,7 +258,7 @@ export const FirebaseService = {
     },
 
     deleteItem: async (type: 'discipline'|'chapter'|'unit'|'topic', ids: {dId?: string, cId?: string, uId?: string, tId?: string}) => {
-        console.log("Iniciando exclusão:", type); // Removido 'ids' do log para evitar possíveis objetos complexos
+        console.log("Iniciando exclusão:", type);
         const batch = writeBatch(db);
 
         try {
