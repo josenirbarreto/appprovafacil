@@ -765,6 +765,17 @@ const ExamsPage = () => {
         setGeneratedQuestions(finalQuestions);
     };
 
+    // Helper: Move Question
+    const moveQuestion = (index: number, direction: 'up' | 'down') => {
+        const newQuestions = [...generatedQuestions];
+        if (direction === 'up' && index > 0) {
+            [newQuestions[index], newQuestions[index - 1]] = [newQuestions[index - 1], newQuestions[index]];
+        } else if (direction === 'down' && index < newQuestions.length - 1) {
+            [newQuestions[index], newQuestions[index + 1]] = [newQuestions[index + 1], newQuestions[index]];
+        }
+        setGeneratedQuestions(newQuestions);
+    };
+
     // Helper: Save
     const handleSave = async () => {
         if(!editing.title) return alert('Título obrigatório');
@@ -889,26 +900,7 @@ const ExamsPage = () => {
                             </div>
                         </div>
 
-                        {/* Pré-visualização de Questões Filtradas */}
-                        {selectedDisc && (
-                            <div>
-                                <h4 className="text-sm font-bold text-slate-700 mb-2">Questões Disponíveis ({previewQuestions.length})</h4>
-                                <div className="max-h-48 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg bg-white p-2 space-y-2">
-                                    {previewQuestions.map(q => (
-                                        <div key={q.id} className="p-2 border border-slate-100 rounded flex justify-between items-center text-sm">
-                                            <div className="truncate flex-1 pr-2">
-                                                <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="line-clamp-1 text-slate-600" />
-                                            </div>
-                                            <button onClick={() => setViewingQuestion(q)} className="text-brand-blue hover:underline text-xs flex items-center gap-1">
-                                                <Icons.Eye /> Visualizar
-                                            </button>
-                                        </div>
-                                    ))}
-                                    {previewQuestions.length === 0 && <p className="text-xs text-slate-400 text-center py-2">Nenhuma questão encontrada com estes filtros.</p>}
-                                </div>
-                            </div>
-                        )}
-
+                        {/* Conteúdos Selecionados - MOVEMOS PARA CIMA */}
                         <div>
                             <h4 className="text-sm font-bold text-slate-700 mb-2">Conteúdos Selecionados</h4>
                             {tempScopes.length === 0 ? (
@@ -937,6 +929,26 @@ const ExamsPage = () => {
                                 </div>
                             )}
                         </div>
+
+                        {/* Pré-visualização de Questões Filtradas - MOVEMOS PARA BAIXO */}
+                        {selectedDisc && (
+                            <div>
+                                <h4 className="text-sm font-bold text-slate-700 mb-2">Questões Disponíveis ({previewQuestions.length})</h4>
+                                <div className="max-h-48 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg bg-white p-2 space-y-2">
+                                    {previewQuestions.map(q => (
+                                        <div key={q.id} className="p-2 border border-slate-100 rounded flex justify-between items-center text-sm">
+                                            <div className="truncate flex-1 pr-2">
+                                                <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="line-clamp-1 text-slate-600" />
+                                            </div>
+                                            <button onClick={() => setViewingQuestion(q)} className="text-brand-blue hover:underline text-xs flex items-center gap-1">
+                                                <Icons.Eye /> Visualizar
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {previewQuestions.length === 0 && <p className="text-xs text-slate-400 text-center py-2">Nenhuma questão encontrada com estes filtros.</p>}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             case 3: // GERAÇÃO
@@ -977,15 +989,26 @@ const ExamsPage = () => {
                                 {generatedQuestions.length > 0 && (
                                     <div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100 text-left max-h-96 overflow-y-auto custom-scrollbar">
                                         <div className="p-3 bg-slate-50 font-bold text-sm text-slate-700 sticky top-0">Questões Geradas ({generatedQuestions.length})</div>
-                                        {generatedQuestions.map(q => (
+                                        {generatedQuestions.map((q, index) => (
                                             <div key={q.id} className="p-3 flex justify-between items-start hover:bg-slate-50">
-                                                <div className="flex-1 pr-4">
-                                                    <div className="flex gap-2 mb-1">
-                                                        <Badge color="blue">{QuestionTypeLabels[q.type].split(' ')[0]}</Badge>
+                                                <div className="flex-1 pr-4 flex gap-3">
+                                                    <span className="font-bold text-slate-400 text-sm w-6 text-right pt-0.5">{index + 1}.</span>
+                                                    <div>
+                                                        <div className="flex gap-2 mb-1">
+                                                            <Badge color="blue">{QuestionTypeLabels[q.type].split(' ')[0]}</Badge>
+                                                        </div>
+                                                        <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="text-sm text-slate-800 line-clamp-2" />
                                                     </div>
-                                                    <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="text-sm text-slate-800 line-clamp-2" />
                                                 </div>
-                                                <div className="flex gap-2 shrink-0">
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <div className="flex flex-col gap-1 mr-2">
+                                                        <button onClick={() => moveQuestion(index, 'up')} disabled={index === 0} className="w-5 h-5 bg-slate-100 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                                                            <div className="transform rotate-180"><Icons.ChevronDown /></div>
+                                                        </button>
+                                                        <button onClick={() => moveQuestion(index, 'down')} disabled={index === generatedQuestions.length - 1} className="w-5 h-5 bg-slate-100 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                                                            <Icons.ChevronDown />
+                                                        </button>
+                                                    </div>
                                                     <button onClick={() => setViewingQuestion(q)} className="text-brand-blue hover:underline text-xs p-1" title="Visualizar"><Icons.Eye /></button>
                                                     <button onClick={() => setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id))} className="text-red-500 hover:text-red-700 text-xs p-1" title="Remover"><Icons.Trash /></button>
                                                 </div>
@@ -997,39 +1020,69 @@ const ExamsPage = () => {
                         )}
 
                         {generationMode === 'MANUAL' && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-slate-700">Selecione as Questões</h4>
-                                    <span className="text-sm text-slate-500">{generatedQuestions.length} selecionadas</span>
-                                </div>
-                                <div className="h-96 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">
-                                    {sortedAvailable.length === 0 ? (
-                                        <div className="p-8 text-center text-slate-400">Nenhuma questão encontrada para os filtros.</div>
-                                    ) : (
-                                        sortedAvailable.map(q => {
-                                            const isSelected = generatedQuestions.some(gq => gq.id === q.id);
-                                            return (
-                                                <div key={q.id} className={`p-3 flex gap-3 hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`} onClick={() => {
-                                                    if(isSelected) setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id));
-                                                    else setGeneratedQuestions(prev => [...prev, q]);
-                                                }}>
-                                                    <div className="pt-1">
-                                                        <input type="checkbox" checked={isSelected} readOnly />
+                            <div className="space-y-6">
+                                {/* Nova Seção de Ordenação para Modo Manual */}
+                                {generatedQuestions.length > 0 && (
+                                    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                        <div className="p-3 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
+                                            <h4 className="font-bold text-slate-700 text-sm">Organizar Questões Selecionadas</h4>
+                                            <span className="text-xs text-blue-600 font-semibold">{generatedQuestions.length} questões</span>
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
+                                            {generatedQuestions.map((q, index) => (
+                                                <div key={q.id} className="p-2 flex items-center justify-between hover:bg-slate-50">
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <span className="font-bold text-slate-400 text-sm w-6 text-right shrink-0">{index + 1}.</span>
+                                                        <div className="truncate text-sm text-slate-700 max-w-[400px]" dangerouslySetInnerHTML={{__html: q.enunciado.replace(/<[^>]*>?/gm, '')}} />
                                                     </div>
-                                                    <div className="flex-1">
-                                                        <div className="flex gap-2 mb-1">
-                                                            <Badge color={isSelected ? 'blue' : 'yellow'}>{QuestionTypeLabels[q.type].split(' ')[0]}</Badge>
-                                                        </div>
-                                                        <div className="text-sm text-slate-800 line-clamp-2 font-medium" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                                                        <div className="text-xs text-slate-400 mt-1">{FirebaseService.getFullHierarchyString(q, hierarchy)}</div>
-                                                    </div>
-                                                    <div onClick={e => e.stopPropagation()}>
-                                                        <button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-white rounded"><Icons.Eye /></button>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <button onClick={() => moveQuestion(index, 'up')} disabled={index === 0} className="p-1 hover:bg-slate-200 rounded text-slate-500 disabled:opacity-30">
+                                                            <div className="transform rotate-180 w-4 h-4"><Icons.ChevronDown /></div>
+                                                        </button>
+                                                        <button onClick={() => moveQuestion(index, 'down')} disabled={index === generatedQuestions.length - 1} className="p-1 hover:bg-slate-200 rounded text-slate-500 disabled:opacity-30">
+                                                            <div className="w-4 h-4"><Icons.ChevronDown /></div>
+                                                        </button>
+                                                        <button onClick={() => setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id))} className="text-red-400 hover:text-red-600 p-1 ml-2"><Icons.Trash /></button>
                                                     </div>
                                                 </div>
-                                            );
-                                        })
-                                    )}
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className="font-bold text-slate-700">Banco de Questões (Seleção)</h4>
+                                    </div>
+                                    <div className="h-80 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">
+                                        {sortedAvailable.length === 0 ? (
+                                            <div className="p-8 text-center text-slate-400">Nenhuma questão encontrada para os filtros.</div>
+                                        ) : (
+                                            sortedAvailable.map(q => {
+                                                const isSelected = generatedQuestions.some(gq => gq.id === q.id);
+                                                return (
+                                                    <div key={q.id} className={`p-3 flex gap-3 hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`} onClick={() => {
+                                                        if(isSelected) setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id));
+                                                        else setGeneratedQuestions(prev => [...prev, q]);
+                                                    }}>
+                                                        <div className="pt-1">
+                                                            <input type="checkbox" checked={isSelected} readOnly />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex gap-2 mb-1">
+                                                                <Badge color={isSelected ? 'blue' : 'yellow'}>{QuestionTypeLabels[q.type].split(' ')[0]}</Badge>
+                                                            </div>
+                                                            <div className="text-sm text-slate-800 line-clamp-2 font-medium" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                            <div className="text-xs text-slate-400 mt-1">{FirebaseService.getFullHierarchyString(q, hierarchy)}</div>
+                                                        </div>
+                                                        <div onClick={e => e.stopPropagation()}>
+                                                            <button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-white rounded"><Icons.Eye /></button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
