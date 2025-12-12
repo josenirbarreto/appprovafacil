@@ -20,7 +20,13 @@ import ProfilePage from './pages/Profile';
 const Layout = ({ children }: { children?: React.ReactNode }) => {
     const location = useLocation();
     const { user } = useAuth();
+    const [isSidebarOpen, setSidebarOpen] = useState(false);
     
+    // Fechar sidebar ao navegar em mobile
+    useEffect(() => {
+        setSidebarOpen(false);
+    }, [location]);
+
     // Definição das seções do menu conforme solicitado
     const menuGroups = [
         {
@@ -48,11 +54,39 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
-            {/* Sidebar Dark Theme */}
-            <aside className="w-64 bg-brand-dark border-r border-slate-700 flex flex-col shrink-0 z-20 transition-all duration-300">
-                <div className="p-6 border-b border-slate-700 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/50">PF</div>
-                    <span className="font-display font-bold text-xl text-white tracking-tight">Prova Fácil</span>
+            {/* Mobile Header */}
+            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-brand-dark z-30 flex items-center px-4 justify-between shadow-md">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setSidebarOpen(true)} className="text-slate-300 hover:text-white p-1">
+                        <Icons.Menu />
+                    </button>
+                    <span className="font-display font-bold text-lg text-white tracking-tight">Prova Fácil</span>
+                </div>
+            </div>
+
+            {/* Overlay para Mobile */}
+            {isSidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            {/* Sidebar Dark Theme - Responsive */}
+            <aside className={`
+                fixed inset-y-0 left-0 z-50 w-64 bg-brand-dark border-r border-slate-700 flex flex-col shrink-0 transition-transform duration-300
+                ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+                md:relative md:translate-x-0 md:z-auto
+            `}>
+                <div className="p-6 border-b border-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/50">PF</div>
+                        <span className="font-display font-bold text-xl text-white tracking-tight">Prova Fácil</span>
+                    </div>
+                    {/* Close Button Mobile */}
+                    <button onClick={() => setSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
+                        <Icons.X />
+                    </button>
                 </div>
 
                 <nav className="flex-1 p-4 space-y-6 overflow-y-auto custom-scrollbar">
@@ -104,8 +138,8 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+            {/* Main Content - com padding top no mobile para compensar o header */}
+            <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative pt-16 md:pt-0">
                 {children}
             </main>
         </div>
