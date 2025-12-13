@@ -312,19 +312,19 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Usa variável explicitamente tipada como ANY para evitar erro de tipo "Property 'id' does not exist on type 'unknown'"
-        const plainData: any = JSON.parse(JSON.stringify(q));
-        delete plainData.id;
+        // Casting direto no retorno de JSON.parse para garantir que TS trate como ANY
+        const data = JSON.parse(JSON.stringify(q)) as any;
+        delete data.id;
         
         // Garante que o authorId esteja preenchido se não estiver
-        if (!plainData.authorId && auth.currentUser) {
-            plainData.authorId = auth.currentUser.uid;
+        if (!data.authorId && auth.currentUser) {
+            data.authorId = auth.currentUser.uid;
         }
         
-        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), plainData);
+        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data);
         
-        plainData.id = docRef.id;
-        return plainData as Question;
+        data.id = docRef.id;
+        return data as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -366,24 +366,24 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Usa variável explicitamente tipada como ANY para evitar erro de tipo "Property 'id' does not exist on type 'unknown'"
-        const plainData: any = JSON.parse(JSON.stringify(exam));
-        const id = plainData.id;
-        delete plainData.id;
+        // Casting direto no retorno de JSON.parse para garantir que TS trate como ANY
+        const data = JSON.parse(JSON.stringify(exam)) as any;
+        const id = data.id;
+        delete data.id;
         
         // Garante authorId
-        if (!plainData.authorId && auth.currentUser) {
-            plainData.authorId = auth.currentUser.uid;
+        if (!data.authorId && auth.currentUser) {
+            data.authorId = auth.currentUser.uid;
         }
 
         if (id) {
-            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), plainData);
-            plainData.id = id;
-            return plainData as Exam;
+            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), data);
+            data.id = id;
+            return data as Exam;
         } else {
-            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), plainData);
-            plainData.id = docRef.id;
-            return plainData as Exam;
+            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), data);
+            data.id = docRef.id;
+            return data as Exam;
         }
     },
 
