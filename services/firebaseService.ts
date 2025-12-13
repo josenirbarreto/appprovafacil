@@ -312,9 +312,12 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Casting direto no retorno de JSON.parse para garantir que TS trate como ANY
-        const data = JSON.parse(JSON.stringify(q)) as any;
-        delete data.id;
+        // Deep copy via JSON to strip undefined and get a plain object
+        const raw = JSON.parse(JSON.stringify(q));
+        // Explicitly type as ANY to allow property deletion without TS errors
+        const data: any = raw;
+        
+        if (data.id) delete data.id;
         
         // Garante que o authorId esteja preenchido se não estiver
         if (!data.authorId && auth.currentUser) {
@@ -366,10 +369,13 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Casting direto no retorno de JSON.parse para garantir que TS trate como ANY
-        const data = JSON.parse(JSON.stringify(exam)) as any;
+        // Deep copy via JSON to strip undefined and get a plain object
+        const raw = JSON.parse(JSON.stringify(exam));
+        // Explicitly type as ANY to allow property deletion without TS errors
+        const data: any = raw;
+        
         const id = data.id;
-        delete data.id;
+        if (data.id) delete data.id;
         
         // Garante authorId
         if (!data.authorId && auth.currentUser) {
