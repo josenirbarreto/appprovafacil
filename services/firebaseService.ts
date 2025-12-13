@@ -312,8 +312,8 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Deep copy via JSON e cast explícito para Record<string, any> para permitir acesso a propriedades
-        const data = JSON.parse(JSON.stringify(q)) as Record<string, any>;
+        // Deep copy via JSON e define como 'any' para evitar erros de tipo estrito (unknown)
+        const data: any = JSON.parse(JSON.stringify(q));
         
         // Remove ID antes de salvar
         if (data.id) delete data.id;
@@ -367,8 +367,8 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Deep copy via JSON e cast explícito para Record<string, any>
-        const data = JSON.parse(JSON.stringify(exam)) as Record<string, any>;
+        // Deep copy via JSON e define como 'any' para evitar erros de tipo estrito (unknown)
+        const data: any = JSON.parse(JSON.stringify(exam));
 
         const id = data.id;
         
