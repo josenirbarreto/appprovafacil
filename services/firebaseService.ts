@@ -36,7 +36,6 @@ const COLLECTIONS = {
 };
 
 const safeLog = (message: string, error: any) => {
-    // Avoid logging full Firestore error objects which may contain circular references (e.g. Query objects)
     console.error(message, error?.code || error?.message || String(error));
 };
 
@@ -116,22 +115,14 @@ export const FirebaseService = {
 
     updateUser: async (uid: string, data: Partial<User>) => {
         try {
-            // Atualiza no Firestore (Source of Truth principal do App)
             const docRef = doc(db, COLLECTIONS.USERS, uid);
             await updateDoc(docRef, data);
-
-            // Tenta atualizar no Auth para sincronizar sessão, se possível
             if (auth.currentUser) {
                 const profileUpdates: any = {};
                 if (data.name) profileUpdates.displayName = data.name;
-                
-                // Só atualiza photoURL no Auth se NÃO for Base64 (data URI), 
-                // pois o Firebase Auth tem limite restrito de caracteres para URL.
-                // Se for Base64, a imagem fica salva apenas no Firestore e carregada via getCurrentUserData.
                 if (data.photoUrl && !data.photoUrl.startsWith('data:')) {
                      profileUpdates.photoURL = data.photoUrl;
                 }
-
                 if (Object.keys(profileUpdates).length > 0) {
                      await updateProfile(auth.currentUser, profileUpdates);
                 }
@@ -192,7 +183,7 @@ export const FirebaseService = {
         await deleteDoc(doc(db, COLLECTIONS.CLASSES, id));
     },
 
-    // --- HIERARQUIA (CRUD RELACIONAL) ---
+    // --- HIERARQUIA ---
     getHierarchy: async (): Promise<Discipline[]> => {
         try {
             const [dSnap, cSnap, uSnap, tSnap] = await Promise.all([
@@ -202,10 +193,9 @@ export const FirebaseService = {
                 getDocs(collection(db, COLLECTIONS.TOPICS))
             ]);
 
-            // Função para ordenar por data de criação
             const sortByCreated = (a: any, b: any) => {
                 if (!a.createdAt && !b.createdAt) return 0;
-                if (!a.createdAt) return -1; // Itens sem data aparecem primeiro (ou último, dependendo da preferência)
+                if (!a.createdAt) return -1;
                 if (!b.createdAt) return 1;
                 return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
             };
@@ -259,21 +249,17 @@ export const FirebaseService = {
     },
 
     deleteItem: async (type: 'discipline'|'chapter'|'unit'|'topic', ids: {dId?: string, cId?: string, uId?: string, tId?: string}) => {
-        console.log("Iniciando exclusão:", type);
         const batch = writeBatch(db);
-
         try {
             if (type === 'topic' && ids.tId) {
                 batch.delete(doc(db, COLLECTIONS.TOPICS, ids.tId));
             }
-
             else if (type === 'unit' && ids.uId) {
                 batch.delete(doc(db, COLLECTIONS.UNITS, ids.uId));
                 const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", ids.uId));
                 const snapT = await getDocs(qT);
                 snapT.forEach(d => batch.delete(d.ref));
             }
-
             else if (type === 'chapter' && ids.cId) {
                 batch.delete(doc(db, COLLECTIONS.CHAPTERS, ids.cId));
                 const qU = query(collection(db, COLLECTIONS.UNITS), where("chapterId", "==", ids.cId));
@@ -285,7 +271,6 @@ export const FirebaseService = {
                     snapT.forEach(t => batch.delete(t.ref));
                 }
             }
-
             else if (type === 'discipline' && ids.dId) {
                 batch.delete(doc(db, COLLECTIONS.DISCIPLINES, ids.dId));
                 const qC = query(collection(db, COLLECTIONS.CHAPTERS), where("disciplineId", "==", ids.dId));
@@ -302,7 +287,6 @@ export const FirebaseService = {
                     }
                 }
             }
-
             await batch.commit();
         } catch (error) {
             safeLog("Erro crítico no deleteItem:", error);
@@ -310,21 +294,34 @@ export const FirebaseService = {
         }
     },
 
-    // --- QUESTÕES ---
-    getQuestions: async () => {
-        const snapshot = await getDocs(collection(db, COLLECTIONS.QUESTIONS));
+    // --- QUESTÕES (DATA ISOLATION) ---
+    getQuestions: async (currentUser?: User | null) => {
+        let qRef;
+        // Se for professor, só vê as suas. Se for Admin, vê tudo.
+        if (currentUser && currentUser.role === UserRole.TEACHER) {
+            qRef = query(collection(db, COLLECTIONS.QUESTIONS), where("authorId", "==", currentUser.id));
+        } else {
+            qRef = query(collection(db, COLLECTIONS.QUESTIONS)); // Admin vê tudo
+        }
+
+        const snapshot = await getDocs(qRef);
         return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Question));
     },
 
     addQuestion: async (q: Question) => {
         const { id, ...rest } = q;
+        // Garante que o authorId esteja preenchido se não estiver
+        if (!rest.authorId && auth.currentUser) {
+            rest.authorId = auth.currentUser.uid;
+        }
+        
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), rest);
         return { ...q, id: docRef.id };
     },
 
     updateQuestion: async (q: Question) => {
         const { id, ...rest } = q;
-        if (!id) throw new Error("ID da questão obrigatório para atualização");
+        if (!id) throw new Error("ID da questão obrigatório");
         await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), rest);
     },
 
@@ -332,9 +329,16 @@ export const FirebaseService = {
         await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id));
     },
 
-    // --- PROVAS ---
-    getExams: async () => {
-        const snapshot = await getDocs(collection(db, COLLECTIONS.EXAMS));
+    // --- PROVAS (DATA ISOLATION) ---
+    getExams: async (currentUser?: User | null) => {
+        let eRef;
+        if (currentUser && currentUser.role === UserRole.TEACHER) {
+            eRef = query(collection(db, COLLECTIONS.EXAMS), where("authorId", "==", currentUser.id));
+        } else {
+            eRef = query(collection(db, COLLECTIONS.EXAMS)); // Admin vê tudo
+        }
+
+        const snapshot = await getDocs(eRef);
         return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Exam));
     },
 
@@ -349,6 +353,12 @@ export const FirebaseService = {
 
     saveExam: async (exam: Exam) => {
         const { id, ...rest } = exam;
+        
+        // Garante authorId
+        if (!rest.authorId && auth.currentUser) {
+            rest.authorId = auth.currentUser.uid;
+        }
+
         if (id) {
             await updateDoc(doc(db, COLLECTIONS.EXAMS, id), rest);
             return exam;
@@ -362,9 +372,7 @@ export const FirebaseService = {
         await deleteDoc(doc(db, COLLECTIONS.EXAMS, id));
     },
 
-    // --- ONLINE EXAMS (PUBLIC & ATTEMPTS) ---
-    
-    // Aluno: Começar uma prova
+    // --- ONLINE EXAMS ---
     startAttempt: async (examId: string, studentName: string, studentIdentifier: string): Promise<ExamAttempt> => {
         const attempt: Partial<ExamAttempt> = {
             examId,
@@ -379,7 +387,6 @@ export const FirebaseService = {
         return { ...attempt, id: docRef.id } as ExamAttempt;
     },
 
-    // Aluno: Enviar prova
     submitAttempt: async (id: string, answers: Record<string, string>, score: number, totalQuestions: number) => {
         const docRef = doc(db, COLLECTIONS.ATTEMPTS, id);
         await updateDoc(docRef, {
@@ -391,13 +398,11 @@ export const FirebaseService = {
         });
     },
     
-    // Professor: Corrigir/Atualizar Nota manualmente
     updateAttemptScore: async (id: string, score: number) => {
         const docRef = doc(db, COLLECTIONS.ATTEMPTS, id);
         await updateDoc(docRef, { score });
     },
 
-    // Aluno: Verificar tentativas anteriores
     getStudentAttempts: async (examId: string, identifier: string) => {
         const q = query(
             collection(db, COLLECTIONS.ATTEMPTS), 
@@ -408,7 +413,6 @@ export const FirebaseService = {
         return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamAttempt));
     },
 
-    // Professor: Ver resultados
     getExamResults: async (examId: string) => {
         const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId));
         const snapshot = await getDocs(q);

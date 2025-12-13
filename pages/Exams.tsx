@@ -59,15 +59,18 @@ const ExamsPage = () => {
 
     const { user } = useAuth();
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { 
+        if (user) load(); 
+    }, [user]);
     
     const load = async () => {
+        // Passamos user para garantir filtro
         const [e, i, c, h, q] = await Promise.all([
-            FirebaseService.getExams(),
+            FirebaseService.getExams(user),
             FirebaseService.getInstitutions(),
             FirebaseService.getClasses(),
             FirebaseService.getHierarchy(),
-            FirebaseService.getQuestions()
+            FirebaseService.getQuestions(user)
         ]);
         setExams(e);
         setInstitutions(i.sort((a,b) => a.name.localeCompare(b.name)));
@@ -190,6 +193,7 @@ const ExamsPage = () => {
             // Ensure no undefined values are passed to Firestore
             const examData: Exam = {
                 id: editing.id || '',
+                authorId: user?.id, // Garante authorId
                 title: editing.title || 'Sem título',
                 headerText: editing.headerText || '',
                 institutionId: editing.institutionId || '',
@@ -255,24 +259,13 @@ const ExamsPage = () => {
         load();
     };
 
-    // FUNÇÃO DE GERAÇÃO DE URL ROBUSTA E SEGURA PARA PREVIEW
     const getPublicLink = (examId: string) => {
-        // CORREÇÃO PARA ERRO 404 NO PREVIEW:
-        // Se a URL atual for um 'blob:', significa que estamos num ambiente isolado do navegador (IDX/Replit).
-        // O caminho (pathname) desse blob (ex: /ff8b...) é temporário e NÃO existe no servidor real.
-        // Se tentarmos usar esse caminho na URL final (removendo só o 'blob:'), o servidor retorna 404.
-        
         if (window.location.protocol === 'blob:') {
-            // Solução: Usar apenas a origem (domínio) + a rota da hash.
-            // Ex: blob:https://site.com/uuid -> https://site.com/#/p/123
             return `${window.location.origin}/#/p/${examId}`;
         }
-        
-        // Comportamento padrão para produção ou localhost normal
         const fullUrl = window.location.href;
         const base = fullUrl.indexOf('#') > -1 ? fullUrl.split('#')[0] : fullUrl;
         const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
-        
         return `${cleanBase}/#/p/${examId}`;
     };
 
@@ -289,10 +282,7 @@ const ExamsPage = () => {
     const toggleYear = (id: string) => setExpandedYears(prev => ({ ...prev, [id]: !prev[id] }));
     const toggleClass = (id: string) => setExpandedClasses(prev => ({ ...prev, [id]: !prev[id] }));
 
-    // --- WIZARD RENDERERS (Steps 1-4 omitted for brevity, logic identical to previous file) ---
-    // ... (Mantém a lógica de renderStepContent igual ao anterior) ...
     const renderStepContent = () => {
-         // Reusing existing logic
          switch(currentStep) {
             case 1: // CONFIGURAÇÃO
                 return (
@@ -496,6 +486,7 @@ const ExamsPage = () => {
             </div>
 
             <div className="space-y-4 print:hidden">
+                {/* ... (Renderização da Lista Principal inalterada, o filtro já acontece no load) ... */}
                 {institutions.length === 0 && <div className="text-center py-10 text-slate-400">Nenhuma instituição cadastrada.</div>}
                 {institutions.map(inst => {
                     const instExams = exams.filter(e => e.institutionId === inst.id);
@@ -589,9 +580,10 @@ const ExamsPage = () => {
                 </div>
                 {renderStepContent()}
             </Modal>
-
-            {/* MODAL DE PUBLICAÇÃO ONLINE */}
+            
+            {/* Modal de Publicação e Visualização já existentes (mantidos, mas omitidos para brevidade se iguais) */}
             <Modal isOpen={isPublishModalOpen} onClose={() => setIsPublishModalOpen(false)} title="Publicar Prova Online" footer={<Button onClick={handleSavePublish}>Salvar Configuração</Button>}>
+                 {/* ... Conteúdo do modal de publicação mantido ... */}
                  <div className="space-y-6">
                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
                          Ao publicar, um link será gerado para que os alunos possam responder online.
@@ -653,7 +645,6 @@ const ExamsPage = () => {
                  </div>
             </Modal>
 
-            {/* Modal de Visualização Rápida de Questão dentro do Wizard */}
             {viewingQuestion && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in print:hidden">
                     <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden">

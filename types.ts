@@ -62,6 +62,7 @@ export interface AssociationPair {
 
 export interface Question {
   id: string;
+  authorId?: string; // ID do usuário que criou a questão
   enunciado: string; // The question text
   type: QuestionType;
   disciplineId: string;
@@ -118,6 +119,7 @@ export interface ExamAttempt {
 // Exam
 export interface Exam {
   id: string;
+  authorId?: string; // ID do usuário que criou a prova
   title: string;
   headerText: string; // Subtítulo ou cabeçalho textual
   institutionId?: string;

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Question, Discipline, QuestionType } from '../types';
 import { FirebaseService } from '../services/firebaseService';
@@ -5,6 +6,7 @@ import { GeminiService } from '../services/geminiService';
 import { PdfService } from '../services/pdfService';
 import { Button, Modal, Select, Input, Badge, RichTextEditor, Card } from '../components/UI';
 import { Icons } from '../components/Icons';
+import { useAuth } from '../contexts/AuthContext';
 
 const QuestionTypeLabels: Record<QuestionType, string> = {
   [QuestionType.MULTIPLE_CHOICE]: 'Múltipla Escolha',
@@ -15,6 +17,7 @@ const QuestionTypeLabels: Record<QuestionType, string> = {
 };
 
 const QuestionsPage = () => {
+    const { user } = useAuth();
     const [allQuestions, setAllQuestions] = useState<Question[]>([]);
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     
@@ -49,10 +52,13 @@ const QuestionsPage = () => {
     // Para edição rápida dentro da importação
     const [expandedImportId, setExpandedImportId] = useState<string | null>(null);
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { 
+        if (user) load(); 
+    }, [user]);
     
     const load = async () => {
-        const [qs, hs] = await Promise.all([FirebaseService.getQuestions(), FirebaseService.getHierarchy()]);
+        // Agora passamos o USER para o serviço filtrar os dados
+        const [qs, hs] = await Promise.all([FirebaseService.getQuestions(user), FirebaseService.getHierarchy()]);
         setAllQuestions(qs);
         setHierarchy(hs);
     };
@@ -74,6 +80,7 @@ const QuestionsPage = () => {
         if(!editing.enunciado || !editing.disciplineId) { alert('Preencha os campos obrigatórios (Enunciado e Disciplina)'); return; }
         const q: Question = {
             id: editing.id || '',
+            authorId: user?.id, // Atribui authorId
             enunciado: editing.enunciado,
             type: editing.type || QuestionType.MULTIPLE_CHOICE,
             difficulty: editing.difficulty || 'Medium',
@@ -118,7 +125,6 @@ const QuestionsPage = () => {
         setImportLoading(true);
         try {
             const text = await PdfService.extractText(importFile);
-            // Passa o texto para a IA
             const rawQuestions = await GeminiService.parseQuestionsFromText(text);
             
             if (rawQuestions.length === 0) {
@@ -127,7 +133,6 @@ const QuestionsPage = () => {
                 return;
             }
 
-            // Aplica o contexto selecionado às questões
             const processedQuestions = rawQuestions.map((q, idx) => ({
                 ...q,
                 id: `temp-${Date.now()}-${idx}`,
@@ -139,7 +144,6 @@ const QuestionsPage = () => {
             }));
 
             setExtractedQuestions(processedQuestions);
-            // Seleciona todas por padrão
             setSelectedImportIds(new Set(processedQuestions.map(q => q.id!)));
             setImportStep('REVIEW');
 
@@ -178,10 +182,10 @@ const QuestionsPage = () => {
         setImportLoading(true);
         try {
             for (const q of toSave) {
-                // Remove ID temporário e garante integridade
                 const { id, ...cleanQ } = q;
                 const finalQ: Question = {
-                    id: '', // Firestore vai gerar
+                    id: '',
+                    authorId: user?.id,
                     enunciado: cleanQ.enunciado || 'Questão sem texto',
                     type: cleanQ.type || QuestionType.MULTIPLE_CHOICE,
                     difficulty: cleanQ.difficulty || 'Medium',
@@ -301,8 +305,7 @@ const QuestionsPage = () => {
             </div>
 
             {/* --- MODAIS --- */}
-
-            {/* MODAL IA GENERATE */}
+            {/* ... Modais existentes mantidos idênticos ... */}
             <Modal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} title="Gerar com Inteligência Artificial" footer={<Button onClick={confirmAiGeneration} disabled={generating}>{generating ? 'Gerando...' : 'Gerar Questão'}</Button>}>
                 <div className="space-y-4">
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 mb-4">
@@ -347,7 +350,7 @@ const QuestionsPage = () => {
                 </div>
             </Modal>
 
-            {/* MODAL IMPORTAR PDF */}
+            {/* MODAL IMPORTAR PDF (Mantido mas encurtado para brevidade do XML, lógica igual ao anterior) */}
             <Modal 
                 isOpen={isImportModalOpen} 
                 onClose={() => setIsImportModalOpen(false)} 
@@ -359,6 +362,7 @@ const QuestionsPage = () => {
                     : <Button onClick={finalizeImport} disabled={importLoading || selectedImportIds.size === 0}>{importLoading ? 'Salvando...' : `Importar (${selectedImportIds.size}) Questões`}</Button>
                 }
             >
+                {/* ... (Conteúdo do modal de importação inalterado, apenas encapsulado) ... */}
                 {importStep === 'CONFIG' && (
                     <div className="space-y-6">
                         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm text-orange-800">
@@ -402,9 +406,8 @@ const QuestionsPage = () => {
                         </div>
                     </div>
                 )}
-
                 {importStep === 'REVIEW' && (
-                    <div className="h-full flex flex-col">
+                     <div className="h-full flex flex-col">
                         <div className="flex justify-between items-center mb-4">
                             <p className="text-slate-600 text-sm">Identificamos <strong>{extractedQuestions.length}</strong> questões. Selecione quais deseja importar.</p>
                             <div className="flex gap-2 text-xs">
@@ -413,12 +416,10 @@ const QuestionsPage = () => {
                                 <button onClick={() => setSelectedImportIds(new Set())} className="text-slate-500 hover:underline">Desmarcar Todas</button>
                             </div>
                         </div>
-                        
                         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-1">
                             {extractedQuestions.map((q, idx) => {
                                 const isSelected = selectedImportIds.has(q.id!);
                                 const isExpanded = expandedImportId === q.id;
-
                                 return (
                                     <div key={q.id} className={`border rounded-lg transition-all ${isSelected ? 'border-brand-blue bg-blue-50/30' : 'border-slate-200 bg-white opacity-70'}`}>
                                         <div className="p-3 flex gap-3">
@@ -428,54 +429,20 @@ const QuestionsPage = () => {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between items-start mb-1">
                                                     <Badge color="blue">{QuestionTypeLabels[q.type as QuestionType]?.split(' ')[0]}</Badge>
-                                                    <button 
-                                                        onClick={() => setExpandedImportId(isExpanded ? null : q.id!)} 
-                                                        className="text-xs font-bold text-brand-blue hover:underline bg-white px-2 py-0.5 rounded border border-blue-100"
-                                                    >
-                                                        {isExpanded ? 'Recolher' : 'Editar / Detalhes'}
-                                                    </button>
+                                                    <button onClick={() => setExpandedImportId(isExpanded ? null : q.id!)} className="text-xs font-bold text-brand-blue hover:underline bg-white px-2 py-0.5 rounded border border-blue-100">{isExpanded ? 'Recolher' : 'Editar / Detalhes'}</button>
                                                 </div>
-                                                
-                                                {!isExpanded && (
-                                                    <div 
-                                                        className="text-sm text-slate-800 line-clamp-2"
-                                                        dangerouslySetInnerHTML={{__html: q.enunciado || ''}}
-                                                    />
-                                                )}
-
-                                                {/* ÁREA DE EDIÇÃO RÁPIDA */}
+                                                {!isExpanded && <div className="text-sm text-slate-800 line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado || ''}} />}
                                                 {isExpanded && (
                                                     <div className="mt-2 space-y-4 animate-fade-in bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                                        <div>
-                                                            <RichTextEditor 
-                                                                label="Enunciado" 
-                                                                value={q.enunciado || ''}
-                                                                onChange={(html) => updateExtractedQuestion(q.id!, 'enunciado', html)}
-                                                            />
-                                                        </div>
-
+                                                        <div><RichTextEditor label="Enunciado" value={q.enunciado || ''} onChange={(html) => updateExtractedQuestion(q.id!, 'enunciado', html)} /></div>
                                                         {q.type === QuestionType.MULTIPLE_CHOICE && (
                                                             <div className="space-y-2">
                                                                 <label className="text-xs font-bold text-slate-500 uppercase">Alternativas</label>
                                                                 {q.options?.map((opt, i) => (
                                                                     <div key={i} className="flex gap-2 items-center">
                                                                         <span className={`text-xs font-bold w-4 flex items-center justify-center ${opt.isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{String.fromCharCode(65+i)}</span>
-                                                                        <input 
-                                                                            type="text" 
-                                                                            value={opt.text}
-                                                                            onChange={(e) => updateExtractedOption(q.id!, i, e.target.value)}
-                                                                            className={`flex-1 text-sm border rounded p-2 outline-none transition-colors text-slate-800 ${opt.isCorrect ? 'border-green-300 bg-green-50 font-medium' : 'border-slate-300 bg-white'}`}
-                                                                        />
-                                                                        <input 
-                                                                            type="radio" 
-                                                                            name={`correct-${q.id}`} 
-                                                                            checked={opt.isCorrect} 
-                                                                            onChange={() => {
-                                                                                const newOpts = q.options?.map((o, idxOpt) => ({ ...o, isCorrect: idxOpt === i }));
-                                                                                updateExtractedQuestion(q.id!, 'options', newOpts);
-                                                                            }}
-                                                                            className="w-4 h-4 text-brand-blue"
-                                                                        />
+                                                                        <input type="text" value={opt.text} onChange={(e) => updateExtractedOption(q.id!, i, e.target.value)} className={`flex-1 text-sm border rounded p-2 outline-none transition-colors text-slate-800 ${opt.isCorrect ? 'border-green-300 bg-green-50 font-medium' : 'border-slate-300 bg-white'}`} />
+                                                                        <input type="radio" name={`correct-${q.id}`} checked={opt.isCorrect} onChange={() => { const newOpts = q.options?.map((o, idxOpt) => ({ ...o, isCorrect: idxOpt === i })); updateExtractedQuestion(q.id!, 'options', newOpts); }} className="w-4 h-4 text-brand-blue" />
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -492,8 +459,9 @@ const QuestionsPage = () => {
                 )}
             </Modal>
 
-            {/* MODAL DE EDIÇÃO MANUAL (Mesmo anterior) */}
+            {/* MODAL DE EDIÇÃO MANUAL (Mesmo anterior, inalterado) */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Editar Questão" maxWidth="max-w-4xl" footer={<Button onClick={handleSave}>Salvar Questão</Button>}>
+                {/* ... (Conteúdo do modal de edição) ... */}
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <Select label="Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value})}><option value="">Selecione...</option>{hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
                     <Select label="Capítulo" value={editing.chapterId || ''} onChange={e => setEditing({...editing, chapterId: e.target.value})} disabled={!editing.disciplineId}><option value="">Selecione...</option>{hierarchy.find(d => d.id === editing.disciplineId)?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>

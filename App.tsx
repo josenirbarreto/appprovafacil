@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { User } from './types';
+import { User, UserRole } from './types';
 import { FirebaseService } from './services/firebaseService';
 import { Icons } from './components/Icons';
 import { AuthContext, useAuth } from './contexts/AuthContext';
@@ -19,6 +19,8 @@ import PublicExam from './pages/PublicExam';
 import ClassesPage from './pages/Classes';
 import InstitutionPage from './pages/Institutions';
 import ProfilePage from './pages/Profile';
+import UsersPage from './pages/Users';
+import PlansPage from './pages/Plans';
 
 const Layout = ({ children }: { children?: React.ReactNode }) => {
     const location = useLocation();
@@ -30,10 +32,12 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         setSidebarOpen(false);
     }, [location]);
 
-    // Definição das seções do menu conforme solicitado
+    const isAdmin = user?.role === UserRole.ADMIN;
+
+    // Definição dinâmica do menu baseada no Role
     const menuGroups = [
         {
-            title: null, // Sem título para o topo
+            title: null, 
             items: [
                 { path: '/', label: 'Dashboard', icon: Icons.Dashboard }
             ]
@@ -41,7 +45,12 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         {
             title: 'GESTÃO',
             items: [
-                { path: '/institutions', label: 'Instituições', icon: Icons.Building },
+                // Itens exclusivos para ADMIN
+                ...(isAdmin ? [
+                    { path: '/institutions', label: 'Instituições', icon: Icons.Building },
+                    { path: '/users', label: 'Usuários', icon: Icons.User },
+                    { path: '/plans', label: 'Planos', icon: Icons.Filter } // Using Filter as generic icon for Plans/Subs
+                ] : []),
                 { path: '/classes', label: 'Turmas', icon: Icons.UsersGroup },
                 { path: '/hierarchy', label: 'Conteúdos', icon: Icons.BookOpen },
             ]
@@ -84,7 +93,12 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 <div className="p-6 border-b border-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/50">PF</div>
-                        <span className="font-display font-bold text-xl text-white tracking-tight">Prova Fácil</span>
+                        <div className="flex flex-col">
+                            <span className="font-display font-bold text-xl text-white tracking-tight leading-none">Prova Fácil</span>
+                            <span className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-wider">
+                                {isAdmin ? 'Painel Admin' : 'Painel Professor'}
+                            </span>
+                        </div>
                     </div>
                     {/* Close Button Mobile */}
                     <button onClick={() => setSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
@@ -132,7 +146,10 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                          </div>
                          <div className="overflow-hidden">
                              <p className="text-sm font-bold text-slate-200 truncate group-hover:text-white transition-colors" title={user?.name}>{user?.name}</p>
-                             <p className="text-xs text-slate-500 truncate" title={user?.email}>{user?.email}</p>
+                             <div className="flex items-center gap-1">
+                                 <div className={`w-2 h-2 rounded-full ${isAdmin ? 'bg-purple-400' : 'bg-green-400'}`}></div>
+                                 <p className="text-xs text-slate-500 truncate">{isAdmin ? 'Administrador' : 'Professor'}</p>
+                             </div>
                          </div>
                     </Link>
                     <button onClick={() => FirebaseService.logout()} className="flex items-center gap-2 text-slate-400 hover:text-red-400 hover:bg-red-950/30 w-full px-4 py-2 rounded-lg transition-colors text-sm font-medium">
@@ -141,7 +158,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 </div>
             </aside>
 
-            {/* Main Content - com padding top no mobile para compensar o header */}
+            {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative pt-16 md:pt-0">
                 {children}
             </main>
@@ -191,7 +208,12 @@ const App = () => {
                                 <Route path="/exams" element={<ExamsPage />} />
                                 <Route path="/exam-results" element={<ExamResults />} />
                                 <Route path="/classes" element={<ClassesPage />} />
+                                
+                                {/* Rotas de Admin */}
                                 <Route path="/institutions" element={<InstitutionPage />} />
+                                <Route path="/users" element={<UsersPage />} />
+                                <Route path="/plans" element={<PlansPage />} />
+                                
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="*" element={<Navigate to="/" />} />
                             </Routes>
