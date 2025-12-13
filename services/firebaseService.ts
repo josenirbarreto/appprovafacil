@@ -312,8 +312,8 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Tipagem explícita para ANY para permitir delete e atribuição sem erros de TS
-        const dataToSave: any = JSON.parse(JSON.stringify(q));
+        // Casting explícito no retorno do JSON.parse para 'any' para evitar erro TS2339 (unknown)
+        const dataToSave = JSON.parse(JSON.stringify(q)) as any;
         delete dataToSave.id;
         
         // Garante que o authorId esteja preenchido se não estiver
@@ -366,8 +366,8 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Tipagem explícita para ANY para permitir delete e atribuição
-        const dataToSave: any = JSON.parse(JSON.stringify(exam));
+        // Casting explícito no retorno do JSON.parse para 'any'
+        const dataToSave = JSON.parse(JSON.stringify(exam)) as any;
         const id = dataToSave.id;
         delete dataToSave.id;
         
