@@ -308,18 +308,22 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Cast para 'any' para evitar erro TS2698 no build
+        // Correção robusta para TS2698: Spread de tipos não-objetos
         const qAny = q as any;
         const { id, ...rest } = qAny;
+        const safeRest: Record<string, any> = rest;
         
         // Garante que o authorId esteja preenchido se não estiver
-        if (!rest.authorId && auth.currentUser) {
-            rest.authorId = auth.currentUser.uid;
+        if (!safeRest.authorId && auth.currentUser) {
+            safeRest.authorId = auth.currentUser.uid;
         }
         
-        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), rest);
-        // Retorno com cast explícito para evitar problemas de tipagem no retorno
-        return { ...rest, id: docRef.id } as Question;
+        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), safeRest);
+        
+        // Retorna usando Object.assign para evitar sintaxe de spread no retorno
+        const result = Object.assign({}, safeRest);
+        result.id = docRef.id;
+        return result as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -355,22 +359,25 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Cast para 'any' para evitar erro TS2698 no build
+        // Correção robusta para TS2698
         const examAny = exam as any;
         const { id, ...rest } = examAny;
+        const safeRest: Record<string, any> = rest;
         
         // Garante authorId
-        if (!rest.authorId && auth.currentUser) {
-            rest.authorId = auth.currentUser.uid;
+        if (!safeRest.authorId && auth.currentUser) {
+            safeRest.authorId = auth.currentUser.uid;
         }
 
         if (id) {
-            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), rest);
+            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), safeRest);
             return exam;
         } else {
-            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), rest);
-            // Retorno com cast explícito
-            return { ...rest, id: docRef.id } as Exam;
+            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), safeRest);
+            // Retorna usando Object.assign
+            const result = Object.assign({}, safeRest);
+            result.id = docRef.id;
+            return result as Exam;
         }
     },
 
