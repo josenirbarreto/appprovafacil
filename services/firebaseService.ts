@@ -308,20 +308,19 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Correção robusta para TS2698: Spread de tipos não-objetos
-        const qAny = q as any;
-        const { id, ...rest } = qAny;
-        const safeRest: Record<string, any> = rest;
+        // Uso de Object.assign para criar cópia sem spread syntax (evita erro TS2698)
+        const dataToSave: any = Object.assign({}, q);
+        delete dataToSave.id;
         
         // Garante que o authorId esteja preenchido se não estiver
-        if (!safeRest.authorId && auth.currentUser) {
-            safeRest.authorId = auth.currentUser.uid;
+        if (!dataToSave.authorId && auth.currentUser) {
+            dataToSave.authorId = auth.currentUser.uid;
         }
         
-        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), safeRest);
+        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), dataToSave);
         
-        // Retorna usando Object.assign para evitar sintaxe de spread no retorno
-        const result = Object.assign({}, safeRest);
+        // Reconstrói objeto de retorno
+        const result = Object.assign({}, dataToSave);
         result.id = docRef.id;
         return result as Question;
     },
@@ -359,23 +358,22 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Correção robusta para TS2698
-        const examAny = exam as any;
-        const { id, ...rest } = examAny;
-        const safeRest: Record<string, any> = rest;
+        // Uso de Object.assign para evitar spread syntax
+        const dataToSave: any = Object.assign({}, exam);
+        const id = dataToSave.id;
+        delete dataToSave.id;
         
         // Garante authorId
-        if (!safeRest.authorId && auth.currentUser) {
-            safeRest.authorId = auth.currentUser.uid;
+        if (!dataToSave.authorId && auth.currentUser) {
+            dataToSave.authorId = auth.currentUser.uid;
         }
 
         if (id) {
-            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), safeRest);
+            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), dataToSave);
             return exam;
         } else {
-            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), safeRest);
-            // Retorna usando Object.assign
-            const result = Object.assign({}, safeRest);
+            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), dataToSave);
+            const result = Object.assign({}, dataToSave);
             result.id = docRef.id;
             return result as Exam;
         }
