@@ -304,12 +304,16 @@ export const FirebaseService = {
         }
 
         const snapshot = await getDocs(qRef);
-        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Question));
+        return snapshot.docs.map(d => {
+            const data = d.data();
+            data.id = d.id;
+            return data as Question;
+        });
     },
 
     addQuestion: async (q: Question) => {
-        // Uso de Object.assign para criar cópia sem spread syntax (evita erro TS2698)
-        const dataToSave: any = Object.assign({}, q);
+        // Uso de JSON para deep copy e remover tipos (Any), evitando erro TS2698
+        const dataToSave = JSON.parse(JSON.stringify(q));
         delete dataToSave.id;
         
         // Garante que o authorId esteja preenchido se não estiver
@@ -319,10 +323,8 @@ export const FirebaseService = {
         
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), dataToSave);
         
-        // Reconstrói objeto de retorno
-        const result = Object.assign({}, dataToSave);
-        result.id = docRef.id;
-        return result as Question;
+        dataToSave.id = docRef.id;
+        return dataToSave as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -345,21 +347,27 @@ export const FirebaseService = {
         }
 
         const snapshot = await getDocs(eRef);
-        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Exam));
+        return snapshot.docs.map(d => {
+            const data = d.data();
+            data.id = d.id;
+            return data as Exam;
+        });
     },
 
     getExamById: async (id: string) => {
         const docRef = doc(db, COLLECTIONS.EXAMS, id);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-            return { ...snap.data(), id: snap.id } as Exam;
+            const data = snap.data();
+            data.id = snap.id;
+            return data as Exam;
         }
         return null;
     },
 
     saveExam: async (exam: Exam) => {
-        // Uso de Object.assign para evitar spread syntax
-        const dataToSave: any = Object.assign({}, exam);
+        // Uso de JSON para deep copy e remover tipos (Any)
+        const dataToSave = JSON.parse(JSON.stringify(exam));
         const id = dataToSave.id;
         delete dataToSave.id;
         
@@ -370,12 +378,12 @@ export const FirebaseService = {
 
         if (id) {
             await updateDoc(doc(db, COLLECTIONS.EXAMS, id), dataToSave);
-            return exam;
+            dataToSave.id = id;
+            return dataToSave as Exam;
         } else {
             const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), dataToSave);
-            const result = Object.assign({}, dataToSave);
-            result.id = docRef.id;
-            return result as Exam;
+            dataToSave.id = docRef.id;
+            return dataToSave as Exam;
         }
     },
 
@@ -421,13 +429,21 @@ export const FirebaseService = {
             where("studentIdentifier", "==", identifier)
         );
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamAttempt));
+        return snapshot.docs.map(d => {
+            const data = d.data();
+            data.id = d.id;
+            return data as ExamAttempt;
+        });
     },
 
     getExamResults: async (examId: string) => {
         const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamAttempt));
+        return snapshot.docs.map(d => {
+            const data = d.data();
+            data.id = d.id;
+            return data as ExamAttempt;
+        });
     },
 
     getFullHierarchyString: (q: Question, hierarchy: Discipline[]) => {
