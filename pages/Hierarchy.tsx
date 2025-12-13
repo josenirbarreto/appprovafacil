@@ -1,17 +1,20 @@
+
 import React, { useState, useEffect } from 'react';
 import { Discipline } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button } from '../components/UI';
 import { Icons } from '../components/Icons';
+import { useAuth } from '../contexts/AuthContext';
 
 const HierarchyPage = () => {
+    const { user } = useAuth();
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedDisciplines, setExpandedDisciplines] = useState<Record<string, boolean>>({});
     const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
     
-    useEffect(() => { load(); }, []);
-    const load = async () => { setHierarchy(await FirebaseService.getHierarchy()); setLoading(false); };
+    useEffect(() => { if(user) load(); }, [user]);
+    const load = async () => { setHierarchy(await FirebaseService.getHierarchy(user)); setLoading(false); };
 
     const addD = async (name: string) => { await FirebaseService.addDiscipline(name); load(); }
     const addC = async (dId: string, name: string) => { await FirebaseService.addChapter(dId, name); load(); }

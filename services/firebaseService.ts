@@ -139,19 +139,28 @@ export const FirebaseService = {
     },
 
     // --- INSTITUIÇÕES ---
-    getInstitutions: async () => {
-        const snapshot = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
+    getInstitutions: async (currentUser?: User | null) => {
+        if (!currentUser) return [];
+        let ref;
+        if (currentUser.role === UserRole.TEACHER) {
+            ref = query(collection(db, COLLECTIONS.INSTITUTIONS), where("authorId", "==", currentUser.id));
+        } else {
+            ref = collection(db, COLLECTIONS.INSTITUTIONS);
+        }
+        const snapshot = await getDocs(ref);
         return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Institution));
     },
 
     addInstitution: async (data: Institution) => {
         const { id, ...rest } = data;
-        const docRef = await addDoc(collection(db, COLLECTIONS.INSTITUTIONS), rest);
+        const payload = { ...rest, authorId: auth.currentUser?.uid };
+        const docRef = await addDoc(collection(db, COLLECTIONS.INSTITUTIONS), payload);
         return { ...data, id: docRef.id };
     },
 
     updateInstitution: async (data: Institution) => {
         const docRef = doc(db, COLLECTIONS.INSTITUTIONS, data.id);
+        // Não sobrescreve authorId na edição para manter propriedade
         await updateDoc(docRef, { ...data });
         return data;
     },
@@ -161,14 +170,22 @@ export const FirebaseService = {
     },
 
     // --- TURMAS ---
-    getClasses: async () => {
-        const snapshot = await getDocs(collection(db, COLLECTIONS.CLASSES));
+    getClasses: async (currentUser?: User | null) => {
+        if (!currentUser) return [];
+        let ref;
+        if (currentUser.role === UserRole.TEACHER) {
+            ref = query(collection(db, COLLECTIONS.CLASSES), where("authorId", "==", currentUser.id));
+        } else {
+            ref = collection(db, COLLECTIONS.CLASSES);
+        }
+        const snapshot = await getDocs(ref);
         return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SchoolClass));
     },
 
     addClass: async (data: SchoolClass) => {
         const { id, ...rest } = data;
-        const docRef = await addDoc(collection(db, COLLECTIONS.CLASSES), rest);
+        const payload = { ...rest, authorId: auth.currentUser?.uid };
+        const docRef = await addDoc(collection(db, COLLECTIONS.CLASSES), payload);
         return { ...data, id: docRef.id };
     },
 
@@ -183,13 +200,27 @@ export const FirebaseService = {
     },
 
     // --- HIERARQUIA ---
-    getHierarchy: async (): Promise<Discipline[]> => {
+    getHierarchy: async (currentUser?: User | null): Promise<Discipline[]> => {
+        // Se não houver usuário, não retorna nada
+        if (!currentUser) return [];
+
         try {
+            // Se for professor, filtra por authorId. Se Admin, pega tudo.
+            const isTeacher = currentUser.role === UserRole.TEACHER;
+            
             const [dSnap, cSnap, uSnap, tSnap] = await Promise.all([
-                getDocs(collection(db, COLLECTIONS.DISCIPLINES)),
-                getDocs(collection(db, COLLECTIONS.CHAPTERS)),
-                getDocs(collection(db, COLLECTIONS.UNITS)),
-                getDocs(collection(db, COLLECTIONS.TOPICS))
+                isTeacher 
+                    ? getDocs(query(collection(db, COLLECTIONS.DISCIPLINES), where("authorId", "==", currentUser.id)))
+                    : getDocs(collection(db, COLLECTIONS.DISCIPLINES)),
+                isTeacher 
+                    ? getDocs(query(collection(db, COLLECTIONS.CHAPTERS), where("authorId", "==", currentUser.id)))
+                    : getDocs(collection(db, COLLECTIONS.CHAPTERS)),
+                isTeacher 
+                    ? getDocs(query(collection(db, COLLECTIONS.UNITS), where("authorId", "==", currentUser.id)))
+                    : getDocs(collection(db, COLLECTIONS.UNITS)),
+                isTeacher 
+                    ? getDocs(query(collection(db, COLLECTIONS.TOPICS), where("authorId", "==", currentUser.id)))
+                    : getDocs(collection(db, COLLECTIONS.TOPICS))
             ]);
 
             const sortByCreated = (a: any, b: any) => {
@@ -222,19 +253,19 @@ export const FirebaseService = {
     },
 
     addDiscipline: async (name: string) => {
-        await addDoc(collection(db, COLLECTIONS.DISCIPLINES), { name, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, COLLECTIONS.DISCIPLINES), { name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
     },
 
     addChapter: async (disciplineId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.CHAPTERS), { disciplineId, name, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, COLLECTIONS.CHAPTERS), { disciplineId, name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
     },
 
     addUnit: async (disciplineId: string, chapterId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.UNITS), { chapterId, name, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, COLLECTIONS.UNITS), { chapterId, name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
     },
 
     addTopic: async (disciplineId: string, chapterId: string, unitId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.TOPICS), { unitId, name, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, COLLECTIONS.TOPICS), { unitId, name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
     },
 
     updateHierarchyItem: async (type: 'discipline'|'chapter'|'unit'|'topic', id: string, newName: string) => {
@@ -295,9 +326,12 @@ export const FirebaseService = {
 
     // --- QUESTÕES (DATA ISOLATION) ---
     getQuestions: async (currentUser?: User | null) => {
+        // Se não tem usuário logado, não retorna nada (segurança)
+        if (!currentUser) return [];
+
         let qRef;
         // Se for professor, só vê as suas. Se for Admin, vê tudo.
-        if (currentUser && currentUser.role === UserRole.TEACHER) {
+        if (currentUser.role === UserRole.TEACHER) {
             qRef = query(collection(db, COLLECTIONS.QUESTIONS), where("authorId", "==", currentUser.id));
         } else {
             qRef = query(collection(db, COLLECTIONS.QUESTIONS)); // Admin vê tudo
@@ -312,7 +346,7 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Cast direto no parse para evitar erro TS2339 (unknown type)
+        // FIX TS2339: Cast explícito para 'any'
         const data = JSON.parse(JSON.stringify(q)) as any;
         
         // Remove ID antes de salvar
@@ -340,8 +374,11 @@ export const FirebaseService = {
 
     // --- PROVAS (DATA ISOLATION) ---
     getExams: async (currentUser?: User | null) => {
+        // Se não tem usuário logado, não retorna nada
+        if (!currentUser) return [];
+
         let eRef;
-        if (currentUser && currentUser.role === UserRole.TEACHER) {
+        if (currentUser.role === UserRole.TEACHER) {
             eRef = query(collection(db, COLLECTIONS.EXAMS), where("authorId", "==", currentUser.id));
         } else {
             eRef = query(collection(db, COLLECTIONS.EXAMS)); // Admin vê tudo
@@ -367,7 +404,7 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Cast direto no parse para evitar erro TS2339 (unknown type)
+        // FIX TS2339: Cast explícito para 'any'
         const data = JSON.parse(JSON.stringify(exam)) as any;
 
         const id = data.id;

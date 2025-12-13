@@ -1,16 +1,19 @@
+
 import React, { useState, useEffect } from 'react';
 import { Institution } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Input, Card } from '../components/UI';
 import { Icons } from '../components/Icons';
+import { useAuth } from '../contexts/AuthContext';
 
 const InstitutionPage = () => {
+    const { user } = useAuth();
     const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<Partial<Institution>>({});
 
-    useEffect(() => { load(); }, []);
-    const load = async () => { setInstitutions(await FirebaseService.getInstitutions()); };
+    useEffect(() => { if (user) load(); }, [user]);
+    const load = async () => { setInstitutions(await FirebaseService.getInstitutions(user)); };
 
     const handleSave = async () => {
         if (!editing.name) return alert('Nome obrigatório');

@@ -45,14 +45,16 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         {
             title: 'GESTÃO',
             items: [
-                // Itens exclusivos para ADMIN
-                ...(isAdmin ? [
-                    { path: '/institutions', label: 'Instituições', icon: Icons.Building },
-                    { path: '/users', label: 'Usuários', icon: Icons.User },
-                    { path: '/plans', label: 'Planos', icon: Icons.Filter } // Using Filter as generic icon for Plans/Subs
-                ] : []),
+                // Itens compartilhados
+                { path: '/institutions', label: 'Instituições', icon: Icons.Building },
                 { path: '/classes', label: 'Turmas', icon: Icons.UsersGroup },
                 { path: '/hierarchy', label: 'Conteúdos', icon: Icons.BookOpen },
+                
+                // Itens exclusivos para ADMIN
+                ...(isAdmin ? [
+                    { path: '/users', label: 'Usuários', icon: Icons.User },
+                    { path: '/plans', label: 'Planos', icon: Icons.Filter } 
+                ] : []),
             ]
         },
         {

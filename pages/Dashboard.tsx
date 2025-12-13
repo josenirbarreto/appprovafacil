@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, Badge, Button } from '../components/UI';
 import { Icons } from '../components/Icons';
@@ -5,8 +6,10 @@ import { SimpleBarChart, SimpleDonutChart } from '../components/Charts';
 import { FirebaseService } from '../services/firebaseService';
 import { Exam, Question, SchoolClass, Discipline, Institution, QuestionType } from '../types';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard = () => {
+    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [metrics, setMetrics] = useState({
         totalExams: 0,
@@ -20,14 +23,16 @@ const Dashboard = () => {
     });
 
     useEffect(() => {
+        if (!user) return;
         const loadStats = async () => {
             try {
+                // Passa o 'user' para garantir que os dados sejam isolados
                 const [exams, questions, classes, institutions, disciplines] = await Promise.all([
-                    FirebaseService.getExams(),
-                    FirebaseService.getQuestions(),
-                    FirebaseService.getClasses(),
-                    FirebaseService.getInstitutions(),
-                    FirebaseService.getHierarchy()
+                    FirebaseService.getExams(user),
+                    FirebaseService.getQuestions(user),
+                    FirebaseService.getClasses(user),
+                    FirebaseService.getInstitutions(user),
+                    FirebaseService.getHierarchy(user)
                 ]);
 
                 // 1. Totais Básicos
@@ -108,7 +113,7 @@ const Dashboard = () => {
         };
 
         loadStats();
-    }, []);
+    }, [user]);
 
     if (loading) {
         return (

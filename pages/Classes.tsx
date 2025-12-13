@@ -1,10 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { SchoolClass, Institution } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Select, Input, Card, Badge } from '../components/UI';
 import { Icons } from '../components/Icons';
+import { useAuth } from '../contexts/AuthContext';
 
 const ClassesPage = () => {
+    const { user } = useAuth();
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -12,9 +15,9 @@ const ClassesPage = () => {
     const [expandedInstitutions, setExpandedInstitutions] = useState<Record<string, boolean>>({});
     const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { if(user) load(); }, [user]);
     const load = async () => {
-        const [cls, insts] = await Promise.all([FirebaseService.getClasses(), FirebaseService.getInstitutions()]);
+        const [cls, insts] = await Promise.all([FirebaseService.getClasses(user), FirebaseService.getInstitutions(user)]);
         setClasses(cls);
         setInstitutions(insts.sort((a,b) => a.name.localeCompare(b.name)));
     };
