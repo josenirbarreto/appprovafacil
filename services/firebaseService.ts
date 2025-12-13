@@ -312,10 +312,8 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Separa o parse do casting para evitar erro TS2339 (unknown type)
-        const json = JSON.stringify(q);
-        const parsed = JSON.parse(json);
-        const data = parsed as any;
+        // Deep copy via JSON e cast explícito para Record<string, any> para permitir acesso a propriedades
+        const data = JSON.parse(JSON.stringify(q)) as Record<string, any>;
         
         // Remove ID antes de salvar
         if (data.id) delete data.id;
@@ -369,10 +367,8 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Separa o parse do casting para evitar erro TS2339 (unknown type)
-        const json = JSON.stringify(exam);
-        const parsed = JSON.parse(json);
-        const data = parsed as any;
+        // Deep copy via JSON e cast explícito para Record<string, any>
+        const data = JSON.parse(JSON.stringify(exam)) as Record<string, any>;
 
         const id = data.id;
         
