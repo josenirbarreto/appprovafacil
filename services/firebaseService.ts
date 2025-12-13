@@ -15,7 +15,7 @@ import {
     createUserWithEmailAndPassword, 
     signInWithEmailAndPassword, 
     signOut, 
-    updateProfile,
+    updateProfile, 
     deleteUser
 } from "firebase/auth";
 import { db, auth } from "../firebaseConfig";
@@ -312,11 +312,10 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Deep copy via JSON to strip undefined and get a plain object
-        const raw = JSON.parse(JSON.stringify(q));
-        // Explicitly type as ANY to allow property deletion without TS errors
-        const data: any = raw;
+        // Usa casting explicito para 'any' para evitar erro TS2339 no retorno de JSON.parse
+        const data = JSON.parse(JSON.stringify(q)) as any;
         
+        // Remove ID antes de salvar
         if (data.id) delete data.id;
         
         // Garante que o authorId esteja preenchido se não estiver
@@ -326,8 +325,7 @@ export const FirebaseService = {
         
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data);
         
-        data.id = docRef.id;
-        return data as Question;
+        return { ...q, id: docRef.id };
     },
 
     updateQuestion: async (q: Question) => {
@@ -369,12 +367,11 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Deep copy via JSON to strip undefined and get a plain object
-        const raw = JSON.parse(JSON.stringify(exam));
-        // Explicitly type as ANY to allow property deletion without TS errors
-        const data: any = raw;
-        
+        // Usa casting explicito para 'any' para evitar erro TS2339 no retorno de JSON.parse
+        const data = JSON.parse(JSON.stringify(exam)) as any;
         const id = data.id;
+        
+        // Remove ID do payload para o Firestore
         if (data.id) delete data.id;
         
         // Garante authorId
@@ -384,12 +381,10 @@ export const FirebaseService = {
 
         if (id) {
             await updateDoc(doc(db, COLLECTIONS.EXAMS, id), data);
-            data.id = id;
-            return data as Exam;
+            return { ...exam, id };
         } else {
             const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), data);
-            data.id = docRef.id;
-            return data as Exam;
+            return { ...exam, id: docRef.id };
         }
     },
 
