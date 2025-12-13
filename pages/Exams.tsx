@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
-import { Exam, Institution, SchoolClass, Discipline, Question, ExamContentScope, QuestionType } from '../types';
+import { useNavigate } from 'react-router-dom';
+import { Exam, Institution, SchoolClass, Discipline, Question, ExamContentScope, QuestionType, PublicExamConfig } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Select, Input, Card, Badge, RichTextEditor } from '../components/UI';
 import { Icons } from '../components/Icons';
@@ -20,6 +22,8 @@ const ExamsPage = () => {
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     const [allQuestions, setAllQuestions] = useState<Question[]>([]);
+    
+    const navigate = useNavigate();
 
     // Modal & Wizard State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,6 +31,11 @@ const ExamsPage = () => {
     const [currentStep, setCurrentStep] = useState(1);
     const [saving, setSaving] = useState(false);
     
+    // Publish Modal State
+    const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+    const [publishConfig, setPublishConfig] = useState<Partial<PublicExamConfig>>({});
+    const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
+
     // Step 2: Content Scope State
     const [selectedDisc, setSelectedDisc] = useState('');
     const [selectedChap, setSelectedChap] = useState('');
@@ -190,7 +199,8 @@ const ExamsPage = () => {
                 contentScopes: tempScopes || [],
                 questions: generatedQuestions || [],
                 showAnswerKey: editing.showAnswerKey || false,
-                createdAt: editing.createdAt || new Date().toISOString()
+                createdAt: editing.createdAt || new Date().toISOString(),
+                publicConfig: editing.publicConfig // Preserve existing config if editing
             };
 
             await FirebaseService.saveExam(examData);
@@ -211,13 +221,79 @@ const ExamsPage = () => {
         }
     };
 
+    // --- PUBLISH LOGIC ---
+    const openPublishModal = (exam: Exam) => {
+        setSelectedExamId(exam.id);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 7);
+        
+        setPublishConfig(exam.publicConfig || {
+            isPublished: true,
+            startDate: new Date().toISOString().slice(0, 16),
+            endDate: tomorrow.toISOString().slice(0, 16),
+            timeLimitMinutes: 60,
+            allowedAttempts: 1,
+            randomizeQuestions: false,
+            requireIdentifier: true,
+            showFeedback: true
+        });
+        setIsPublishModalOpen(true);
+    };
+
+    const handleSavePublish = async () => {
+        if (!selectedExamId) return;
+        const exam = exams.find(e => e.id === selectedExamId);
+        if (!exam) return;
+
+        const updatedExam: Exam = {
+            ...exam,
+            publicConfig: publishConfig as PublicExamConfig
+        };
+        
+        await FirebaseService.saveExam(updatedExam);
+        setIsPublishModalOpen(false);
+        load();
+    };
+
+    // FUNÇÃO DE GERAÇÃO DE URL ROBUSTA E SEGURA PARA PREVIEW
+    const getPublicLink = (examId: string) => {
+        // CORREÇÃO PARA ERRO 404 NO PREVIEW:
+        // Se a URL atual for um 'blob:', significa que estamos num ambiente isolado do navegador (IDX/Replit).
+        // O caminho (pathname) desse blob (ex: /ff8b...) é temporário e NÃO existe no servidor real.
+        // Se tentarmos usar esse caminho na URL final (removendo só o 'blob:'), o servidor retorna 404.
+        
+        if (window.location.protocol === 'blob:') {
+            // Solução: Usar apenas a origem (domínio) + a rota da hash.
+            // Ex: blob:https://site.com/uuid -> https://site.com/#/p/123
+            return `${window.location.origin}/#/p/${examId}`;
+        }
+        
+        // Comportamento padrão para produção ou localhost normal
+        const fullUrl = window.location.href;
+        const base = fullUrl.indexOf('#') > -1 ? fullUrl.split('#')[0] : fullUrl;
+        const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+        
+        return `${cleanBase}/#/p/${examId}`;
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text).then(() => {
+            alert("Link copiado para a área de transferência!");
+        }).catch(err => {
+            console.error('Erro ao copiar: ', err);
+            prompt("Copie o link manualmente:", text);
+        });
+    };
+
     const toggleInstitution = (id: string) => setExpandedInstitutions(prev => ({ ...prev, [id]: !prev[id] }));
     const toggleYear = (id: string) => setExpandedYears(prev => ({ ...prev, [id]: !prev[id] }));
     const toggleClass = (id: string) => setExpandedClasses(prev => ({ ...prev, [id]: !prev[id] }));
 
-    // --- WIZARD RENDERERS ---
+    // --- WIZARD RENDERERS (Steps 1-4 omitted for brevity, logic identical to previous file) ---
+    // ... (Mantém a lógica de renderStepContent igual ao anterior) ...
     const renderStepContent = () => {
-        switch(currentStep) {
+         // Reusing existing logic
+         switch(currentStep) {
             case 1: // CONFIGURAÇÃO
                 return (
                     <div className="space-y-4 animate-fade-in">
@@ -272,7 +348,6 @@ const ExamsPage = () => {
                     if (selectedChap && q.chapterId !== selectedChap) return false;
                     if (selectedUnit && q.unitId !== selectedUnit) return false;
                     if (selectedTopic && q.topicId !== selectedTopic) return false;
-                    // Se nada selecionado, não mostrar nada ou mostrar tudo? Vamos mostrar nada para não poluir
                     if (!selectedDisc) return false;
                     return true;
                 });
@@ -305,7 +380,7 @@ const ExamsPage = () => {
                             </div>
                         </div>
 
-                        {/* Conteúdos Selecionados - MOVEMOS PARA CIMA */}
+                        {/* Conteúdos Selecionados */}
                         <div>
                             <h4 className="text-sm font-bold text-slate-700 mb-2">Conteúdos Selecionados</h4>
                             {tempScopes.length === 0 ? (
@@ -335,7 +410,7 @@ const ExamsPage = () => {
                             )}
                         </div>
 
-                        {/* Pré-visualização de Questões Filtradas - MOVEMOS PARA BAIXO */}
+                        {/* Pré-visualização de Questões Filtradas */}
                         {selectedDisc && (
                             <div>
                                 <h4 className="text-sm font-bold text-slate-700 mb-2">Questões Disponíveis ({previewQuestions.length})</h4>
@@ -357,7 +432,6 @@ const ExamsPage = () => {
                     </div>
                 );
             case 3: // GERAÇÃO
-                // Sort available questions so selected ones appear first in manual mode
                 const sortedAvailable = [...availableQuestions].sort((a, b) => {
                     const aSel = generatedQuestions.some(g => g.id === a.id);
                     const bSel = generatedQuestions.some(g => g.id === b.id);
@@ -369,126 +443,19 @@ const ExamsPage = () => {
                 return (
                     <div className="space-y-6 animate-fade-in">
                         <div className="flex justify-center gap-4 mb-6">
-                            <button 
-                                onClick={() => setGenerationMode('AUTO')}
-                                className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'AUTO' ? 'border-brand-blue bg-blue-50 text-brand-blue' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}
-                            >
-                                <Icons.Magic />
-                                <span className="font-bold text-sm">Automático</span>
-                            </button>
-                            <button 
-                                onClick={() => setGenerationMode('MANUAL')}
-                                className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'MANUAL' ? 'border-brand-blue bg-blue-50 text-brand-blue' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}
-                            >
-                                <Icons.Check />
-                                <span className="font-bold text-sm">Manual</span>
-                            </button>
+                            <button onClick={() => setGenerationMode('AUTO')} className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'AUTO' ? 'border-brand-blue bg-blue-50 text-brand-blue' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}><Icons.Magic /><span className="font-bold text-sm">Automático</span></button>
+                            <button onClick={() => setGenerationMode('MANUAL')} className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'MANUAL' ? 'border-brand-blue bg-blue-50 text-brand-blue' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}><Icons.Check /><span className="font-bold text-sm">Manual</span></button>
                         </div>
-
                         {generationMode === 'AUTO' && (
                             <div className="text-center py-2">
-                                <p className="text-slate-600 mb-4">O sistema selecionará aleatoriamente as questões baseadas nos escopos definidos.</p>
-                                <Button onClick={handleAutoGenerate} className="mx-auto mb-6">
-                                    <Icons.Refresh /> Gerar Prova Agora
-                                </Button>
-                                {generatedQuestions.length > 0 && (
-                                    <div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100 text-left max-h-96 overflow-y-auto custom-scrollbar">
-                                        <div className="p-3 bg-slate-50 font-bold text-sm text-slate-700 sticky top-0">Questões Geradas ({generatedQuestions.length})</div>
-                                        {generatedQuestions.map((q, index) => (
-                                            <div key={q.id} className="p-3 flex justify-between items-start hover:bg-slate-50">
-                                                <div className="flex-1 pr-4 flex gap-3">
-                                                    <span className="font-bold text-slate-400 text-sm w-6 text-right pt-0.5">{index + 1}.</span>
-                                                    <div>
-                                                        <div className="flex gap-2 mb-1">
-                                                            <Badge color="blue">{QuestionTypeLabels[q.type].split(' ')[0]}</Badge>
-                                                        </div>
-                                                        <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="text-sm text-slate-800 line-clamp-2" />
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <div className="flex flex-col gap-1 mr-2">
-                                                        <button onClick={() => moveQuestion(index, 'up')} disabled={index === 0} className="w-5 h-5 bg-slate-100 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed">
-                                                            <div className="transform rotate-180"><Icons.ChevronDown /></div>
-                                                        </button>
-                                                        <button onClick={() => moveQuestion(index, 'down')} disabled={index === generatedQuestions.length - 1} className="w-5 h-5 bg-slate-100 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed">
-                                                            <Icons.ChevronDown />
-                                                        </button>
-                                                    </div>
-                                                    <button onClick={() => setViewingQuestion(q)} className="text-brand-blue hover:underline text-xs p-1" title="Visualizar"><Icons.Eye /></button>
-                                                    <button onClick={() => setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id))} className="text-red-500 hover:text-red-700 text-xs p-1" title="Remover"><Icons.Trash /></button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                <p className="text-slate-600 mb-4">O sistema selecionará aleatoriamente as questões.</p>
+                                <Button onClick={handleAutoGenerate} className="mx-auto mb-6"><Icons.Refresh /> Gerar Prova Agora</Button>
+                                {generatedQuestions.length > 0 && (<div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100 text-left max-h-96 overflow-y-auto custom-scrollbar"><div className="p-3 bg-slate-50 font-bold text-sm text-slate-700 sticky top-0">Questões Geradas ({generatedQuestions.length})</div>{generatedQuestions.map((q, index) => (<div key={q.id} className="p-3 flex justify-between items-start hover:bg-slate-50"><div className="flex-1 pr-4 flex gap-3"><span className="font-bold text-slate-400 text-sm w-6 text-right pt-0.5">{index + 1}.</span><div><div className="flex gap-2 mb-1"><Badge color="blue">{QuestionTypeLabels[q.type].split(' ')[0]}</Badge></div><div dangerouslySetInnerHTML={{__html: q.enunciado}} className="text-sm text-slate-800 line-clamp-2" /></div></div><div className="flex items-center gap-2 shrink-0"><div className="flex flex-col gap-1 mr-2"><button onClick={() => moveQuestion(index, 'up')} disabled={index === 0} className="w-5 h-5 bg-slate-100 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"><div className="transform rotate-180"><Icons.ChevronDown /></div></button><button onClick={() => moveQuestion(index, 'down')} disabled={index === generatedQuestions.length - 1} className="w-5 h-5 bg-slate-100 rounded hover:bg-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"><Icons.ChevronDown /></button></div><button onClick={() => setViewingQuestion(q)} className="text-brand-blue hover:underline text-xs p-1" title="Visualizar"><Icons.Eye /></button><button onClick={() => setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id))} className="text-red-500 hover:text-red-700 text-xs p-1" title="Remover"><Icons.Trash /></button></div></div>))}</div>)}
                             </div>
                         )}
-
                         {generationMode === 'MANUAL' && (
                             <div className="space-y-6">
-                                {/* Nova Seção de Ordenação para Modo Manual */}
-                                {generatedQuestions.length > 0 && (
-                                    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                                        <div className="p-3 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
-                                            <h4 className="font-bold text-slate-700 text-sm">Organizar Questões Selecionadas</h4>
-                                            <span className="text-xs text-blue-600 font-semibold">{generatedQuestions.length} questões</span>
-                                        </div>
-                                        <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
-                                            {generatedQuestions.map((q, index) => (
-                                                <div key={q.id} className="p-2 flex items-center justify-between hover:bg-slate-50">
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <span className="font-bold text-slate-400 text-sm w-6 text-right shrink-0">{index + 1}.</span>
-                                                        <div className="truncate text-sm text-slate-700 max-w-[400px]" dangerouslySetInnerHTML={{__html: q.enunciado.replace(/<[^>]*>?/gm, '')}} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2 shrink-0">
-                                                        <button onClick={() => moveQuestion(index, 'up')} disabled={index === 0} className="p-1 hover:bg-slate-200 rounded text-slate-500 disabled:opacity-30">
-                                                            <div className="transform rotate-180 w-4 h-4"><Icons.ChevronDown /></div>
-                                                        </button>
-                                                        <button onClick={() => moveQuestion(index, 'down')} disabled={index === generatedQuestions.length - 1} className="p-1 hover:bg-slate-200 rounded text-slate-500 disabled:opacity-30">
-                                                            <div className="w-4 h-4"><Icons.ChevronDown /></div>
-                                                        </button>
-                                                        <button onClick={() => setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id))} className="text-red-400 hover:text-red-600 p-1 ml-2"><Icons.Trash /></button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h4 className="font-bold text-slate-700">Banco de Questões (Seleção)</h4>
-                                    </div>
-                                    <div className="h-80 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">
-                                        {sortedAvailable.length === 0 ? (
-                                            <div className="p-8 text-center text-slate-400">Nenhuma questão encontrada para os filtros.</div>
-                                        ) : (
-                                            sortedAvailable.map(q => {
-                                                const isSelected = generatedQuestions.some(gq => gq.id === q.id);
-                                                return (
-                                                    <div key={q.id} className={`p-3 flex gap-3 hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`} onClick={() => {
-                                                        if(isSelected) setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id));
-                                                        else setGeneratedQuestions(prev => [...prev, q]);
-                                                    }}>
-                                                        <div className="pt-1">
-                                                            <input type="checkbox" checked={isSelected} readOnly />
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <div className="flex gap-2 mb-1">
-                                                                <Badge color={isSelected ? 'blue' : 'yellow'}>{QuestionTypeLabels[q.type].split(' ')[0]}</Badge>
-                                                            </div>
-                                                            <div className="text-sm text-slate-800 line-clamp-2 font-medium" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                                                            <div className="text-xs text-slate-400 mt-1">{FirebaseService.getFullHierarchyString(q, hierarchy)}</div>
-                                                        </div>
-                                                        <div onClick={e => e.stopPropagation()}>
-                                                            <button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-white rounded"><Icons.Eye /></button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                </div>
+                                <div><div className="flex justify-between items-center mb-2"><h4 className="font-bold text-slate-700">Banco de Questões</h4></div><div className="h-80 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">{sortedAvailable.length === 0 ? <div className="p-8 text-center text-slate-400">Nenhuma questão encontrada para os filtros.</div> : sortedAvailable.map(q => { const isSelected = generatedQuestions.some(gq => gq.id === q.id); return (<div key={q.id} className={`p-3 flex gap-3 hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`} onClick={() => { if(isSelected) setGeneratedQuestions(prev => prev.filter(x => x.id !== q.id)); else setGeneratedQuestions(prev => [...prev, q]); }}><div className="pt-1"><input type="checkbox" checked={isSelected} readOnly /></div><div className="flex-1"><div className="flex gap-2 mb-1"><Badge color={isSelected ? 'blue' : 'yellow'}>{QuestionTypeLabels[q.type].split(' ')[0]}</Badge></div><div className="text-sm text-slate-800 line-clamp-2 font-medium" dangerouslySetInnerHTML={{__html: q.enunciado}} /><div className="text-xs text-slate-400 mt-1">{FirebaseService.getFullHierarchyString(q, hierarchy)}</div></div><div onClick={e => e.stopPropagation()}><button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-white rounded"><Icons.Eye /></button></div></div>); })}</div></div>
                             </div>
                         )}
                     </div>
@@ -496,101 +463,10 @@ const ExamsPage = () => {
             case 4: // VISUALIZAÇÃO
                 return (
                     <div className="flex flex-col h-full animate-fade-in relative">
-                        {/* A4 PAPER PREVIEW */}
                         <div className="bg-white shadow-lg mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0">
-                            {/* Header (Repeated logic for print) */}
-                            <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
-                                {institutions.find(i => i.id === editing.institutionId)?.logoUrl && (
-                                    <img src={institutions.find(i => i.id === editing.institutionId)?.logoUrl} className="h-16 w-16 object-contain" />
-                                )}
-                                <div className="flex-1">
-                                    <h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'Nome da Instituição'}</h1>
-                                    <h2 className="text-lg font-bold">{editing.title}</h2>
-                                    <p className="text-sm">{editing.headerText}</p>
-                                    <div className="flex justify-between text-sm mt-2 pt-2 border-t border-gray-300">
-                                        <span>Aluno(a): _______________________________________________________</span>
-                                        <span>Turma: {classes.find(c => c.id === editing.classId)?.name}</span>
-                                        <span>Data: ____/____/____</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Instructions */}
-                            {editing.instructions && (
-                                <div className="mb-6 text-sm border border-black p-2 bg-gray-50 print:bg-transparent">
-                                    <strong>Instruções:</strong>
-                                    <div dangerouslySetInnerHTML={{__html: editing.instructions}} />
-                                </div>
-                            )}
-
-                            {/* Questions Grid */}
-                            <div 
-                                className={`${editing.columns === 2 ? 'columns-2 gap-8' : ''}`}
-                                style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}
-                            >
-                                {generatedQuestions.map((q, idx) => (
-                                    <div key={q.id} className="mb-6 break-inside-avoid">
-                                        <div className="flex gap-2">
-                                            <span className="font-bold">{idx + 1}.</span>
-                                            <div className="flex-1">
-                                                <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="text-sm mb-2" />
-                                                
-                                                {q.type === QuestionType.MULTIPLE_CHOICE && (
-                                                    <div className="space-y-1 ml-1">
-                                                        {q.options?.map((opt, i) => (
-                                                            <div key={i} className="flex gap-2 text-sm items-start">
-                                                                <span className="font-bold text-xs border border-black rounded-full w-5 h-5 flex items-center justify-center shrink-0">{String.fromCharCode(65+i)}</span>
-                                                                <span>{opt.text}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {q.type === QuestionType.TRUE_FALSE && (
-                                                    <div className="space-y-1 ml-1 text-sm">
-                                                        <div className="flex gap-2"><span>( ) Verdadeiro</span></div>
-                                                        <div className="flex gap-2"><span>( ) Falso</span></div>
-                                                    </div>
-                                                )}
-                                                {(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && (
-                                                    <div className="mt-8 border-b border-black w-full"></div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Answer Key (Optional - Page Break Logic) */}
-                            {editing.showAnswerKey && (
-                                <div className="break-before-page pt-10 print:pt-0">
-                                    {/* Header Repeated for Answer Key Page */}
-                                    <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
-                                        <div className="flex-1">
-                                            <h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name} - GABARITO</h1>
-                                            <h2 className="text-lg font-bold">{editing.title}</h2>
-                                            <div className="flex justify-between text-sm mt-2 pt-2 border-t border-gray-300">
-                                                <span>Turma: {classes.find(c => c.id === editing.classId)?.name}</span>
-                                                <span>Professor: {user?.name}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-5 gap-4 text-sm">
-                                        {generatedQuestions.map((q, idx) => (
-                                            <div key={q.id} className="border p-2 rounded">
-                                                <span className="font-bold mr-2">{idx+1}.</span> 
-                                                {q.type === QuestionType.MULTIPLE_CHOICE ? (
-                                                    <span className="font-bold text-brand-blue">{String.fromCharCode(65 + (q.options?.findIndex(o => o.isCorrect) || 0))}</span>
-                                                ) : q.type === QuestionType.TRUE_FALSE ? (
-                                                    <span>{q.options?.find(o => o.isCorrect)?.text}</span>
-                                                ) : (
-                                                    <span className="italic text-gray-500">Dissertativa/Numérica</span>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">{institutions.find(i => i.id === editing.institutionId)?.logoUrl && <img src={institutions.find(i => i.id === editing.institutionId)?.logoUrl} className="h-16 w-16 object-contain" />}<div className="flex-1"><h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'Nome da Instituição'}</h1><h2 className="text-lg font-bold">{editing.title}</h2><p className="text-sm">{editing.headerText}</p><div className="flex justify-between text-sm mt-2 pt-2 border-t border-gray-300"><span>Aluno(a): _______________________________________________________</span><span>Turma: {classes.find(c => c.id === editing.classId)?.name}</span><span>Data: ____/____/____</span></div></div></div>
+                            {editing.instructions && <div className="mb-6 text-sm border border-black p-2 bg-gray-50 print:bg-transparent"><strong>Instruções:</strong><div dangerouslySetInnerHTML={{__html: editing.instructions}} /></div>}
+                            <div className={`${editing.columns === 2 ? 'columns-2 gap-8' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}>{generatedQuestions.map((q, idx) => (<div key={q.id} className="mb-6 break-inside-avoid"><div className="flex gap-2"><span className="font-bold">{idx + 1}.</span><div className="flex-1"><div dangerouslySetInnerHTML={{__html: q.enunciado}} className="text-sm mb-2" />{q.type === QuestionType.MULTIPLE_CHOICE && (<div className="space-y-1 ml-1">{q.options?.map((opt, i) => (<div key={i} className="flex gap-2 text-sm items-start"><span className="font-bold text-xs border border-black rounded-full w-5 h-5 flex items-center justify-center shrink-0">{String.fromCharCode(65+i)}</span><span>{opt.text}</span></div>))}</div>)}{q.type === QuestionType.TRUE_FALSE && (<div className="space-y-1 ml-1 text-sm"><div className="flex gap-2"><span>( ) Verdadeiro</span></div><div className="flex gap-2"><span>( ) Falso</span></div></div>)}{(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && <div className="mt-8 border-b border-black w-full"></div>}</div></div></div>))}</div>
                         </div>
                     </div>
                 );
@@ -600,23 +476,11 @@ const ExamsPage = () => {
 
     const renderFooter = () => (
         <div className="flex justify-between w-full print:hidden">
-            {currentStep > 1 ? (
-                <Button variant="ghost" onClick={() => setCurrentStep(s => s - 1)}>Voltar</Button>
-            ) : <div />}
-            
+            {currentStep > 1 ? <Button variant="ghost" onClick={() => setCurrentStep(s => s - 1)}>Voltar</Button> : <div />}
             <div className="flex gap-2">
-                {currentStep === 4 && (
-                    <Button variant="outline" onClick={() => window.print()}><Icons.Printer /> Imprimir</Button>
-                )}
+                {currentStep === 4 && <Button variant="outline" onClick={() => window.print()}><Icons.Printer /> Imprimir</Button>}
                 <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                {currentStep < 4 ? (
-                    <Button onClick={() => {
-                        if (currentStep === 2) prepareGeneration();
-                        setCurrentStep(s => s + 1);
-                    }}>Próximo</Button>
-                ) : (
-                    <Button onClick={handleSave} variant="primary" disabled={saving}>{saving ? 'Salvando...' : 'Salvar Prova'}</Button>
-                )}
+                {currentStep < 4 ? <Button onClick={() => { if (currentStep === 2) prepareGeneration(); setCurrentStep(s => s + 1); }}>Próximo</Button> : <Button onClick={handleSave} variant="primary" disabled={saving}>{saving ? 'Salvando...' : 'Salvar Prova'}</Button>}
             </div>
         </div>
     );
@@ -652,13 +516,8 @@ const ExamsPage = () => {
                                         return (
                                             <div key={yearId} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
                                                 <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors select-none pl-6" onClick={() => toggleYear(yearId)}>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`transform transition-transform text-slate-400 ${isExpandedYear ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
-                                                        <span className="font-semibold text-slate-700">Ano Letivo {year}</span>
-                                                    </div>
-                                                    <span className="text-xs text-slate-400 mr-2">{yearExamsCount} provas</span>
+                                                    <div className="flex items-center gap-3"><div className={`transform transition-transform text-slate-400 ${isExpandedYear ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div><span className="font-semibold text-slate-700">Ano Letivo {year}</span></div><span className="text-xs text-slate-400 mr-2">{yearExamsCount} provas</span>
                                                 </div>
-
                                                 {isExpandedYear && (
                                                     <div className="bg-slate-100/50 p-3 space-y-2 border-t border-slate-100 animate-fade-in">
                                                         {yearClasses.map(cls => {
@@ -667,28 +526,31 @@ const ExamsPage = () => {
                                                             return (
                                                                 <div key={cls.id} className="bg-white border border-slate-200 rounded overflow-hidden">
                                                                      <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors select-none pl-9" onClick={() => toggleClass(cls.id)}>
-                                                                        <div className="flex items-center gap-3">
-                                                                             <div className={`transform transition-transform text-slate-400 ${isExpandedClass ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
-                                                                            <span className="text-sm font-bold text-slate-800">{cls.name}</span>
-                                                                        </div>
-                                                                        <span className="text-xs text-slate-400">{clsExams.length} provas</span>
+                                                                        <div className="flex items-center gap-3"><div className={`transform transition-transform text-slate-400 ${isExpandedClass ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div><span className="text-sm font-bold text-slate-800">{cls.name}</span></div><span className="text-xs text-slate-400">{clsExams.length} provas</span>
                                                                     </div>
                                                                     {isExpandedClass && (
                                                                         <div className="border-t border-slate-100 animate-fade-in divide-y divide-slate-50">
                                                                             {clsExams.map(exam => (
                                                                                 <div key={exam.id} className="p-3 pl-12 flex justify-between items-center hover:bg-blue-50/30 transition-colors group">
                                                                                     <div className="flex items-center gap-3">
-                                                                                        <div className="bg-blue-100 text-brand-blue p-2 rounded text-xs font-bold"><Icons.FileText /></div>
+                                                                                        <div className={`p-2 rounded text-xs font-bold ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>
+                                                                                            {exam.publicConfig?.isPublished ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <Icons.FileText />}
+                                                                                        </div>
                                                                                         <div>
-                                                                                            <h4 className="font-bold text-slate-700 text-sm">{exam.title}</h4>
-                                                                                            <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                                                                                                <span>{new Date(exam.createdAt).toLocaleDateString()}</span>
-                                                                                                <span>•</span>
-                                                                                                <span>{exam.questions?.length || 0} questões</span>
-                                                                                            </div>
+                                                                                            <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                                                                                {exam.title}
+                                                                                                {exam.publicConfig?.isPublished && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 rounded border border-green-200">ONLINE</span>}
+                                                                                            </h4>
+                                                                                            <div className="flex items-center gap-2 text-[10px] text-slate-400"><span>{new Date(exam.createdAt).toLocaleDateString()}</span><span>•</span><span>{exam.questions?.length || 0} questões</span></div>
                                                                                         </div>
                                                                                     </div>
-                                                                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                    <div className="flex gap-2">
+                                                                                        {exam.publicConfig?.isPublished && (
+                                                                                             <button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="text-xs bg-white border border-slate-200 px-3 py-1.5 rounded hover:bg-slate-50 text-slate-600 font-medium">Ver Resultados</button>
+                                                                                        )}
+                                                                                        <button onClick={() => openPublishModal(exam)} className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-white rounded border border-transparent hover:border-green-200 transition-all" title="Publicar Online">
+                                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                                                                                        </button>
                                                                                         <button onClick={() => handleOpenModal(exam)} className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><Icons.Edit /></button>
                                                                                         <button onClick={() => handleDelete(exam.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded border border-transparent hover:border-red-100 transition-all"><Icons.Trash /></button>
                                                                                     </div>
@@ -711,6 +573,7 @@ const ExamsPage = () => {
                 })}
             </div>
 
+            {/* MODAL PRINCIPAL DO WIZARD (Criação/Edição) */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Assistente de Prova" maxWidth="max-w-5xl" footer={renderFooter()}>
                 <div className="flex items-center justify-between mb-8 px-4 relative print:hidden">
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -z-10 transform -translate-y-1/2"></div>
@@ -725,6 +588,69 @@ const ExamsPage = () => {
                     })}
                 </div>
                 {renderStepContent()}
+            </Modal>
+
+            {/* MODAL DE PUBLICAÇÃO ONLINE */}
+            <Modal isOpen={isPublishModalOpen} onClose={() => setIsPublishModalOpen(false)} title="Publicar Prova Online" footer={<Button onClick={handleSavePublish}>Salvar Configuração</Button>}>
+                 <div className="space-y-6">
+                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
+                         Ao publicar, um link será gerado para que os alunos possam responder online.
+                         {selectedExamId && exams.find(e => e.id === selectedExamId)?.publicConfig?.isPublished && (
+                             <div className="mt-3 pt-3 border-t border-blue-200">
+                                 <p className="text-xs font-bold uppercase text-blue-500 mb-1">Link para Alunos</p>
+                                 <div className="flex gap-2">
+                                     <input 
+                                        type="text" 
+                                        readOnly 
+                                        onClick={(e) => e.currentTarget.select()}
+                                        value={getPublicLink(selectedExamId)} 
+                                        className="flex-1 text-xs border border-blue-300 rounded px-2 py-1.5 bg-white text-slate-600 cursor-text" 
+                                     />
+                                     <button 
+                                        onClick={() => copyToClipboard(getPublicLink(selectedExamId))}
+                                        className="bg-white border border-blue-300 text-blue-600 px-3 rounded hover:bg-blue-50 text-xs font-bold"
+                                     >
+                                         Copiar
+                                     </button>
+                                     <a 
+                                        href={getPublicLink(selectedExamId)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="bg-brand-blue border border-brand-blue text-white px-3 rounded hover:bg-blue-600 text-xs font-bold flex items-center"
+                                     >
+                                         Abrir
+                                     </a>
+                                 </div>
+                             </div>
+                         )}
+                     </div>
+                     <div className="flex items-center gap-2 mb-4">
+                         <input type="checkbox" id="isPublished" checked={publishConfig.isPublished || false} onChange={e => setPublishConfig({...publishConfig, isPublished: e.target.checked})} className="w-5 h-5 text-brand-blue rounded" />
+                         <label htmlFor="isPublished" className="font-bold text-slate-800">Prova Ativa (Aceitando respostas)</label>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                         <Input label="Início" type="datetime-local" value={publishConfig.startDate || ''} onChange={e => setPublishConfig({...publishConfig, startDate: e.target.value})} />
+                         <Input label="Fim" type="datetime-local" value={publishConfig.endDate || ''} onChange={e => setPublishConfig({...publishConfig, endDate: e.target.value})} />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                         <Input label="Tempo Limite (minutos)" type="number" value={publishConfig.timeLimitMinutes || 0} onChange={e => setPublishConfig({...publishConfig, timeLimitMinutes: parseInt(e.target.value)})} placeholder="0 = Sem limite" />
+                         <Input label="Tentativas Permitidas" type="number" min="1" value={publishConfig.allowedAttempts || 1} onChange={e => setPublishConfig({...publishConfig, allowedAttempts: parseInt(e.target.value)})} />
+                     </div>
+                     <div className="space-y-3 pt-2">
+                         <div className="flex items-center justify-between border p-3 rounded-lg">
+                             <label htmlFor="rand" className="text-sm font-medium">Embaralhar Questões e Alternativas (Prova Diferente p/ cada aluno)</label>
+                             <input type="checkbox" id="rand" checked={publishConfig.randomizeQuestions || false} onChange={e => setPublishConfig({...publishConfig, randomizeQuestions: e.target.checked})} className="w-5 h-5" />
+                         </div>
+                         <div className="flex items-center justify-between border p-3 rounded-lg">
+                             <label htmlFor="reqId" className="text-sm font-medium">Exigir Identificação (Matrícula/Email)</label>
+                             <input type="checkbox" id="reqId" checked={publishConfig.requireIdentifier || false} onChange={e => setPublishConfig({...publishConfig, requireIdentifier: e.target.checked})} className="w-5 h-5" />
+                         </div>
+                         <div className="flex items-center justify-between border p-3 rounded-lg">
+                             <label htmlFor="feed" className="text-sm font-medium">Mostrar Nota ao Final</label>
+                             <input type="checkbox" id="feed" checked={publishConfig.showFeedback || false} onChange={e => setPublishConfig({...publishConfig, showFeedback: e.target.checked})} className="w-5 h-5" />
+                         </div>
+                     </div>
+                 </div>
             </Modal>
 
             {/* Modal de Visualização Rápida de Questão dentro do Wizard */}

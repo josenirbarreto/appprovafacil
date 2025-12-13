@@ -89,6 +89,32 @@ export interface ExamContentScope {
   questionCount: number; // Quantidade de questões desejadas deste tópico
 }
 
+// Online Exam Configuration
+export interface PublicExamConfig {
+  isPublished: boolean;
+  startDate: string; // ISO String
+  endDate: string; // ISO String
+  timeLimitMinutes: number; // 0 = sem limite
+  allowedAttempts: number; // 1 = padrão
+  randomizeQuestions: boolean; // Se true, embaralha questões e alternativas
+  requireIdentifier: boolean; // Se true, pede matricula/email além do nome
+  showFeedback: boolean; // Se true, mostra nota ao final
+}
+
+// Student Attempt
+export interface ExamAttempt {
+  id: string;
+  examId: string;
+  studentName: string;
+  studentIdentifier?: string; // Email ou Matrícula
+  startedAt: string;
+  submittedAt?: string;
+  answers: Record<string, string>; // questionId -> optionId ou text
+  score: number; // Calculado automaticamente
+  totalQuestions: number;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+}
+
 // Exam
 export interface Exam {
   id: string;
@@ -107,4 +133,7 @@ export interface Exam {
   
   createdAt: string;
   showAnswerKey: boolean;
+  
+  // Configuração Online
+  publicConfig?: PublicExamConfig;
 }

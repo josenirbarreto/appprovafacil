@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { User } from './types';
@@ -13,6 +14,8 @@ import Dashboard from './pages/Dashboard';
 import HierarchyPage from './pages/Hierarchy';
 import QuestionsPage from './pages/Questions';
 import ExamsPage from './pages/Exams';
+import ExamResults from './pages/ExamResults';
+import PublicExam from './pages/PublicExam';
 import ClassesPage from './pages/Classes';
 import InstitutionPage from './pages/Institutions';
 import ProfilePage from './pages/Profile';
@@ -174,6 +177,10 @@ const App = () => {
         <AuthContext.Provider value={{ user, loading, refreshUser }}>
             <HashRouter>
                 <Routes>
+                    {/* ROTA PÚBLICA (ALUNO) - Fora do Auth Guard */}
+                    <Route path="/p/:examId" element={<PublicExam />} />
+
+                    {/* ROTAS PROTEGIDAS (PROFESSOR) */}
                     <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
                     <Route path="/*" element={user ? (
                         <Layout>
@@ -182,6 +189,7 @@ const App = () => {
                                 <Route path="/hierarchy" element={<HierarchyPage />} />
                                 <Route path="/questions" element={<QuestionsPage />} />
                                 <Route path="/exams" element={<ExamsPage />} />
+                                <Route path="/exam-results" element={<ExamResults />} />
                                 <Route path="/classes" element={<ClassesPage />} />
                                 <Route path="/institutions" element={<InstitutionPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />

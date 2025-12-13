@@ -20,7 +20,7 @@ import {
     deleteUser
 } from "firebase/auth";
 import { db, auth } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -28,6 +28,7 @@ const COLLECTIONS = {
     CLASSES: 'classes',
     QUESTIONS: 'questions',
     EXAMS: 'exams',
+    ATTEMPTS: 'exam_attempts',
     DISCIPLINES: 'disciplines',
     CHAPTERS: 'chapters',
     UNITS: 'units',
@@ -337,6 +338,15 @@ export const FirebaseService = {
         return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Exam));
     },
 
+    getExamById: async (id: string) => {
+        const docRef = doc(db, COLLECTIONS.EXAMS, id);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+            return { ...snap.data(), id: snap.id } as Exam;
+        }
+        return null;
+    },
+
     saveExam: async (exam: Exam) => {
         const { id, ...rest } = exam;
         if (id) {
@@ -350,6 +360,53 @@ export const FirebaseService = {
 
     deleteExam: async (id: string) => {
         await deleteDoc(doc(db, COLLECTIONS.EXAMS, id));
+    },
+
+    // --- ONLINE EXAMS (PUBLIC & ATTEMPTS) ---
+    
+    // Aluno: Começar uma prova
+    startAttempt: async (examId: string, studentName: string, studentIdentifier: string): Promise<ExamAttempt> => {
+        const attempt: Partial<ExamAttempt> = {
+            examId,
+            studentName,
+            studentIdentifier,
+            startedAt: new Date().toISOString(),
+            answers: {},
+            score: 0,
+            status: 'IN_PROGRESS'
+        };
+        const docRef = await addDoc(collection(db, COLLECTIONS.ATTEMPTS), attempt);
+        return { ...attempt, id: docRef.id } as ExamAttempt;
+    },
+
+    // Aluno: Enviar prova
+    submitAttempt: async (id: string, answers: Record<string, string>, score: number, totalQuestions: number) => {
+        const docRef = doc(db, COLLECTIONS.ATTEMPTS, id);
+        await updateDoc(docRef, {
+            answers,
+            score,
+            totalQuestions,
+            submittedAt: new Date().toISOString(),
+            status: 'COMPLETED'
+        });
+    },
+
+    // Aluno: Verificar tentativas anteriores
+    getStudentAttempts: async (examId: string, identifier: string) => {
+        const q = query(
+            collection(db, COLLECTIONS.ATTEMPTS), 
+            where("examId", "==", examId), 
+            where("studentIdentifier", "==", identifier)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamAttempt));
+    },
+
+    // Professor: Ver resultados
+    getExamResults: async (examId: string) => {
+        const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamAttempt));
     },
 
     getFullHierarchyString: (q: Question, hierarchy: Discipline[]) => {
