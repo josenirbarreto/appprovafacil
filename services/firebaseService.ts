@@ -1,4 +1,3 @@
-
 import { 
     collection, 
     getDocs, 
@@ -316,8 +315,8 @@ export const FirebaseService = {
         }
         
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), rest);
-        // Cast rest to any to avoid TS spread error
-        return { ...(rest as any), id: docRef.id } as Question;
+        // Using Object.assign instead of spread to avoid TS2698 on generic rest type
+        return Object.assign({}, rest, { id: docRef.id }) as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -365,8 +364,8 @@ export const FirebaseService = {
             return exam;
         } else {
             const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), rest);
-            // Cast rest to any to avoid TS spread error
-            return { ...(rest as any), id: docRef.id } as Exam;
+            // Using Object.assign to avoid TS2698
+            return Object.assign({}, rest, { id: docRef.id }) as Exam;
         }
     },
 
