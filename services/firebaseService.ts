@@ -312,8 +312,10 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Usa casting explicito para 'any' para evitar erro TS2339 no retorno de JSON.parse
-        const data = JSON.parse(JSON.stringify(q)) as any;
+        // Separa o parse do casting para evitar erro TS2339 (unknown type)
+        const json = JSON.stringify(q);
+        const parsed = JSON.parse(json);
+        const data = parsed as any;
         
         // Remove ID antes de salvar
         if (data.id) delete data.id;
@@ -367,8 +369,11 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Usa casting explicito para 'any' para evitar erro TS2339 no retorno de JSON.parse
-        const data = JSON.parse(JSON.stringify(exam)) as any;
+        // Separa o parse do casting para evitar erro TS2339 (unknown type)
+        const json = JSON.stringify(exam);
+        const parsed = JSON.parse(json);
+        const data = parsed as any;
+
         const id = data.id;
         
         // Remove ID do payload para o Firestore
