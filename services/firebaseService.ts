@@ -1,3 +1,4 @@
+
 import { 
     collection, 
     getDocs, 
@@ -9,7 +10,8 @@ import {
     where, 
     getDoc, 
     setDoc,
-    writeBatch
+    writeBatch,
+    orderBy
 } from "firebase/firestore";
 import { 
     createUserWithEmailAndPassword, 
@@ -19,7 +21,7 @@ import {
     deleteUser
 } from "firebase/auth";
 import { db, auth } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -31,7 +33,9 @@ const COLLECTIONS = {
     DISCIPLINES: 'disciplines',
     CHAPTERS: 'chapters',
     UNITS: 'units',
-    TOPICS: 'topics'
+    TOPICS: 'topics',
+    PLANS: 'plans',
+    PAYMENTS: 'payments'
 };
 
 const safeLog = (message: string, error: any) => {
@@ -39,15 +43,27 @@ const safeLog = (message: string, error: any) => {
 };
 
 // Função auxiliar para verificar permissão de visualização (Dono ou Legado/Sem Dono)
+// ATUALIZADO: Suporte para MANAGER (vê itens dos seus professores)
 const isVisible = (item: any, user: User | null | undefined) => {
-    // Se não tem usuário, não vê nada (exceto publico, mas aqui é painel)
     if (!user) return false;
+    
     // Admin vê tudo
     if (user.role === UserRole.ADMIN) return true;
-    // Se o item não tem authorId, é considerado "Legado" e visível para quem criou antes do update
+    
+    // Legado (sem authorId)
     if (!item.authorId) return true;
-    // Se tem authorId, tem que bater com o usuário
-    return item.authorId === user.id;
+    
+    // Dono direto
+    if (item.authorId === user.id) return true;
+
+    // Se usuário é MANAGER, ele pode ver itens criados por quem ele é "ownerId" (seus professores)
+    // Simplificação Atual:
+    // Se o item tem institutionId e o usuário também, e são iguais => Permite (Manager vendo Turma do Prof)
+    if (user.role === UserRole.MANAGER && user.institutionId && item.institutionId === user.institutionId) {
+        return true;
+    }
+
+    return false;
 };
 
 export const FirebaseService = {
@@ -78,6 +94,29 @@ export const FirebaseService = {
             try { await deleteUser(user); } catch(e) { }
             throw error;
         }
+    },
+
+    // Simula criação de usuário pelo Gestor (apenas no Banco, sem Auth real por enquanto)
+    createSubUser: async (manager: User, data: { name: string, email: string, role: UserRole }) => {
+        const fakeId = `user-${Date.now()}`;
+        const newUser: any = {
+            id: fakeId,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            status: 'ACTIVE',
+            plan: manager.plan, // Herda plano
+            subscriptionEnd: manager.subscriptionEnd,
+            ownerId: manager.id
+        };
+        
+        // Adiciona institutionId apenas se estiver definido para evitar erro no Firestore
+        if (manager.institutionId) {
+            newUser.institutionId = manager.institutionId;
+        }
+
+        await setDoc(doc(db, COLLECTIONS.USERS, fakeId), newUser);
+        return newUser as User;
     },
 
     login: async (email: string, pass: string) => {
@@ -127,8 +166,11 @@ export const FirebaseService = {
     updateUser: async (uid: string, data: Partial<User>) => {
         try {
             const docRef = doc(db, COLLECTIONS.USERS, uid);
-            await updateDoc(docRef, data);
-            if (auth.currentUser) {
+            // Remove undefined fields from data before updating
+            const cleanData = JSON.parse(JSON.stringify(data));
+            await updateDoc(docRef, cleanData);
+            
+            if (auth.currentUser && auth.currentUser.uid === uid) {
                 const profileUpdates: any = {};
                 if (data.name) profileUpdates.displayName = data.name;
                 if (data.photoUrl && !data.photoUrl.startsWith('data:')) {
@@ -143,11 +185,88 @@ export const FirebaseService = {
             throw error;
         }
     },
+    
+    // Remove o documento do usuário do Firestore (o Auth permanece, já que é gerenciado fora)
+    deleteUserDocument: async (uid: string) => {
+        try {
+            await deleteDoc(doc(db, COLLECTIONS.USERS, uid));
+        } catch (error) {
+            safeLog("Erro ao excluir documento de usuário:", error);
+            throw error;
+        }
+    },
 
-    getUsers: async () => {
+    getUsers: async (currentUser?: User | null) => {
+        if (!currentUser) return [];
+
         const q = query(collection(db, COLLECTIONS.USERS));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => d.data() as User);
+        const allUsers = snapshot.docs.map(d => d.data() as User);
+
+        // ADMIN vê todos
+        if (currentUser.role === UserRole.ADMIN) return allUsers;
+
+        // MANAGER vê apenas os usuários que ele criou ou que são da sua instituição
+        if (currentUser.role === UserRole.MANAGER) {
+            return allUsers.filter(u => u.ownerId === currentUser.id || (currentUser.institutionId && u.institutionId === currentUser.institutionId));
+        }
+
+        return []; // Teacher não vê lista de usuários
+    },
+
+    // --- PAGAMENTOS ---
+    addPayment: async (paymentData: Omit<Payment, 'id' | 'date'>) => {
+        try {
+            // 1. Registrar o Pagamento
+            const paymentRef = await addDoc(collection(db, COLLECTIONS.PAYMENTS), {
+                ...paymentData,
+                date: new Date().toISOString()
+            });
+
+            // 2. Calcular nova data de vencimento
+            const userDocRef = doc(db, COLLECTIONS.USERS, paymentData.userId);
+            const userSnap = await getDoc(userDocRef);
+            
+            if (userSnap.exists()) {
+                const user = userSnap.data() as User;
+                
+                // Se já venceu, começa de hoje. Se não, soma ao final.
+                const today = new Date();
+                const currentEnd = new Date(user.subscriptionEnd);
+                
+                let baseDate = currentEnd > today ? currentEnd : today;
+                
+                // Adiciona meses
+                const newEnd = new Date(baseDate);
+                newEnd.setMonth(newEnd.getMonth() + paymentData.periodMonths);
+                
+                // Atualiza User
+                await updateDoc(userDocRef, {
+                    subscriptionEnd: newEnd.toISOString().split('T')[0],
+                    plan: paymentData.planName,
+                    status: 'ACTIVE'
+                });
+            }
+
+            return paymentRef.id;
+        } catch (error) {
+            safeLog("Erro ao adicionar pagamento:", error);
+            throw error;
+        }
+    },
+
+    getPayments: async (userId: string) => {
+        // Removido 'orderBy' da query do Firestore para evitar erro de índice composto.
+        // A ordenação será feita via Javascript (client-side).
+        const q = query(
+            collection(db, COLLECTIONS.PAYMENTS), 
+            where("userId", "==", userId)
+        );
+        const snapshot = await getDocs(q);
+        const payments = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Payment));
+        
+        // Ordenação Client-Side (Mais recente primeiro)
+        return payments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
 
     // --- INSTITUIÇÕES ---
@@ -165,14 +284,27 @@ export const FirebaseService = {
 
     addInstitution: async (data: Institution) => {
         const { id, ...rest } = data;
-        const payload = { ...rest, authorId: auth.currentUser?.uid };
+        const payload: any = { ...rest };
+        if (auth.currentUser?.uid) payload.authorId = auth.currentUser.uid;
+        
         const docRef = await addDoc(collection(db, COLLECTIONS.INSTITUTIONS), payload);
+        
+        // Se quem cria é um MANAGER, vincula ele a essa instituição automaticamente se não tiver uma
+        if (auth.currentUser) {
+             const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid));
+             const userData = userDoc.data() as User;
+             if (userData.role === UserRole.MANAGER && !userData.institutionId) {
+                 await updateDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid), { institutionId: docRef.id });
+             }
+        }
+
         return { ...data, id: docRef.id };
     },
 
     updateInstitution: async (data: Institution) => {
         const docRef = doc(db, COLLECTIONS.INSTITUTIONS, data.id);
-        await updateDoc(docRef, { ...data });
+        const cleanData = JSON.parse(JSON.stringify(data));
+        await updateDoc(docRef, cleanData);
         return data;
     },
 
@@ -194,14 +326,16 @@ export const FirebaseService = {
 
     addClass: async (data: SchoolClass) => {
         const { id, ...rest } = data;
-        const payload = { ...rest, authorId: auth.currentUser?.uid };
+        const payload: any = { ...rest };
+        if (auth.currentUser?.uid) payload.authorId = auth.currentUser.uid;
         const docRef = await addDoc(collection(db, COLLECTIONS.CLASSES), payload);
         return { ...data, id: docRef.id };
     },
 
     updateClass: async (data: SchoolClass) => {
         const docRef = doc(db, COLLECTIONS.CLASSES, data.id);
-        await updateDoc(docRef, { ...data });
+        const cleanData = JSON.parse(JSON.stringify(data));
+        await updateDoc(docRef, cleanData);
         return data;
     },
 
@@ -269,19 +403,27 @@ export const FirebaseService = {
     },
 
     addDiscipline: async (name: string) => {
-        await addDoc(collection(db, COLLECTIONS.DISCIPLINES), { name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
+        const payload: any = { name, createdAt: new Date().toISOString() };
+        if (auth.currentUser?.uid) payload.authorId = auth.currentUser.uid;
+        await addDoc(collection(db, COLLECTIONS.DISCIPLINES), payload);
     },
 
     addChapter: async (disciplineId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.CHAPTERS), { disciplineId, name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
+        const payload: any = { disciplineId, name, createdAt: new Date().toISOString() };
+        if (auth.currentUser?.uid) payload.authorId = auth.currentUser.uid;
+        await addDoc(collection(db, COLLECTIONS.CHAPTERS), payload);
     },
 
     addUnit: async (disciplineId: string, chapterId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.UNITS), { chapterId, name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
+        const payload: any = { chapterId, name, createdAt: new Date().toISOString() };
+        if (auth.currentUser?.uid) payload.authorId = auth.currentUser.uid;
+        await addDoc(collection(db, COLLECTIONS.UNITS), payload);
     },
 
     addTopic: async (disciplineId: string, chapterId: string, unitId: string, name: string) => {
-        await addDoc(collection(db, COLLECTIONS.TOPICS), { unitId, name, createdAt: new Date().toISOString(), authorId: auth.currentUser?.uid });
+        const payload: any = { unitId, name, createdAt: new Date().toISOString() };
+        if (auth.currentUser?.uid) payload.authorId = auth.currentUser.uid;
+        await addDoc(collection(db, COLLECTIONS.TOPICS), payload);
     },
 
     updateHierarchyItem: async (type: 'discipline'|'chapter'|'unit'|'topic', id: string, newName: string) => {
@@ -370,7 +512,8 @@ export const FirebaseService = {
     updateQuestion: async (q: Question) => {
         const { id, ...rest } = q;
         if (!id) throw new Error("ID da questão obrigatório");
-        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), rest);
+        const cleanData = JSON.parse(JSON.stringify(rest));
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), cleanData);
     },
 
     deleteQuestion: async (id: string) => {
@@ -410,6 +553,13 @@ export const FirebaseService = {
         
         if (!data.authorId && auth.currentUser) {
             data.authorId = auth.currentUser.uid;
+            
+            // Se o usuário é MANAGER e tem institutionId, vincula a prova à escola automaticamente
+            if (!data.institutionId) {
+                const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid));
+                const u = userDoc.data() as User;
+                if (u.institutionId) data.institutionId = u.institutionId;
+            }
         }
 
         if (id) {
@@ -423,6 +573,34 @@ export const FirebaseService = {
 
     deleteExam: async (id: string) => {
         await deleteDoc(doc(db, COLLECTIONS.EXAMS, id));
+    },
+
+    // --- PLANS ---
+    getPlans: async () => {
+        const snapshot = await getDocs(collection(db, COLLECTIONS.PLANS));
+        return snapshot.docs.map(d => {
+            const data = d.data() as any;
+            data.id = d.id;
+            return data as Plan;
+        });
+    },
+
+    savePlan: async (plan: Plan) => {
+        const data: any = JSON.parse(JSON.stringify(plan));
+        const id = data.id;
+        if (data.id) delete data.id;
+        
+        if (id) {
+            await updateDoc(doc(db, COLLECTIONS.PLANS, id), data);
+            return { ...plan, id };
+        } else {
+            const docRef = await addDoc(collection(db, COLLECTIONS.PLANS), data);
+            return { ...plan, id: docRef.id };
+        }
+    },
+
+    deletePlan: async (id: string) => {
+        await deleteDoc(doc(db, COLLECTIONS.PLANS, id));
     },
 
     // --- ONLINE EXAMS ---

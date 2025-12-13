@@ -33,6 +33,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     }, [location]);
 
     const isAdmin = user?.role === UserRole.ADMIN;
+    const isManager = user?.role === UserRole.MANAGER;
 
     // Definição dinâmica do menu baseada no Role
     const menuGroups = [
@@ -50,9 +51,13 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 { path: '/classes', label: 'Turmas', icon: Icons.UsersGroup },
                 { path: '/hierarchy', label: 'Conteúdos', icon: Icons.BookOpen },
                 
-                // Itens exclusivos para ADMIN
+                // Usuários: Admin (Global) ou Manager (Professores da Escola)
+                ...((isAdmin || isManager) ? [
+                    { path: '/users', label: isManager ? 'Professores' : 'Usuários', icon: Icons.User },
+                ] : []),
+                
+                // Planos: Apenas Admin
                 ...(isAdmin ? [
-                    { path: '/users', label: 'Usuários', icon: Icons.User },
                     { path: '/plans', label: 'Planos', icon: Icons.Filter } 
                 ] : []),
             ]
@@ -98,7 +103,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                         <div className="flex flex-col">
                             <span className="font-display font-bold text-xl text-white tracking-tight leading-none">Prova Fácil</span>
                             <span className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-wider">
-                                {isAdmin ? 'Painel Admin' : 'Painel Professor'}
+                                {isAdmin ? 'Painel Admin' : isManager ? 'Painel Gestor' : 'Painel Professor'}
                             </span>
                         </div>
                     </div>
@@ -149,8 +154,8 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                          <div className="overflow-hidden">
                              <p className="text-sm font-bold text-slate-200 truncate group-hover:text-white transition-colors" title={user?.name}>{user?.name}</p>
                              <div className="flex items-center gap-1">
-                                 <div className={`w-2 h-2 rounded-full ${isAdmin ? 'bg-purple-400' : 'bg-green-400'}`}></div>
-                                 <p className="text-xs text-slate-500 truncate">{isAdmin ? 'Administrador' : 'Professor'}</p>
+                                 <div className={`w-2 h-2 rounded-full ${isAdmin ? 'bg-purple-400' : isManager ? 'bg-orange-400' : 'bg-green-400'}`}></div>
+                                 <p className="text-xs text-slate-500 truncate">{isAdmin ? 'Administrador' : isManager ? 'Gestor' : 'Professor'}</p>
                              </div>
                          </div>
                     </Link>

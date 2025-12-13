@@ -1,6 +1,7 @@
 
 export enum UserRole {
   ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER', // Gestor da Escola
   TEACHER = 'TEACHER'
 }
 
@@ -10,14 +11,31 @@ export interface User {
   email: string;
   role: UserRole;
   status: 'ACTIVE' | 'INACTIVE';
-  plan: 'BASIC' | 'PREMIUM';
-  subscriptionEnd: string;
-  photoUrl?: string; // URL da foto de perfil
+  plan: string; // Alterado de Union Type fixo para string para aceitar planos dinâmicos
+  subscriptionEnd: string; // ISO String YYYY-MM-DD
+  subscriptionStart?: string;
+  photoUrl?: string; 
+  institutionId?: string; // Vinculo: Se for Professor, aponta para o Gestor/Escola
+  ownerId?: string; // ID do Gestor que criou este usuário
+}
+
+export interface Payment {
+  id: string;
+  userId: string;
+  userName: string;
+  planName: string;
+  amount: number;
+  date: string; // ISO String
+  method: 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'MANUAL';
+  periodMonths: number; // Quantos meses foram adicionados
+  status: 'PAID' | 'PENDING' | 'FAILED';
+  notes?: string;
 }
 
 // Institution & Classes
 export interface Institution {
   id: string;
+  authorId?: string; // ID do usuário dono (Gestor ou Admin)
   name: string;
   logoUrl: string; // URL or Base64
   address?: string;
@@ -28,16 +46,17 @@ export interface Institution {
 
 export interface SchoolClass {
   id: string;
+  authorId?: string;
   name: string; // e.g. "3º Ano A"
   year: number;
   institutionId: string;
 }
 
 // Hierarchy
-export interface Topic { id: string; name: string; unitId: string; createdAt?: string; }
-export interface Unit { id: string; name: string; chapterId: string; topics: Topic[]; createdAt?: string; }
-export interface Chapter { id: string; name: string; disciplineId: string; units: Unit[]; createdAt?: string; }
-export interface Discipline { id: string; name: string; chapters: Chapter[]; createdAt?: string; }
+export interface Topic { id: string; name: string; unitId: string; createdAt?: string; authorId?: string; }
+export interface Unit { id: string; name: string; chapterId: string; topics: Topic[]; createdAt?: string; authorId?: string; }
+export interface Chapter { id: string; name: string; disciplineId: string; units: Unit[]; createdAt?: string; authorId?: string; }
+export interface Discipline { id: string; name: string; chapters: Chapter[]; createdAt?: string; authorId?: string; }
 
 // Questions
 export enum QuestionType {
@@ -138,4 +157,28 @@ export interface Exam {
   
   // Configuração Online
   publicConfig?: PublicExamConfig;
+}
+
+// Plans
+export type PlanHighlightType = 'NONE' | 'POPULAR' | 'BEST_VALUE' | 'CHEAPEST';
+
+export interface Plan {
+  id: string;
+  name: string; // Ex: Basic, Premium
+  description: string;
+  price: number;
+  interval: 'monthly' | 'yearly' | 'lifetime';
+  isPopular: boolean; // Mantido para legado, mas a UI usará highlightType
+  highlightType?: PlanHighlightType; // NOVO: Tipo de destaque visual
+  features: string[]; // Lista de strings para exibir com checkmarks
+  
+  // Limites Técnicos (Para controle do SaaS)
+  limits: {
+    maxUsers: number; // NOVO: Quantidade de professores permitidos (1 = apenas o dono)
+    maxQuestions: number; // -1 para ilimitado
+    maxClasses: number;
+    maxAiGenerations: number;
+    allowPdfImport: boolean;
+    allowWhiteLabel: boolean; // Remover logo do sistema
+  };
 }

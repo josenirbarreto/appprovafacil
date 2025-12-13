@@ -9,6 +9,10 @@ const Login = () => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    
+    // Estado para teste de Gestor
+    const [isManager, setIsManager] = useState(false);
+    
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -20,8 +24,11 @@ const Login = () => {
         try {
             if (isRegistering) {
                 if (!name.trim()) throw new Error("Por favor, informe seu nome.");
-                // O registro define o plano como BASIC (Grátis) automaticamente no FirebaseService
-                await FirebaseService.register(email, password, name, UserRole.TEACHER);
+                
+                // Define a Role baseada no checkbox de teste
+                const roleToRegister = isManager ? UserRole.MANAGER : UserRole.TEACHER;
+                
+                await FirebaseService.register(email, password, name, roleToRegister);
             } else {
                 await FirebaseService.login(email, password);
             }
@@ -59,6 +66,7 @@ const Login = () => {
         setName('');
         setEmail('');
         setPassword('');
+        setIsManager(false);
     };
 
     return (
@@ -81,7 +89,7 @@ const Login = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {isRegistering && (
-                        <div className="animate-fade-in">
+                        <div className="animate-fade-in space-y-4">
                             <Input 
                                 label="Nome Completo" 
                                 type="text" 
@@ -90,6 +98,20 @@ const Login = () => {
                                 required={isRegistering} 
                                 placeholder="Seu nome" 
                             />
+                            
+                            {/* Opção de Teste para Gestor */}
+                            <label className="flex items-start gap-3 p-3 border border-orange-200 bg-orange-50 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors">
+                                <input 
+                                    type="checkbox" 
+                                    className="mt-1 w-4 h-4 text-brand-orange rounded border-orange-300 focus:ring-brand-orange"
+                                    checked={isManager}
+                                    onChange={e => setIsManager(e.target.checked)}
+                                />
+                                <div>
+                                    <span className="block text-sm font-bold text-orange-800">Sou um Gestor Escolar</span>
+                                    <span className="block text-xs text-orange-700">Habilita o Painel Administrativo para cadastrar professores.</span>
+                                </div>
+                            </label>
                         </div>
                     )}
                     <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="ex: professor@escola.com" />
