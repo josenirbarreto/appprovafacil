@@ -312,8 +312,8 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Uso de JSON para deep copy e remover tipos (Any), evitando erro TS2698
-        const dataToSave = JSON.parse(JSON.stringify(q));
+        // Tipagem explícita para ANY para permitir delete e atribuição sem erros de TS
+        const dataToSave: any = JSON.parse(JSON.stringify(q));
         delete dataToSave.id;
         
         // Garante que o authorId esteja preenchido se não estiver
@@ -366,8 +366,8 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Uso de JSON para deep copy e remover tipos (Any)
-        const dataToSave = JSON.parse(JSON.stringify(exam));
+        // Tipagem explícita para ANY para permitir delete e atribuição
+        const dataToSave: any = JSON.parse(JSON.stringify(exam));
         const id = dataToSave.id;
         delete dataToSave.id;
         
