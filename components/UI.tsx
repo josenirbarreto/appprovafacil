@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 
 export const Icons = {
@@ -77,12 +78,13 @@ export const Card: React.FC<{ children: React.ReactNode; className?: string; tit
   </div>
 );
 
-export const Badge: React.FC<{ children: React.ReactNode; color?: 'blue' | 'green' | 'red' | 'yellow' }> = ({ children, color = 'blue' }) => {
+export const Badge: React.FC<{ children: React.ReactNode; color?: 'blue' | 'green' | 'red' | 'yellow' | 'purple' }> = ({ children, color = 'blue' }) => {
   const colors = {
     blue: 'bg-blue-100 text-blue-800',
     green: 'bg-green-100 text-green-800',
     red: 'bg-red-100 text-red-800',
     yellow: 'bg-yellow-100 text-yellow-800',
+    purple: 'bg-purple-100 text-purple-800',
   };
   return <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${colors[color]}`}>{children}</span>;
 };

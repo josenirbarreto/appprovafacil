@@ -316,7 +316,8 @@ export const FirebaseService = {
         }
         
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), rest);
-        return { ...q, id: docRef.id };
+        // Usa 'rest' + novo 'id' para garantir que retornamos o objeto salvo (com authorId injetado)
+        return { ...rest, id: docRef.id } as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -364,7 +365,8 @@ export const FirebaseService = {
             return exam;
         } else {
             const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), rest);
-            return { ...exam, id: docRef.id };
+            // Usa 'rest' + novo 'id' para garantir consistência
+            return { ...rest, id: docRef.id } as Exam;
         }
     },
 
