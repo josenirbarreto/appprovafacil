@@ -308,15 +308,18 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        const { id, ...rest } = q;
+        // Cast para 'any' para evitar erro TS2698 no build
+        const qAny = q as any;
+        const { id, ...rest } = qAny;
+        
         // Garante que o authorId esteja preenchido se não estiver
         if (!rest.authorId && auth.currentUser) {
             rest.authorId = auth.currentUser.uid;
         }
         
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), rest);
-        // Using Object.assign instead of spread to avoid TS2698 on generic rest type
-        return Object.assign({}, rest, { id: docRef.id }) as Question;
+        // Retorno com cast explícito para evitar problemas de tipagem no retorno
+        return { ...rest, id: docRef.id } as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -352,7 +355,9 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        const { id, ...rest } = exam;
+        // Cast para 'any' para evitar erro TS2698 no build
+        const examAny = exam as any;
+        const { id, ...rest } = examAny;
         
         // Garante authorId
         if (!rest.authorId && auth.currentUser) {
@@ -364,8 +369,8 @@ export const FirebaseService = {
             return exam;
         } else {
             const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), rest);
-            // Using Object.assign to avoid TS2698
-            return Object.assign({}, rest, { id: docRef.id }) as Exam;
+            // Retorno com cast explícito
+            return { ...rest, id: docRef.id } as Exam;
         }
     },
 
