@@ -38,6 +38,18 @@ const safeLog = (message: string, error: any) => {
     console.error(message, error?.code || error?.message || String(error));
 };
 
+// Função auxiliar para verificar permissão de visualização (Dono ou Legado/Sem Dono)
+const isVisible = (item: any, user: User | null | undefined) => {
+    // Se não tem usuário, não vê nada (exceto publico, mas aqui é painel)
+    if (!user) return false;
+    // Admin vê tudo
+    if (user.role === UserRole.ADMIN) return true;
+    // Se o item não tem authorId, é considerado "Legado" e visível para quem criou antes do update
+    if (!item.authorId) return true;
+    // Se tem authorId, tem que bater com o usuário
+    return item.authorId === user.id;
+};
+
 export const FirebaseService = {
     // --- AUTENTICAÇÃO ---
     register: async (email: string, pass: string, name: string, role: UserRole) => {
@@ -141,14 +153,14 @@ export const FirebaseService = {
     // --- INSTITUIÇÕES ---
     getInstitutions: async (currentUser?: User | null) => {
         if (!currentUser) return [];
-        let ref;
-        if (currentUser.role === UserRole.TEACHER) {
-            ref = query(collection(db, COLLECTIONS.INSTITUTIONS), where("authorId", "==", currentUser.id));
-        } else {
-            ref = collection(db, COLLECTIONS.INSTITUTIONS);
-        }
-        const snapshot = await getDocs(ref);
-        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Institution));
+        // Busca TUDO e filtra em memória para permitir itens legados (sem authorId)
+        const snapshot = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
+        return snapshot.docs
+            .map(d => {
+                const data = d.data() as any; // Cast 'any' resolve TS2698
+                return { ...data, id: d.id } as Institution;
+            })
+            .filter(item => isVisible(item, currentUser));
     },
 
     addInstitution: async (data: Institution) => {
@@ -160,7 +172,6 @@ export const FirebaseService = {
 
     updateInstitution: async (data: Institution) => {
         const docRef = doc(db, COLLECTIONS.INSTITUTIONS, data.id);
-        // Não sobrescreve authorId na edição para manter propriedade
         await updateDoc(docRef, { ...data });
         return data;
     },
@@ -172,14 +183,13 @@ export const FirebaseService = {
     // --- TURMAS ---
     getClasses: async (currentUser?: User | null) => {
         if (!currentUser) return [];
-        let ref;
-        if (currentUser.role === UserRole.TEACHER) {
-            ref = query(collection(db, COLLECTIONS.CLASSES), where("authorId", "==", currentUser.id));
-        } else {
-            ref = collection(db, COLLECTIONS.CLASSES);
-        }
-        const snapshot = await getDocs(ref);
-        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SchoolClass));
+        const snapshot = await getDocs(collection(db, COLLECTIONS.CLASSES));
+        return snapshot.docs
+            .map(d => {
+                const data = d.data() as any; // Cast 'any' resolve TS2698
+                return { ...data, id: d.id } as SchoolClass;
+            })
+            .filter(item => isVisible(item, currentUser));
     },
 
     addClass: async (data: SchoolClass) => {
@@ -201,26 +211,15 @@ export const FirebaseService = {
 
     // --- HIERARQUIA ---
     getHierarchy: async (currentUser?: User | null): Promise<Discipline[]> => {
-        // Se não houver usuário, não retorna nada
         if (!currentUser) return [];
 
         try {
-            // Se for professor, filtra por authorId. Se Admin, pega tudo.
-            const isTeacher = currentUser.role === UserRole.TEACHER;
-            
+            // Busca TUDO para garantir dados antigos + novos
             const [dSnap, cSnap, uSnap, tSnap] = await Promise.all([
-                isTeacher 
-                    ? getDocs(query(collection(db, COLLECTIONS.DISCIPLINES), where("authorId", "==", currentUser.id)))
-                    : getDocs(collection(db, COLLECTIONS.DISCIPLINES)),
-                isTeacher 
-                    ? getDocs(query(collection(db, COLLECTIONS.CHAPTERS), where("authorId", "==", currentUser.id)))
-                    : getDocs(collection(db, COLLECTIONS.CHAPTERS)),
-                isTeacher 
-                    ? getDocs(query(collection(db, COLLECTIONS.UNITS), where("authorId", "==", currentUser.id)))
-                    : getDocs(collection(db, COLLECTIONS.UNITS)),
-                isTeacher 
-                    ? getDocs(query(collection(db, COLLECTIONS.TOPICS), where("authorId", "==", currentUser.id)))
-                    : getDocs(collection(db, COLLECTIONS.TOPICS))
+                getDocs(collection(db, COLLECTIONS.DISCIPLINES)),
+                getDocs(collection(db, COLLECTIONS.CHAPTERS)),
+                getDocs(collection(db, COLLECTIONS.UNITS)),
+                getDocs(collection(db, COLLECTIONS.TOPICS))
             ]);
 
             const sortByCreated = (a: any, b: any) => {
@@ -230,11 +229,28 @@ export const FirebaseService = {
                 return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
             };
 
-            const disciplines = dSnap.docs.map(d => ({ ...d.data(), id: d.id, chapters: [] } as Discipline)).sort(sortByCreated);
-            const chapters = cSnap.docs.map(c => ({ ...c.data(), id: c.id, units: [] } as Chapter)).sort(sortByCreated);
-            const units = uSnap.docs.map(u => ({ ...u.data(), id: u.id, topics: [] } as Unit)).sort(sortByCreated);
-            const topics = tSnap.docs.map(t => ({ ...t.data(), id: t.id } as Topic)).sort(sortByCreated);
+            // Mapeia e Filtra
+            const disciplines = dSnap.docs
+                .map(d => ({ ...d.data() as any, id: d.id, chapters: [] } as Discipline))
+                .filter(i => isVisible(i, currentUser))
+                .sort(sortByCreated);
+            
+            const chapters = cSnap.docs
+                .map(c => ({ ...c.data() as any, id: c.id, units: [] } as Chapter))
+                .filter(i => isVisible(i, currentUser))
+                .sort(sortByCreated);
+            
+            const units = uSnap.docs
+                .map(u => ({ ...u.data() as any, id: u.id, topics: [] } as Unit))
+                .filter(i => isVisible(i, currentUser))
+                .sort(sortByCreated);
+            
+            const topics = tSnap.docs
+                .map(t => ({ ...t.data() as any, id: t.id } as Topic))
+                .filter(i => isVisible(i, currentUser))
+                .sort(sortByCreated);
 
+            // Reconstrói a árvore
             units.forEach(u => {
                 u.topics = topics.filter(t => t.unitId === u.id);
             });
@@ -324,41 +340,30 @@ export const FirebaseService = {
         }
     },
 
-    // --- QUESTÕES (DATA ISOLATION) ---
+    // --- QUESTÕES ---
     getQuestions: async (currentUser?: User | null) => {
-        // Se não tem usuário logado, não retorna nada (segurança)
         if (!currentUser) return [];
-
-        let qRef;
-        // Se for professor, só vê as suas. Se for Admin, vê tudo.
-        if (currentUser.role === UserRole.TEACHER) {
-            qRef = query(collection(db, COLLECTIONS.QUESTIONS), where("authorId", "==", currentUser.id));
-        } else {
-            qRef = query(collection(db, COLLECTIONS.QUESTIONS)); // Admin vê tudo
-        }
-
-        const snapshot = await getDocs(qRef);
-        return snapshot.docs.map(d => {
-            const data = d.data();
-            data.id = d.id;
-            return data as Question;
-        });
+        const snapshot = await getDocs(collection(db, COLLECTIONS.QUESTIONS));
+        return snapshot.docs
+            .map(d => {
+                const data = d.data() as any;
+                data.id = d.id;
+                return data as Question;
+            })
+            .filter(item => isVisible(item, currentUser));
     },
 
     addQuestion: async (q: Question) => {
-        // FIX TS2339: Cast explícito para 'any'
-        const data = JSON.parse(JSON.stringify(q)) as any;
+        // FIX TS2339: Tipagem explícita 'any' para o objeto JSON parsed
+        const data: any = JSON.parse(JSON.stringify(q));
         
-        // Remove ID antes de salvar
         if (data.id) delete data.id;
         
-        // Garante que o authorId esteja preenchido se não estiver
         if (!data.authorId && auth.currentUser) {
             data.authorId = auth.currentUser.uid;
         }
         
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data);
-        
         return { ...q, id: docRef.id };
     },
 
@@ -372,31 +377,24 @@ export const FirebaseService = {
         await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id));
     },
 
-    // --- PROVAS (DATA ISOLATION) ---
+    // --- PROVAS ---
     getExams: async (currentUser?: User | null) => {
-        // Se não tem usuário logado, não retorna nada
         if (!currentUser) return [];
-
-        let eRef;
-        if (currentUser.role === UserRole.TEACHER) {
-            eRef = query(collection(db, COLLECTIONS.EXAMS), where("authorId", "==", currentUser.id));
-        } else {
-            eRef = query(collection(db, COLLECTIONS.EXAMS)); // Admin vê tudo
-        }
-
-        const snapshot = await getDocs(eRef);
-        return snapshot.docs.map(d => {
-            const data = d.data();
-            data.id = d.id;
-            return data as Exam;
-        });
+        const snapshot = await getDocs(collection(db, COLLECTIONS.EXAMS));
+        return snapshot.docs
+            .map(d => {
+                const data = d.data() as any;
+                data.id = d.id;
+                return data as Exam;
+            })
+            .filter(item => isVisible(item, currentUser));
     },
 
     getExamById: async (id: string) => {
         const docRef = doc(db, COLLECTIONS.EXAMS, id);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-            const data = snap.data();
+            const data = snap.data() as any;
             data.id = snap.id;
             return data as Exam;
         }
@@ -404,15 +402,12 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // FIX TS2339: Cast explícito para 'any'
-        const data = JSON.parse(JSON.stringify(exam)) as any;
-
+        // FIX TS2339: Tipagem explícita 'any' para evitar erro no build
+        const data: any = JSON.parse(JSON.stringify(exam));
         const id = data.id;
-        
-        // Remove ID do payload para o Firestore
+
         if (data.id) delete data.id;
         
-        // Garante authorId
         if (!data.authorId && auth.currentUser) {
             data.authorId = auth.currentUser.uid;
         }
@@ -469,7 +464,7 @@ export const FirebaseService = {
         );
         const snapshot = await getDocs(q);
         return snapshot.docs.map(d => {
-            const data = d.data();
+            const data = d.data() as any;
             data.id = d.id;
             return data as ExamAttempt;
         });
@@ -479,7 +474,7 @@ export const FirebaseService = {
         const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(d => {
-            const data = d.data();
+            const data = d.data() as any;
             data.id = d.id;
             return data as ExamAttempt;
         });
