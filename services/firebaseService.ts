@@ -316,8 +316,8 @@ export const FirebaseService = {
         }
         
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), rest);
-        // Usa 'rest' + novo 'id' para garantir que retornamos o objeto salvo (com authorId injetado)
-        return { ...rest, id: docRef.id } as Question;
+        // Cast rest to any to avoid TS spread error
+        return { ...(rest as any), id: docRef.id } as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -365,8 +365,8 @@ export const FirebaseService = {
             return exam;
         } else {
             const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), rest);
-            // Usa 'rest' + novo 'id' para garantir consistência
-            return { ...rest, id: docRef.id } as Exam;
+            // Cast rest to any to avoid TS spread error
+            return { ...(rest as any), id: docRef.id } as Exam;
         }
     },
 
