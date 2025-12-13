@@ -312,19 +312,19 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // Casting explícito no retorno do JSON.parse para 'any' para evitar erro TS2339 (unknown)
-        const dataToSave = JSON.parse(JSON.stringify(q)) as any;
-        delete dataToSave.id;
+        // Usa variável explicitamente tipada como ANY para evitar erro de tipo "Property 'id' does not exist on type 'unknown'"
+        const plainData: any = JSON.parse(JSON.stringify(q));
+        delete plainData.id;
         
         // Garante que o authorId esteja preenchido se não estiver
-        if (!dataToSave.authorId && auth.currentUser) {
-            dataToSave.authorId = auth.currentUser.uid;
+        if (!plainData.authorId && auth.currentUser) {
+            plainData.authorId = auth.currentUser.uid;
         }
         
-        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), dataToSave);
+        const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), plainData);
         
-        dataToSave.id = docRef.id;
-        return dataToSave as Question;
+        plainData.id = docRef.id;
+        return plainData as Question;
     },
 
     updateQuestion: async (q: Question) => {
@@ -366,24 +366,24 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // Casting explícito no retorno do JSON.parse para 'any'
-        const dataToSave = JSON.parse(JSON.stringify(exam)) as any;
-        const id = dataToSave.id;
-        delete dataToSave.id;
+        // Usa variável explicitamente tipada como ANY para evitar erro de tipo "Property 'id' does not exist on type 'unknown'"
+        const plainData: any = JSON.parse(JSON.stringify(exam));
+        const id = plainData.id;
+        delete plainData.id;
         
         // Garante authorId
-        if (!dataToSave.authorId && auth.currentUser) {
-            dataToSave.authorId = auth.currentUser.uid;
+        if (!plainData.authorId && auth.currentUser) {
+            plainData.authorId = auth.currentUser.uid;
         }
 
         if (id) {
-            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), dataToSave);
-            dataToSave.id = id;
-            return dataToSave as Exam;
+            await updateDoc(doc(db, COLLECTIONS.EXAMS, id), plainData);
+            plainData.id = id;
+            return plainData as Exam;
         } else {
-            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), dataToSave);
-            dataToSave.id = docRef.id;
-            return dataToSave as Exam;
+            const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), plainData);
+            plainData.id = docRef.id;
+            return plainData as Exam;
         }
     },
 
