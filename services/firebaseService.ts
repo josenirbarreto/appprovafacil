@@ -390,6 +390,12 @@ export const FirebaseService = {
             status: 'COMPLETED'
         });
     },
+    
+    // Professor: Corrigir/Atualizar Nota manualmente
+    updateAttemptScore: async (id: string, score: number) => {
+        const docRef = doc(db, COLLECTIONS.ATTEMPTS, id);
+        await updateDoc(docRef, { score });
+    },
 
     // Aluno: Verificar tentativas anteriores
     getStudentAttempts: async (examId: string, identifier: string) => {

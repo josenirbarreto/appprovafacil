@@ -132,23 +132,42 @@ const PublicExam = () => {
         if (!currentAttempt || !exam) return;
         
         // Calculate Score (Auto-grading)
-        let score = 0;
+        let finalScore = 0;
+        let pendingCorrection = false;
+
         randomizedQuestions.forEach(q => {
             const answer = answers[q.id];
+            
+            // Check subjective types
+            if (q.type === QuestionType.SHORT_ANSWER) {
+                pendingCorrection = true;
+            }
+
             if (!answer) return;
 
             if (q.type === QuestionType.MULTIPLE_CHOICE || q.type === QuestionType.TRUE_FALSE) {
                 const correctOpt = q.options?.find(o => o.isCorrect);
+                // Validação robusta: Compara ID ou Texto para garantir compatibilidade
                 if (correctOpt && (correctOpt.id === answer || correctOpt.text === answer)) { 
-                     if (answer === correctOpt.id) score++;
+                     // Garante que só conta ponto se bater exatamente
+                     if (answer === correctOpt.id || answer === correctOpt.text) finalScore++;
                 }
             } else if (q.type === QuestionType.NUMERIC) {
                 const correctVal = q.options?.[0]?.text;
-                if (parseFloat(answer) === parseFloat(correctVal || '0')) score++;
+                if (parseFloat(answer) === parseFloat(correctVal || '0')) finalScore++;
             }
         });
 
-        await FirebaseService.submitAttempt(currentAttempt.id, answers, score, exam.questions.length);
+        // CRÍTICO: Atualiza o estado LOCAL antes de enviar, para a UI refletir a nota instantaneamente
+        setCurrentAttempt(prev => prev ? { 
+            ...prev, 
+            score: finalScore, 
+            answers,
+            status: 'COMPLETED'
+        } : null);
+
+        // Envia para o banco
+        await FirebaseService.submitAttempt(currentAttempt.id, answers, finalScore, exam.questions.length);
         setStep('FINISHED');
     };
 
@@ -173,8 +192,6 @@ match /exam_attempts/{attemptId} { allow read, write: if true; }`}</pre>
         </div>
     );
 
-    // FIX DEFINITIVO: 'fixed inset-0' garante que o container ocupe a viewport inteira,
-    // ignorando o 'overflow-hidden' do body definido no index.html.
     const containerClasses = "fixed inset-0 z-50 bg-slate-50 flex flex-col overflow-y-auto custom-scrollbar";
 
     if (step === 'WELCOME') {
@@ -228,10 +245,15 @@ match /exam_attempts/{attemptId} { allow read, write: if true; }`}</pre>
                     
                     {exam?.publicConfig?.showFeedback && currentAttempt && (
                         <div className="bg-slate-50 p-4 rounded-lg inline-block border border-slate-200">
-                            <p className="text-sm text-slate-500 uppercase font-bold mb-1">Resultado Preliminar</p>
+                            <p className="text-sm text-slate-500 uppercase font-bold mb-1">Nota Preliminar (Questões Objetivas)</p>
                             <p className="text-4xl font-display font-bold text-brand-blue">
                                 {currentAttempt.score} <span className="text-xl text-slate-400">/ {exam.questions.length}</span>
                             </p>
+                            {exam.questions.some(q => q.type === QuestionType.SHORT_ANSWER) && (
+                                <p className="text-xs text-slate-500 mt-2 italic border-t border-slate-200 pt-2">
+                                    *Questões dissertativas serão corrigidas pelo professor.
+                                </p>
+                            )}
                         </div>
                     )}
                 </Card>
