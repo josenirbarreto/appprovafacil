@@ -26,20 +26,33 @@ const PublicExam = () => {
     useEffect(() => {
         const loadExam = async () => {
             if (!examId) return;
-            const data = await FirebaseService.getExamById(examId);
-            if (!data) {
-                setError('Prova não encontrada.');
-            } else if (!data.publicConfig?.isPublished) {
-                setError('Esta prova não está mais disponível.');
-            } else {
-                const now = new Date();
-                const start = new Date(data.publicConfig.startDate);
-                const end = new Date(data.publicConfig.endDate);
-                if (now < start) setError(`A prova estará disponível em ${start.toLocaleString()}`);
-                else if (now > end) setError('O prazo para esta prova encerrou.');
-                else setExam(data);
+            
+            try {
+                const data = await FirebaseService.getExamById(examId);
+                
+                if (!data) {
+                    setError('Prova não encontrada.');
+                } else if (!data.publicConfig?.isPublished) {
+                    setError('Esta prova não está mais disponível.');
+                } else {
+                    const now = new Date();
+                    const start = new Date(data.publicConfig.startDate);
+                    const end = new Date(data.publicConfig.endDate);
+                    
+                    if (now < start) setError(`A prova estará disponível em ${start.toLocaleString()}`);
+                    else if (now > end) setError('O prazo para esta prova encerrou.');
+                    else setExam(data);
+                }
+            } catch (err: any) {
+                console.error("Erro ao carregar prova:", err);
+                if (err.code === 'permission-denied') {
+                    setError('Erro de Permissão: O acesso público não está configurado nas Regras do Firestore.');
+                } else {
+                    setError('Erro ao carregar a prova. Verifique sua conexão.');
+                }
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
         loadExam();
     }, [examId]);
@@ -68,41 +81,46 @@ const PublicExam = () => {
 
         const identifier = studentId || studentName.toLowerCase().replace(/\s/g, '');
 
-        // Check attempts
-        const previousAttempts = await FirebaseService.getStudentAttempts(exam!.id, identifier);
-        const allowed = exam!.publicConfig!.allowedAttempts || 1;
-        
-        if (previousAttempts.length >= allowed) {
-            alert(`Você já realizou esta prova ${previousAttempts.length} vezes. Limite atingido.`);
-            return;
-        }
-
-        // Randomization Logic
-        let questionsToUse = [...exam!.questions];
-        if (exam!.publicConfig?.randomizeQuestions) {
-            // Shuffle Questions Order
-            questionsToUse.sort(() => Math.random() - 0.5);
+        try {
+            // Check attempts
+            const previousAttempts = await FirebaseService.getStudentAttempts(exam!.id, identifier);
+            const allowed = exam!.publicConfig!.allowedAttempts || 1;
             
-            // Shuffle Options for MC and Association
-            questionsToUse = questionsToUse.map(q => {
-                if (q.type === QuestionType.MULTIPLE_CHOICE && q.options) {
-                    return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
-                }
-                return q;
-            });
+            if (previousAttempts.length >= allowed) {
+                alert(`Você já realizou esta prova ${previousAttempts.length} vezes. Limite atingido.`);
+                return;
+            }
+
+            // Randomization Logic
+            let questionsToUse = [...exam!.questions];
+            if (exam!.publicConfig?.randomizeQuestions) {
+                // Shuffle Questions Order
+                questionsToUse.sort(() => Math.random() - 0.5);
+                
+                // Shuffle Options for MC and Association
+                questionsToUse = questionsToUse.map(q => {
+                    if (q.type === QuestionType.MULTIPLE_CHOICE && q.options) {
+                        return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
+                    }
+                    return q;
+                });
+            }
+            setRandomizedQuestions(questionsToUse);
+
+            // Create Attempt in DB
+            const attempt = await FirebaseService.startAttempt(exam!.id, studentName, identifier);
+            setCurrentAttempt(attempt);
+
+            // Start Timer
+            if (exam!.publicConfig!.timeLimitMinutes > 0) {
+                setTimeLeft(exam!.publicConfig!.timeLimitMinutes * 60);
+            }
+
+            setStep('TAKING');
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao iniciar a prova. Verifique se as permissões de escrita (create) estão ativas no Firestore.");
         }
-        setRandomizedQuestions(questionsToUse);
-
-        // Create Attempt in DB
-        const attempt = await FirebaseService.startAttempt(exam!.id, studentName, identifier);
-        setCurrentAttempt(attempt);
-
-        // Start Timer
-        if (exam!.publicConfig!.timeLimitMinutes > 0) {
-            setTimeLeft(exam!.publicConfig!.timeLimitMinutes * 60);
-        }
-
-        setStep('TAKING');
     };
 
     const handleAnswer = (qId: string, val: string) => {
@@ -140,24 +158,33 @@ const PublicExam = () => {
         setStep('FINISHED');
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">Carregando prova...</div>;
+    if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 text-slate-500">Carregando prova...</div>;
     
     if (error) return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="h-screen w-full flex items-center justify-center bg-slate-50 p-4">
             <Card className="max-w-md w-full text-center py-10">
                 <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Icons.X />
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Acesso Indisponível</h2>
-                <p className="text-slate-500">{error}</p>
+                <p className="text-slate-500 mb-4">{error}</p>
+                {error.includes("Permissão") && (
+                    <p className="text-xs text-slate-400 bg-slate-100 p-2 rounded">
+                        Dica para o Desenvolvedor: Ajuste as regras do Firestore para:<br/>
+                        <code>match /exams/&#123;examId&#125; &#123; allow read: if true; &#125;</code>
+                    </p>
+                )}
             </Card>
         </div>
     );
 
+    // FIX: Trocado 'min-h-screen' por 'h-full overflow-y-auto' para funcionar dentro do 'body { overflow: hidden }' do index.html
+    const containerClasses = "h-full bg-slate-50 flex flex-col overflow-y-auto custom-scrollbar";
+
     if (step === 'WELCOME') {
         return (
-            <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-                <Card className="max-w-lg w-full">
+            <div className={`${containerClasses} items-center justify-center p-4`}>
+                <Card className="max-w-lg w-full shrink-0 my-auto">
                     <div className="text-center mb-6">
                         <div className="w-16 h-16 bg-blue-100 text-brand-blue rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                             <Icons.FileText />
@@ -195,8 +222,8 @@ const PublicExam = () => {
 
     if (step === 'FINISHED') {
         return (
-            <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-                <Card className="max-w-md w-full text-center py-10 animate-fade-in">
+            <div className={`${containerClasses} items-center justify-center p-4`}>
+                <Card className="max-w-md w-full text-center py-10 animate-fade-in shrink-0 my-auto">
                     <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
                         <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                     </div>
@@ -217,9 +244,9 @@ const PublicExam = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col">
+        <div className={containerClasses}>
             {/* Header Sticky */}
-            <div className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 py-3 shadow-sm flex justify-between items-center">
+            <div className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 py-3 shadow-sm flex justify-between items-center shrink-0">
                 <div>
                     <h1 className="font-bold text-slate-800 text-sm md:text-base truncate max-w-[200px] md:max-w-none">{exam?.title}</h1>
                     <p className="text-xs text-slate-500">{studentName}</p>
@@ -231,7 +258,7 @@ const PublicExam = () => {
                 )}
             </div>
 
-            <div className="max-w-3xl w-full mx-auto p-4 md:p-8 flex-1 space-y-8">
+            <div className="max-w-3xl w-full mx-auto p-4 md:p-8 space-y-8 flex-1">
                 {randomizedQuestions.map((q, idx) => (
                     <div key={q.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex gap-3 mb-4">
