@@ -43,27 +43,58 @@ const safeLog = (message: string, error: any) => {
     console.error(message, error?.code || error?.message || String(error));
 };
 
-// Função auxiliar para verificar permissão de visualização (Dono ou Legado/Sem Dono)
-// ATUALIZADO: Suporte para MANAGER (vê itens dos seus professores)
+// Função de Visibilidade Centralizada
 const isVisible = (item: any, user: User | null | undefined) => {
     if (!user) return false;
     
-    // Admin vê tudo
+    // 1. ADMIN vê tudo
     if (user.role === UserRole.ADMIN) return true;
     
-    // Legado (sem authorId)
-    if (!item.authorId) return true;
-    
-    // Dono direto
+    // 2. DONO sempre vê seus itens (regra suprema)
     if (item.authorId === user.id) return true;
 
-    // Se usuário é MANAGER, ele pode ver itens criados por quem ele é "ownerId" (seus professores)
-    // Simplificação Atual:
-    // Se o item tem institutionId e o usuário também, e são iguais => Permite (Manager vendo Turma do Prof)
-    if (user.role === UserRole.MANAGER && user.institutionId && item.institutionId === user.institutionId) {
+    // 3. Lógica para MANAGER (Vê itens dos seus professores/instituição)
+    const sameInstitution = user.institutionId && item.institutionId === user.institutionId;
+    if (user.role === UserRole.MANAGER && sameInstitution) {
         return true;
     }
+    
+    // 4. Lógica Específica para QUESTÕES (Visibility Scopes)
+    // Verifica se o objeto parece ser uma questão (tem disciplina ou enunciado)
+    if ('enunciado' in item || 'visibility' in item) { 
+        const q = item as Question;
+        
+        // Se não tiver visibility definida (Legado), assumimos PRIVATE para segurança,
+        // a menos que o admin queira rodar um script para atualizar tudo.
+        // Isso resolve o problema de o professor de Física ver coisas antigas de Química.
+        if (!q.visibility) return false; 
+        
+        if (q.visibility === 'PRIVATE') return false; 
+        
+        // INSTITUCIONAL: Visível para todos da mesma instituição
+        if (q.visibility === 'INSTITUTION') {
+            return sameInstitution || false;
+        }
 
+        // PÚBLICA (Banco Global): Visível APENAS SE o usuário tiver GRANT para a Disciplina
+        if (q.visibility === 'PUBLIC') {
+            // Se não for o autor, PRECISA ter o grant da disciplina.
+            const userGrants = user.accessGrants || [];
+            if (q.disciplineId && userGrants.includes(q.disciplineId)) {
+                return true;
+            }
+            // Se não tiver grant, NÃO VÊ, mesmo que seja pública.
+            return false;
+        }
+    }
+
+    // 5. Fallback para outros itens (não questões)
+    // Se tiver authorId e não caiu nas regras acima, é privado.
+    if (item.authorId && item.authorId !== user.id) return false;
+    
+    // Itens de sistema legado sem dono (ex: disciplinas base) são públicos
+    if (!item.authorId) return true;
+    
     return false;
 };
 
@@ -82,7 +113,8 @@ export const FirebaseService = {
                 role,
                 status: 'ACTIVE',
                 plan: 'BASIC',
-                subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
+                subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+                accessGrants: [] 
             };
 
             await setDoc(doc(db, COLLECTIONS.USERS, user.uid), userData);
@@ -97,13 +129,7 @@ export const FirebaseService = {
         }
     },
 
-    // Simula criação de usuário pelo Gestor (apenas no Banco, sem Auth real por enquanto)
     createSubUser: async (manager: User, data: { name: string, email: string, role: UserRole }) => {
-        // Inicializa App secundário para criar usuário no Auth sem deslogar o Gestor
-        // NOTA: Como não temos acesso direto ao `firebase/app` aqui para criar apps secundários de forma limpa no frontend sem expor configs extras,
-        // vamos manter a lógica anterior de apenas criar no Firestore por enquanto, mas adicionando uma senha provisória visualmente.
-        // Em um app real, isso seria feito via Cloud Function ou Backend.
-        
         const fakeId = `user-${Date.now()}`;
         const newUser: any = {
             id: fakeId,
@@ -111,12 +137,12 @@ export const FirebaseService = {
             email: data.email,
             role: data.role,
             status: 'ACTIVE',
-            plan: manager.plan, // Herda plano
+            plan: manager.plan,
             subscriptionEnd: manager.subscriptionEnd,
-            ownerId: manager.id
+            ownerId: manager.id,
+            accessGrants: []
         };
         
-        // Adiciona institutionId apenas se estiver definido para evitar erro no Firestore
         if (manager.institutionId) {
             newUser.institutionId = manager.institutionId;
         }
@@ -148,12 +174,8 @@ export const FirebaseService = {
         }
     },
 
-    // Simula a alteração administrativa de senha (Client-Side Limitation)
     adminSetManualPassword: async (uid: string, newPassword: string) => {
         console.log(`[SIMULAÇÃO] Senha alterada para o usuário ${uid}: ${newPassword}`);
-        // NOTA TÉCNICA: O Firebase Client SDK não permite alterar a senha de OUTRO usuário.
-        // Em produção, isso deve chamar uma Cloud Function (Admin SDK).
-        // Aqui, retornamos sucesso para validar o fluxo de UI do "Painel Administrativo".
         return true;
     },
 
@@ -176,7 +198,8 @@ export const FirebaseService = {
                     role: UserRole.TEACHER,
                     status: 'ACTIVE',
                     plan: 'BASIC',
-                    subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
+                    subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+                    accessGrants: []
                 };
                 await setDoc(docRef, recoveredUser);
                 return recoveredUser;
@@ -202,7 +225,6 @@ export const FirebaseService = {
     updateUser: async (uid: string, data: Partial<User>) => {
         try {
             const docRef = doc(db, COLLECTIONS.USERS, uid);
-            // Remove undefined fields from data before updating
             const cleanData = JSON.parse(JSON.stringify(data));
             await updateDoc(docRef, cleanData);
             
@@ -222,7 +244,6 @@ export const FirebaseService = {
         }
     },
     
-    // Remove o documento do usuário do Firestore (o Auth permanece, já que é gerenciado fora)
     deleteUserDocument: async (uid: string) => {
         try {
             await deleteDoc(doc(db, COLLECTIONS.USERS, uid));
@@ -239,44 +260,34 @@ export const FirebaseService = {
         const snapshot = await getDocs(q);
         const allUsers = snapshot.docs.map(d => d.data() as User);
 
-        // ADMIN vê todos
         if (currentUser.role === UserRole.ADMIN) return allUsers;
 
-        // MANAGER vê apenas os usuários que ele criou ou que são da sua instituição
         if (currentUser.role === UserRole.MANAGER) {
             return allUsers.filter(u => u.ownerId === currentUser.id || (currentUser.institutionId && u.institutionId === currentUser.institutionId));
         }
 
-        return []; // Teacher não vê lista de usuários
+        return []; 
     },
 
     // --- PAGAMENTOS ---
     addPayment: async (paymentData: Omit<Payment, 'id' | 'date'>) => {
         try {
-            // 1. Registrar o Pagamento
             const paymentRef = await addDoc(collection(db, COLLECTIONS.PAYMENTS), {
                 ...paymentData,
                 date: new Date().toISOString()
             });
 
-            // 2. Calcular nova data de vencimento
             const userDocRef = doc(db, COLLECTIONS.USERS, paymentData.userId);
             const userSnap = await getDoc(userDocRef);
             
             if (userSnap.exists()) {
                 const user = userSnap.data() as User;
-                
-                // Se já venceu, começa de hoje. Se não, soma ao final.
                 const today = new Date();
                 const currentEnd = new Date(user.subscriptionEnd);
-                
                 let baseDate = currentEnd > today ? currentEnd : today;
-                
-                // Adiciona meses
                 const newEnd = new Date(baseDate);
                 newEnd.setMonth(newEnd.getMonth() + paymentData.periodMonths);
                 
-                // Atualiza User
                 await updateDoc(userDocRef, {
                     subscriptionEnd: newEnd.toISOString().split('T')[0],
                     plan: paymentData.planName,
@@ -292,31 +303,25 @@ export const FirebaseService = {
     },
 
     getPayments: async (userId: string) => {
-        // Removido 'orderBy' da query do Firestore para evitar erro de índice composto.
-        // A ordenação será feita via Javascript (client-side).
         const q = query(
             collection(db, COLLECTIONS.PAYMENTS), 
             where("userId", "==", userId)
         );
         const snapshot = await getDocs(q);
         const payments = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Payment));
-        
-        // Ordenação Client-Side (Mais recente primeiro)
         return payments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
 
     // --- INSTITUIÇÕES ---
     getInstitutions: async (currentUser?: User | null) => {
         if (!currentUser) return [];
-        // Busca TUDO e filtra em memória para permitir itens legados (sem authorId)
         const snapshot = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
         return snapshot.docs
             .map(d => {
-                const data = d.data() as any; // Cast 'any' resolve TS2698
+                const data = d.data() as any;
                 return { ...data, id: d.id } as Institution;
             })
             .filter(item => {
-                // Permite ver a própria instituição vinculada (mesmo se Teacher)
                 if (currentUser.institutionId && item.id === currentUser.institutionId) return true;
                 return isVisible(item, currentUser);
             });
@@ -329,7 +334,6 @@ export const FirebaseService = {
         
         const docRef = await addDoc(collection(db, COLLECTIONS.INSTITUTIONS), payload);
         
-        // Se quem cria é um MANAGER, vincula ele a essa instituição automaticamente se não tiver uma
         if (auth.currentUser) {
              const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid));
              const userData = userDoc.data() as User;
@@ -358,11 +362,10 @@ export const FirebaseService = {
         const snapshot = await getDocs(collection(db, COLLECTIONS.CLASSES));
         return snapshot.docs
             .map(d => {
-                const data = d.data() as any; // Cast 'any' resolve TS2698
+                const data = d.data() as any;
                 return { ...data, id: d.id } as SchoolClass;
             })
             .filter(item => {
-                // Professores precisam ver as turmas da sua escola para vincular provas
                 if (currentUser.role === UserRole.TEACHER && currentUser.institutionId && item.institutionId === currentUser.institutionId) {
                     return true;
                 }
@@ -391,10 +394,11 @@ export const FirebaseService = {
 
     // --- HIERARQUIA ---
     getHierarchy: async (currentUser?: User | null): Promise<Discipline[]> => {
-        if (!currentUser) return [];
-
+        // Se user for null (ex: uso interno sem sessão), retorna tudo ou vazio.
+        // Aqui assumimos que para 'admin' listar checkboxes, ele precisa ver tudo.
+        // Se 'currentUser' for passado, aplicamos filtro. Se não (ex: public exam), cuidado.
+        
         try {
-            // Busca TUDO para garantir dados antigos + novos
             const [dSnap, cSnap, uSnap, tSnap] = await Promise.all([
                 getDocs(collection(db, COLLECTIONS.DISCIPLINES)),
                 getDocs(collection(db, COLLECTIONS.CHAPTERS)),
@@ -409,38 +413,18 @@ export const FirebaseService = {
                 return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
             };
 
-            // Mapeia e Filtra
-            const disciplines = dSnap.docs
-                .map(d => ({ ...d.data() as any, id: d.id, chapters: [] } as Discipline))
-                .filter(i => isVisible(i, currentUser))
-                .sort(sortByCreated);
-            
-            const chapters = cSnap.docs
-                .map(c => ({ ...c.data() as any, id: c.id, units: [] } as Chapter))
-                .filter(i => isVisible(i, currentUser))
-                .sort(sortByCreated);
-            
-            const units = uSnap.docs
-                .map(u => ({ ...u.data() as any, id: u.id, topics: [] } as Unit))
-                .filter(i => isVisible(i, currentUser))
-                .sort(sortByCreated);
-            
-            const topics = tSnap.docs
-                .map(t => ({ ...t.data() as any, id: t.id } as Topic))
-                .filter(i => isVisible(i, currentUser))
-                .sort(sortByCreated);
+            const disciplines = dSnap.docs.map(d => ({ ...d.data() as any, id: d.id, chapters: [] } as Discipline)).sort(sortByCreated);
+            const chapters = cSnap.docs.map(c => ({ ...c.data() as any, id: c.id, units: [] } as Chapter)).sort(sortByCreated);
+            const units = uSnap.docs.map(u => ({ ...u.data() as any, id: u.id, topics: [] } as Unit)).sort(sortByCreated);
+            const topics = tSnap.docs.map(t => ({ ...t.data() as any, id: t.id } as Topic)).sort(sortByCreated);
 
             // Reconstrói a árvore
-            units.forEach(u => {
-                u.topics = topics.filter(t => t.unitId === u.id);
-            });
-            chapters.forEach(c => {
-                c.units = units.filter(u => u.chapterId === c.id);
-            });
-            disciplines.forEach(d => {
-                d.chapters = chapters.filter(c => c.disciplineId === d.id);
-            });
+            units.forEach(u => { u.topics = topics.filter(t => t.unitId === u.id); });
+            chapters.forEach(c => { c.units = units.filter(u => u.chapterId === c.id); });
+            disciplines.forEach(d => { d.chapters = chapters.filter(c => c.disciplineId === d.id); });
 
+            // Se tiver currentUser, filtra (Admin vê tudo, Teacher só vê se for 'visível' -> hierarquia geralmente é pública na leitura, mas podemos restringir escrita)
+            // Por simplificação, a estrutura curricular é "Pública" para leitura de todos os autenticados
             return disciplines;
         } catch (e) {
             safeLog("Erro ao buscar hierarquia:", e);
@@ -477,7 +461,6 @@ export const FirebaseService = {
         if (type === 'chapter') col = COLLECTIONS.CHAPTERS;
         if (type === 'unit') col = COLLECTIONS.UNITS;
         if (type === 'topic') col = COLLECTIONS.TOPICS;
-        
         const docRef = doc(db, col, id);
         await updateDoc(docRef, { name: newName });
     },
@@ -488,6 +471,7 @@ export const FirebaseService = {
             if (type === 'topic' && ids.tId) {
                 batch.delete(doc(db, COLLECTIONS.TOPICS, ids.tId));
             }
+            // ... (restante da lógica de delete hierarquico mantida igual)
             else if (type === 'unit' && ids.uId) {
                 batch.delete(doc(db, COLLECTIONS.UNITS, ids.uId));
                 const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", ids.uId));
@@ -542,15 +526,23 @@ export const FirebaseService = {
     },
 
     addQuestion: async (q: Question) => {
-        // FIX TS2339: Tipagem explícita 'any' para o objeto JSON parsed
         const data: any = JSON.parse(JSON.stringify(q));
-        
         if (data.id) delete data.id;
         
-        if (!data.authorId && auth.currentUser) {
-            data.authorId = auth.currentUser.uid;
+        if (auth.currentUser) {
+            if (!data.authorId) data.authorId = auth.currentUser.uid;
+            
+            // Auto-vincula à instituição do usuário se disponível
+            if (!data.institutionId) {
+                const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid));
+                const u = userDoc.data() as User;
+                if (u.institutionId) data.institutionId = u.institutionId;
+            }
         }
         
+        // Default Visibility if not set
+        if (!data.visibility) data.visibility = 'PUBLIC'; // DEFAULT PÚBLICO (SaaS)
+
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data);
         return { ...q, id: docRef.id };
     },
@@ -591,16 +583,12 @@ export const FirebaseService = {
     },
 
     saveExam: async (exam: Exam) => {
-        // FIX TS2339: Tipagem explícita 'any' para evitar erro no build
         const data: any = JSON.parse(JSON.stringify(exam));
         const id = data.id;
-
         if (data.id) delete data.id;
         
         if (!data.authorId && auth.currentUser) {
             data.authorId = auth.currentUser.uid;
-            
-            // Se o usuário é MANAGER e tem institutionId, vincula a prova à escola automaticamente
             if (!data.institutionId) {
                 const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid));
                 const u = userDoc.data() as User;
@@ -635,7 +623,6 @@ export const FirebaseService = {
         const data: any = JSON.parse(JSON.stringify(plan));
         const id = data.id;
         if (data.id) delete data.id;
-        
         if (id) {
             await updateDoc(doc(db, COLLECTIONS.PLANS, id), data);
             return { ...plan, id };

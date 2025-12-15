@@ -17,6 +17,7 @@ export interface User {
   photoUrl?: string; 
   institutionId?: string; // Vinculo: Se for Professor, aponta para o Gestor/Escola
   ownerId?: string; // ID do Gestor que criou este usuário
+  accessGrants?: string[]; // NOVO: IDs das Disciplinas que este usuário pode acessar no Banco Global
 }
 
 export interface Payment {
@@ -46,7 +47,7 @@ export interface Institution {
 
 export interface SchoolClass {
   id: string;
-  authorId?: string;
+  authorId?: string; // ID do usuário dono
   name: string; // e.g. "3º Ano A"
   year: number;
   institutionId: string;
@@ -82,6 +83,8 @@ export interface AssociationPair {
 export interface Question {
   id: string;
   authorId?: string; // ID do usuário que criou a questão
+  institutionId?: string; // NOVO: ID da escola (para visibilidade INSTITUTION)
+  visibility?: 'PRIVATE' | 'INSTITUTION' | 'PUBLIC'; // NOVO: Nível de compartilhamento
   enunciado: string; // The question text
   type: QuestionType;
   disciplineId: string;
