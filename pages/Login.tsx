@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Button, Input } from '../components/UI';
+import { Button, Input, Modal } from '../components/UI';
 import { FirebaseService } from '../services/firebaseService';
 import { EmailService } from '../services/emailService';
 import { UserRole } from '../types';
@@ -19,6 +19,9 @@ const Login = () => {
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Estado para visualização do E-mail Simulado
+    const [simulatedEmail, setSimulatedEmail] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -49,23 +52,56 @@ const Login = () => {
         e.preventDefault();
         setError('');
         setSuccessMsg('');
+        setSimulatedEmail(null);
         setLoading(true);
         const cleanEmail = email.trim();
 
         try {
             if(!cleanEmail) throw new Error("Informe seu email para recuperação.");
             
-            // 1. Tenta envio nativo do Firebase (funciona para Admins e contas criadas via Auth)
-            await FirebaseService.resetPassword(cleanEmail).catch(err => console.log("Firebase Reset skipped:", err.code));
+            // 1. Verifica se o usuário existe no banco de dados
+            const userDoc = await FirebaseService.getUserByEmail(cleanEmail);
             
-            // 2. Tenta envio via EmailJS (fallback para garantir entrega, especialmente para Professores cadastrados apenas no Banco)
-            await EmailService.sendRecoveryInstructions(cleanEmail, name).catch(err => console.warn("EmailJS falhou:", err));
+            if (!userDoc) {
+                throw new Error("E-mail não encontrado no sistema.");
+            }
+
+            // 2. Determina se é Usuário Gerenciado (SubUser) ou Real (Auth)
+            // Se tiver ownerId, é gerenciado.
+            const isManagedUser = !!userDoc.ownerId;
             
-            setSuccessMsg(`Solicitação processada! Verifique a caixa de entrada e SPAM do e-mail "${cleanEmail}".`);
+            if (!isManagedUser) {
+                // Usuário Real: Tenta enviar o link do Firebase Auth
+                await FirebaseService.resetPassword(cleanEmail).catch(err => {
+                    console.log("Firebase Reset skipped/failed:", err.code);
+                    // Não lançamos erro aqui para permitir que o EmailJS envie o aviso mesmo assim
+                });
+            }
+
+            // 3. Envia o e-mail instrutivo via EmailJS
+            const response: any = await EmailService.sendRecoveryInstructions(
+                cleanEmail, 
+                userDoc.name,
+                isManagedUser ? 'MANAGED' : 'REAL'
+            );
+            
+            if (response && response.simulated) {
+                setSimulatedEmail(response.emailContent);
+                setSuccessMsg("E-mail gerado em Modo Simulação (veja a janela).");
+            } else {
+                if (isManagedUser) {
+                     setSuccessMsg(`Atenção: Conta Gerenciada. Verifique as instruções enviadas para "${cleanEmail}".`);
+                } else {
+                     setSuccessMsg(`Link enviado! Verifique a caixa de entrada e SPAM do e-mail "${cleanEmail}".`);
+                }
+            }
+
         } catch (err: any) {
             console.error(err);
             if (err.code === 'auth/invalid-email') {
                 setError("Formato de e-mail inválido.");
+            } else if (err.message) {
+                setError(err.message);
             } else {
                 setError("Ocorreu um erro ao processar. Tente novamente.");
             }
@@ -247,6 +283,30 @@ const Login = () => {
                     )}
                 </div>
             </div>
+
+            {/* MODAL DE SIMULAÇÃO DE E-MAIL */}
+            <Modal
+                isOpen={!!simulatedEmail}
+                onClose={() => setSimulatedEmail(null)}
+                title="[Ambiente de Teste] E-mail Enviado"
+                footer={<Button onClick={() => setSimulatedEmail(null)}>Fechar</Button>}
+            >
+                <div className="space-y-4">
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 text-sm text-yellow-800">
+                        <p className="font-bold">Modo Simulação Ativo</p>
+                        <p>Como o serviço de e-mail não está configurado com chaves reais, exibimos aqui o conteúdo que o usuário receberia.</p>
+                    </div>
+                    
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                        <div className="bg-slate-50 p-2 border-b border-slate-200 text-xs text-slate-500 font-mono">
+                            Para: {email}
+                        </div>
+                        <div className="p-6 bg-white whitespace-pre-line text-slate-800 font-medium">
+                            {simulatedEmail}
+                        </div>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

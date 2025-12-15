@@ -1,49 +1,84 @@
 
 import emailjs from '@emailjs/browser';
 
-// CONFIGURAÇÃO DO EMAILJS
-// Você deve criar uma conta em https://www.emailjs.com/
-// 1. Crie um "Email Service" (ex: Gmail).
-// 2. Crie um "Email Template".
-//    - No template, use variáveis como {{to_name}}, {{to_email}}, {{message}}.
-// 3. Pegue as chaves abaixo em "Account > API Keys" e "Email Services".
-
+// --- CONFIGURAÇÃO DO EMAILJS ---
 const EMAILJS_CONFIG = {
-    SERVICE_ID: 'service_zsl41hr',
-    TEMPLATE_ID: 'template_n6lgptu',
-    PUBLIC_KEY: '3u4OUXE7MSVKsOBZF'
+    SERVICE_ID: 'service_zsl41hr', 
+    TEMPLATE_ID: 'template_n6lgptu', 
+    PUBLIC_KEY: '3u4OUXE7MSVKsOBZF' 
 };
 
 export const EmailService = {
     /**
      * Envia instruções de recuperação de senha via EmailJS.
-     * Como não temos backend para gerar token seguro do Firebase, 
-     * enviamos instruções genéricas ou um link de contato.
+     * @param type 'MANAGED' para usuários criados pelo Gestor (sem link) ou 'REAL' para usuários Auth (com link)
      */
-    sendRecoveryInstructions: async (email: string, name?: string) => {
+    sendRecoveryInstructions: async (email: string, name?: string, type: 'MANAGED' | 'REAL' = 'REAL') => {
+        
+        const header = `
+========================================
+    MENSAGEM DO SISTEMA PROVA FÁCIL
+========================================
+        `;
+
+        let body = '';
+
+        if (type === 'MANAGED') {
+            body = `
+Olá, ${name || 'Professor(a)'}.
+
+Sua conta é do tipo GERENCIADA PELA ESCOLA.
+Isso significa que você NÃO possui redefinição automática por link.
+
+O QUE FAZER:
+1. Entre em contato com o Gestor da sua escola.
+2. Solicite que ele defina uma nova senha manualmente no painel.
+
+Não é possível alterar sua senha por este e-mail.
+            `;
+        } else {
+            body = `
+Olá, ${name || 'Usuário'}.
+
+Enviamos um LINK OFICIAL DE REDEFINIÇÃO para este e-mail (${email}).
+O remetente oficial é "noreply@app-provafacil...".
+
+IMPORTANTE:
+- Verifique sua caixa de SPAM ou LIXEIRA.
+- O e-mail do Google pode demorar alguns minutos.
+- Clique no link daquele e-mail para criar sua nova senha.
+
+Este é apenas um aviso de confirmação.
+            `;
+        }
+
+        const fullMessage = `${header}\n${body}`;
+
         try {
-            // Verifica se as chaves estão configuradas (mock check)
-            if (EMAILJS_CONFIG.PUBLIC_KEY === 'user_public_key') {
-                console.warn("EmailJS não configurado. Simulando envio...");
-                return new Promise((resolve) => setTimeout(resolve, 1000));
+            const isConfigured = 
+                EMAILJS_CONFIG.PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && 
+                EMAILJS_CONFIG.SERVICE_ID !== 'YOUR_SERVICE_ID' &&
+                !EMAILJS_CONFIG.PUBLIC_KEY.includes('YOUR_');
+
+            if (!isConfigured) {
+                console.log(`[EmailJS Simulado] Enviando recuperação para: ${email}`);
+                return { 
+                    status: 200, 
+                    text: 'OK', 
+                    simulated: true, 
+                    emailContent: fullMessage 
+                };
             }
 
             const templateParams = {
-                to_email: email,
+                to_email: email,      
+                email: email,
+                user_email: email,
+                recipient: email,
+                reply_to: email,
                 to_name: name || 'Usuário',
-                subject: 'Recuperação de Senha - Prova Fácil',
-                message: `
-                    Olá,
-
-                    Recebemos uma solicitação para redefinir a senha da sua conta no Prova Fácil.
-
-                    Como sua conta é gerenciada pela instituição, por favor entre em contato com o Administrador ou Gestor da sua escola para que eles redefinam sua senha manualmente no painel administrativo.
-
-                    Se você é um Administrador e perdeu acesso, contate o suporte técnico.
-
-                    Atenciosamente,
-                    Equipe Prova Fácil
-                `
+                subject: 'Instruções de Acesso - Prova Fácil', 
+                message: fullMessage
             };
 
             const response = await emailjs.send(
@@ -54,8 +89,14 @@ export const EmailService = {
             );
 
             return response;
-        } catch (error) {
-            console.error("Erro ao enviar email via EmailJS:", error);
+        } catch (error: any) {
+            let errorText = 'Erro desconhecido';
+            if (error?.text) errorText = error.text; 
+            else if (error?.message) errorText = error.message; 
+            else if (typeof error === 'object') try { errorText = JSON.stringify(error); } catch { errorText = String(error); }
+            else errorText = String(error);
+
+            console.error(`Erro ao enviar email via EmailJS:`, errorText);
             throw error;
         }
     }

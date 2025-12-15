@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Plan, Payment } from '../types';
 import { FirebaseService } from '../services/firebaseService';
+import { EmailService } from '../services/emailService'; // Importação adicionada
 import { Button, Card, Badge, Modal, Input, Select } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +17,10 @@ const UsersPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUserId, setEditingUserId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'PROFILE' | 'FINANCE'>('PROFILE');
+    
+    // Estado para visualização do E-mail Simulado (NOVO)
+    const [simulatedEmail, setSimulatedEmail] = useState<string | null>(null);
+    const [resetLoading, setResetLoading] = useState(false);
     
     // States for Payments
     const [userPayments, setUserPayments] = useState<Payment[]>([]);
@@ -32,6 +37,8 @@ const UsersPage = () => {
         role: UserRole.TEACHER, 
         plan: '' 
     });
+    // Estado para alteração de senha
+    const [password, setPassword] = useState('');
 
     // Atualiza dados do usuário atual (Gestor) ao entrar na tela para garantir limites atualizados
     useEffect(() => {
@@ -62,13 +69,12 @@ const UsersPage = () => {
     const isAdmin = user?.role === UserRole.ADMIN;
     
     const managerPlan = isManager ? availablePlans.find(p => p.name === user?.plan) : null;
-    const maxUsers = managerPlan?.limits?.maxUsers || 0; // Se não achar plano, assume 0 ou trata como infinito dependendo da regra de negócio, aqui 0 força atenção
+    const maxUsers = managerPlan?.limits?.maxUsers || 0; 
     const currentUsage = users.length;
     const usagePercent = maxUsers > 0 ? (currentUsage / maxUsers) * 100 : 0;
     const isLimitReached = isManager && maxUsers > 0 && currentUsage >= maxUsers;
 
     const openAddModal = () => {
-        // Bloqueio se limite atingido
         if (isLimitReached) {
             return alert(`Você atingiu o limite de ${maxUsers} professores do seu plano "${user?.plan}". Faça um upgrade para adicionar mais.`);
         }
@@ -76,12 +82,12 @@ const UsersPage = () => {
         setEditingUserId(null);
         setActiveTab('PROFILE');
         
-        // CORREÇÃO: Se for Gestor, o plano padrão é o DELE. Se Admin, pega o primeiro da lista.
         const initialPlan = isManager && user?.plan 
             ? user.plan 
             : (availablePlans.length > 0 ? availablePlans[0].name : 'BASIC');
 
         setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: initialPlan });
+        setPassword('');
         setIsModalOpen(true);
     };
 
@@ -94,8 +100,8 @@ const UsersPage = () => {
             role: u.role,
             plan: u.plan
         });
+        setPassword('');
         
-        // Se for admin, carrega pagamentos
         if (isAdmin) {
             try {
                 const history = await FirebaseService.getPayments(u.id);
@@ -112,32 +118,68 @@ const UsersPage = () => {
 
         try {
             if (editingUserId) {
-                // Edit
                 await FirebaseService.updateUser(editingUserId, {
                     name: userData.name,
                     email: userData.email,
                     role: userData.role,
                     plan: userData.plan
                 });
+
+                if (password.trim()) {
+                    await FirebaseService.adminSetManualPassword(editingUserId, password);
+                }
+
                 alert("Dados atualizados com sucesso!");
             } else {
-                // Create
-                await FirebaseService.createSubUser(user, {
+                const newUser = await FirebaseService.createSubUser(user, {
                     name: userData.name,
                     email: userData.email,
                     role: userData.role
                 });
-                alert("Usuário cadastrado com sucesso! (Senha provisória enviada por email)");
+                
+                if (password.trim()) {
+                    await FirebaseService.adminSetManualPassword(newUser.id, password);
+                }
+                
+                alert("Usuário cadastrado com sucesso! (Senha definida)");
             }
             
             setIsModalOpen(false);
             setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: '' });
+            setPassword('');
             setEditingUserId(null);
             loadData();
             
         } catch (error) {
             console.error(error);
             alert("Erro ao salvar usuário.");
+        }
+    };
+
+    // FUNÇÃO ATUALIZADA: Lógica robusta de envio de e-mail com simulação
+    const handleSendResetEmail = async () => {
+        if (!userData.email) return alert("Email inválido");
+        setResetLoading(true);
+        try {
+            // 1. Tenta reset nativo (funciona para usuários reais)
+            // Ignoramos erro aqui pois usuários criados via 'createSubUser' não existem no Auth
+            await FirebaseService.resetPassword(userData.email).catch(() => {});
+            
+            // 2. Tenta envio via EmailJS (ou Simulação)
+            const response: any = await EmailService.sendRecoveryInstructions(userData.email, userData.name);
+
+            if (response && response.simulated) {
+                setSimulatedEmail(response.emailContent);
+                // Opcional: fechar o modal de edição para focar no email
+                // setIsModalOpen(false); 
+            } else {
+                alert(`E-mail de redefinição enviado com sucesso para ${userData.email}`);
+            }
+        } catch (e: any) {
+            console.error(e);
+            alert("Erro ao processar envio de e-mail.");
+        } finally {
+            setResetLoading(false);
         }
     };
 
@@ -160,10 +202,9 @@ const UsersPage = () => {
 
             alert("Pagamento registrado e assinatura renovada!");
             
-            // Recarrega lista
             const history = await FirebaseService.getPayments(editingUserId);
             setUserPayments(history);
-            loadData(); // Recarrega lista principal para atualizar data
+            loadData(); 
 
         } catch (error) {
             console.error(error);
@@ -334,7 +375,7 @@ const UsersPage = () => {
                         <p className="text-sm text-slate-500">
                             {editingUserId 
                             ? "Atualize os dados e permissões do usuário." 
-                            : "O usuário receberá um email para configurar a senha."}
+                            : "Preencha os dados do novo usuário."}
                         </p>
                         
                         <Input 
@@ -352,8 +393,40 @@ const UsersPage = () => {
                             placeholder="joao@escola.com" 
                         />
 
+                        {/* SEÇÃO DE SENHA / ACESSO */}
+                        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 mt-4 animate-fade-in">
+                             <div className="flex items-center gap-2 mb-3">
+                                 <div className="text-orange-500"><Icons.UsersGroup /></div>
+                                 <h4 className="text-sm font-bold text-orange-900 uppercase">Segurança e Acesso</h4>
+                             </div>
+                             
+                             <div className="space-y-4">
+                                 <Input 
+                                     label={editingUserId ? "Definir Nova Senha (Opcional)" : "Senha Inicial (Opcional)"}
+                                     type="password"
+                                     value={password}
+                                     onChange={e => setPassword(e.target.value)}
+                                     placeholder={editingUserId ? "Deixe em branco para não alterar" : "Digite para definir uma senha manual"}
+                                 />
+                                 
+                                 {editingUserId && (
+                                     <div className="flex items-center justify-between text-xs text-slate-500 border-t border-orange-200 pt-3 mt-2">
+                                         <span>Alternativa recomendada:</span>
+                                         <button 
+                                             type="button" 
+                                             onClick={handleSendResetEmail}
+                                             disabled={resetLoading}
+                                             className="text-brand-blue hover:underline font-bold disabled:opacity-50"
+                                         >
+                                             {resetLoading ? 'Simulando envio...' : 'Enviar E-mail de Redefinição para o Usuário'}
+                                         </button>
+                                     </div>
+                                 )}
+                             </div>
+                        </div>
+
                         {isAdmin ? (
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                                 <Select 
                                     label="Função (Role)" 
                                     value={userData.role} 
@@ -492,6 +565,31 @@ const UsersPage = () => {
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            {/* MODAL DE SIMULAÇÃO DE E-MAIL (NOVO) */}
+            <Modal
+                isOpen={!!simulatedEmail}
+                onClose={() => setSimulatedEmail(null)}
+                title="[Ambiente de Teste] E-mail Enviado"
+                footer={<Button onClick={() => setSimulatedEmail(null)}>Fechar</Button>}
+                maxWidth="max-w-2xl"
+            >
+                <div className="space-y-4">
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 text-sm text-yellow-800">
+                        <p className="font-bold">Modo Simulação Ativo</p>
+                        <p>Como as chaves de e-mail não estão configuradas ou o usuário é simulado, exibimos aqui o conteúdo que seria enviado.</p>
+                    </div>
+                    
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                        <div className="bg-slate-50 p-2 border-b border-slate-200 text-xs text-slate-500 font-mono">
+                            Para: {userData.email}
+                        </div>
+                        <div className="p-6 bg-white whitespace-pre-line text-slate-800 font-medium">
+                            {simulatedEmail}
+                        </div>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

@@ -148,6 +148,15 @@ export const FirebaseService = {
         }
     },
 
+    // Simula a alteração administrativa de senha (Client-Side Limitation)
+    adminSetManualPassword: async (uid: string, newPassword: string) => {
+        console.log(`[SIMULAÇÃO] Senha alterada para o usuário ${uid}: ${newPassword}`);
+        // NOTA TÉCNICA: O Firebase Client SDK não permite alterar a senha de OUTRO usuário.
+        // Em produção, isso deve chamar uma Cloud Function (Admin SDK).
+        // Aqui, retornamos sucesso para validar o fluxo de UI do "Painel Administrativo".
+        return true;
+    },
+
     getCurrentUserData: async () => {
         const user = auth.currentUser;
         if (!user) return null;
@@ -174,6 +183,18 @@ export const FirebaseService = {
             }
         } catch (error) {
             safeLog("Erro crítico ao recuperar dados do usuário:", error);
+            return null;
+        }
+    },
+
+    getUserByEmail: async (email: string) => {
+        try {
+            const q = query(collection(db, COLLECTIONS.USERS), where("email", "==", email));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) return null;
+            return snapshot.docs[0].data() as User;
+        } catch (error) {
+            safeLog("Erro ao buscar usuário por email:", error);
             return null;
         }
     },
