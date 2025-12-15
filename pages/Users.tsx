@@ -7,7 +7,7 @@ import { Icons } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
 
 const UsersPage = () => {
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
     const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
     const [loading, setLoading] = useState(true);
@@ -33,6 +33,11 @@ const UsersPage = () => {
         plan: '' 
     });
 
+    // Atualiza dados do usuário atual (Gestor) ao entrar na tela para garantir limites atualizados
+    useEffect(() => {
+        refreshUser();
+    }, []);
+
     useEffect(() => {
         loadData();
     }, [user]);
@@ -52,11 +57,31 @@ const UsersPage = () => {
         }
     };
 
+    // Cálculos de Limites do Plano do Gestor
+    const isManager = user?.role === UserRole.MANAGER;
+    const isAdmin = user?.role === UserRole.ADMIN;
+    
+    const managerPlan = isManager ? availablePlans.find(p => p.name === user?.plan) : null;
+    const maxUsers = managerPlan?.limits?.maxUsers || 0; // Se não achar plano, assume 0 ou trata como infinito dependendo da regra de negócio, aqui 0 força atenção
+    const currentUsage = users.length;
+    const usagePercent = maxUsers > 0 ? (currentUsage / maxUsers) * 100 : 0;
+    const isLimitReached = isManager && maxUsers > 0 && currentUsage >= maxUsers;
+
     const openAddModal = () => {
+        // Bloqueio se limite atingido
+        if (isLimitReached) {
+            return alert(`Você atingiu o limite de ${maxUsers} professores do seu plano "${user?.plan}". Faça um upgrade para adicionar mais.`);
+        }
+
         setEditingUserId(null);
         setActiveTab('PROFILE');
-        const defaultPlan = availablePlans.length > 0 ? availablePlans[0].name : 'BASIC';
-        setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: defaultPlan });
+        
+        // CORREÇÃO: Se for Gestor, o plano padrão é o DELE. Se Admin, pega o primeiro da lista.
+        const initialPlan = isManager && user?.plan 
+            ? user.plan 
+            : (availablePlans.length > 0 ? availablePlans[0].name : 'BASIC');
+
+        setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: initialPlan });
         setIsModalOpen(true);
     };
 
@@ -170,9 +195,6 @@ const UsersPage = () => {
 
     if (user?.role === UserRole.TEACHER) return <div className="p-8">Acesso restrito.</div>;
 
-    const isManager = user?.role === UserRole.MANAGER;
-    const isAdmin = user?.role === UserRole.ADMIN;
-
     return (
         <div className="p-8 h-full bg-slate-50 overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-6">
@@ -185,16 +207,30 @@ const UsersPage = () => {
                     </p>
                 </div>
                 
-                <Button onClick={openAddModal}>
+                <Button onClick={openAddModal} disabled={isLimitReached} className={isLimitReached ? "opacity-50 cursor-not-allowed" : ""}>
                     <Icons.Plus /> {isManager ? 'Novo Professor' : 'Novo Usuário'}
                 </Button>
             </div>
 
             {isManager && (
-                <div className="mb-6 bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center justify-between">
-                    <div>
-                        <h4 className="font-bold text-blue-900">Capacidade do Plano</h4>
-                        <p className="text-sm text-blue-700">Você está utilizando <strong>{users.length}</strong> usuários.</p>
+                <div className="mb-6 bg-white border border-slate-200 p-4 rounded-lg shadow-sm">
+                    <div className="flex justify-between items-end mb-2">
+                        <div>
+                            <h4 className="font-bold text-slate-800">Capacidade do Plano ({user?.plan})</h4>
+                            <p className="text-sm text-slate-500">
+                                Você está utilizando <strong>{currentUsage}</strong> de <strong>{maxUsers}</strong> licenças disponíveis.
+                            </p>
+                        </div>
+                        {isLimitReached && (
+                            <Badge color="red">Limite Atingido</Badge>
+                        )}
+                    </div>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-100 rounded-full h-2.5">
+                        <div 
+                            className={`h-2.5 rounded-full transition-all duration-500 ${isLimitReached ? 'bg-red-500' : 'bg-brand-blue'}`} 
+                            style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                        ></div>
                     </div>
                 </div>
             )}
@@ -316,7 +352,7 @@ const UsersPage = () => {
                             placeholder="joao@escola.com" 
                         />
 
-                        {isAdmin && (
+                        {isAdmin ? (
                             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                                 <Select 
                                     label="Função (Role)" 
@@ -343,6 +379,20 @@ const UsersPage = () => {
                                         <option value={userData.plan}>{userData.plan} (Legado)</option>
                                     )}
                                 </Select>
+                            </div>
+                        ) : (
+                            // Visualização para Gestor: Mostra que o plano é herdado
+                            <div className="mt-4 pt-4 border-t border-slate-100 animate-fade-in">
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-500 uppercase">Plano e Licença</p>
+                                        <p className="font-semibold text-slate-700">{userData.plan}</p>
+                                    </div>
+                                    <Badge color="blue">Herdado do Gestor</Badge>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    O professor terá acesso aos mesmos recursos e data de vencimento do seu plano.
+                                </p>
                             </div>
                         )}
                     </div>

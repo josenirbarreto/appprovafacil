@@ -64,12 +64,12 @@ const ExamsPage = () => {
     }, [user]);
     
     const load = async () => {
-        // Passamos user para garantir filtro
+        // Passamos user para garantir filtro correto de instituições e turmas
         const [e, i, c, h, q] = await Promise.all([
             FirebaseService.getExams(user),
-            FirebaseService.getInstitutions(),
-            FirebaseService.getClasses(),
-            FirebaseService.getHierarchy(),
+            FirebaseService.getInstitutions(user),
+            FirebaseService.getClasses(user),
+            FirebaseService.getHierarchy(user),
             FirebaseService.getQuestions(user)
         ]);
         setExams(e);
@@ -87,7 +87,13 @@ const ExamsPage = () => {
             setGeneratedQuestions(exam.questions || []);
             setGenerationMode('MANUAL'); // Editing usually implies manual adjustment
         } else {
-            setEditing({ columns: 1, showAnswerKey: false });
+            // Nova Prova: Pre-seleciona a instituição se o usuário tiver vínculo
+            const defaultInstId = user?.institutionId || '';
+            setEditing({ 
+                columns: 1, 
+                showAnswerKey: false,
+                institutionId: defaultInstId
+            });
             setTempScopes([]);
             setGeneratedQuestions([]);
             setGenerationMode('AUTO');
@@ -486,8 +492,7 @@ const ExamsPage = () => {
             </div>
 
             <div className="space-y-4 print:hidden">
-                {/* ... (Renderização da Lista Principal inalterada, o filtro já acontece no load) ... */}
-                {institutions.length === 0 && <div className="text-center py-10 text-slate-400">Nenhuma instituição cadastrada.</div>}
+                {institutions.length === 0 && <div className="text-center py-10 text-slate-400">Nenhuma instituição encontrada ou selecionada.</div>}
                 {institutions.map(inst => {
                     const instExams = exams.filter(e => e.institutionId === inst.id);
                     const instClasses = classes.filter(c => c.institutionId === inst.id);
@@ -521,6 +526,7 @@ const ExamsPage = () => {
                                                                     </div>
                                                                     {isExpandedClass && (
                                                                         <div className="border-t border-slate-100 animate-fade-in divide-y divide-slate-50">
+                                                                            {clsExams.length === 0 && <div className="p-3 pl-12 text-xs text-slate-400 italic">Nenhuma prova cadastrada nesta turma.</div>}
                                                                             {clsExams.map(exam => (
                                                                                 <div key={exam.id} className="p-3 pl-12 flex justify-between items-center hover:bg-blue-50/30 transition-colors group">
                                                                                     <div className="flex items-center gap-3">

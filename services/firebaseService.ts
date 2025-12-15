@@ -98,6 +98,11 @@ export const FirebaseService = {
 
     // Simula criação de usuário pelo Gestor (apenas no Banco, sem Auth real por enquanto)
     createSubUser: async (manager: User, data: { name: string, email: string, role: UserRole }) => {
+        // Inicializa App secundário para criar usuário no Auth sem deslogar o Gestor
+        // NOTA: Como não temos acesso direto ao `firebase/app` aqui para criar apps secundários de forma limpa no frontend sem expor configs extras,
+        // vamos manter a lógica anterior de apenas criar no Firestore por enquanto, mas adicionando uma senha provisória visualmente.
+        // Em um app real, isso seria feito via Cloud Function ou Backend.
+        
         const fakeId = `user-${Date.now()}`;
         const newUser: any = {
             id: fakeId,
@@ -279,7 +284,11 @@ export const FirebaseService = {
                 const data = d.data() as any; // Cast 'any' resolve TS2698
                 return { ...data, id: d.id } as Institution;
             })
-            .filter(item => isVisible(item, currentUser));
+            .filter(item => {
+                // Permite ver a própria instituição vinculada (mesmo se Teacher)
+                if (currentUser.institutionId && item.id === currentUser.institutionId) return true;
+                return isVisible(item, currentUser);
+            });
     },
 
     addInstitution: async (data: Institution) => {
@@ -321,7 +330,13 @@ export const FirebaseService = {
                 const data = d.data() as any; // Cast 'any' resolve TS2698
                 return { ...data, id: d.id } as SchoolClass;
             })
-            .filter(item => isVisible(item, currentUser));
+            .filter(item => {
+                // Professores precisam ver as turmas da sua escola para vincular provas
+                if (currentUser.role === UserRole.TEACHER && currentUser.institutionId && item.institutionId === currentUser.institutionId) {
+                    return true;
+                }
+                return isVisible(item, currentUser);
+            });
     },
 
     addClass: async (data: SchoolClass) => {
