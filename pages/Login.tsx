@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Button, Input } from '../components/UI';
 import { FirebaseService } from '../services/firebaseService';
+import { EmailService } from '../services/emailService';
 import { UserRole } from '../types';
 
 const Login = () => {
@@ -54,21 +55,20 @@ const Login = () => {
         try {
             if(!cleanEmail) throw new Error("Informe seu email para recuperação.");
             
-            // Envia solicitação ao Firebase. 
-            // NOTA: Por segurança, o Firebase pode não retornar erro se o e-mail não existir (para evitar enumeração de usuários).
-            // A mensagem de sucesso deve refletir isso.
-            await FirebaseService.resetPassword(cleanEmail);
+            // 1. Tenta envio nativo do Firebase (funciona para Admins e contas criadas via Auth)
+            // Nota: Pode falhar silenciosamente se o email não existir (segurança)
+            await FirebaseService.resetPassword(cleanEmail).catch(err => console.log("Firebase Reset skipped:", err.code));
             
-            setSuccessMsg(`Se o e-mail "${cleanEmail}" estiver cadastrado, você receberá o link de redefinição em instantes.`);
+            // 2. Tenta envio via EmailJS (fallback para garantir entrega, especialmente para Professores cadastrados apenas no Banco)
+            await EmailService.sendRecoveryInstructions(cleanEmail, name).catch(err => console.warn("EmailJS falhou:", err));
+            
+            setSuccessMsg(`Solicitação processada! Verifique a caixa de entrada e SPAM do e-mail "${cleanEmail}".`);
         } catch (err: any) {
             console.error(err);
-            if (err.code === 'auth/user-not-found') {
-                // Esse erro só aparece se a "Proteção de Enumeração de Email" estiver DESATIVADA no console do Firebase
-                setError("Email não encontrado no sistema.");
-            } else if (err.code === 'auth/invalid-email') {
+            if (err.code === 'auth/invalid-email') {
                 setError("Formato de e-mail inválido.");
             } else {
-                setError("Erro ao processar solicitação. Tente novamente.");
+                setError("Ocorreu um erro ao processar. Tente novamente.");
             }
         } finally {
             setLoading(false);
@@ -139,11 +139,11 @@ const Login = () => {
                     // FORMULÁRIO DE RECUPERAÇÃO
                     <form onSubmit={handleRecover} className="space-y-4 animate-fade-in">
                         <div className="bg-blue-50 text-blue-800 p-3 rounded text-xs border border-blue-100">
-                            Enviaremos um link seguro para o seu e-mail para que você possa criar uma nova senha.
+                            Enviaremos instruções de recuperação para o seu e-mail.
                         </div>
                         <Input label="Email Cadastrado" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" />
                         <Button type="submit" className="w-full justify-center" disabled={loading}>
-                            {loading ? 'Processando...' : 'Enviar Link de Recuperação'}
+                            {loading ? 'Processando...' : 'Enviar Instruções'}
                         </Button>
                         <button 
                             type="button"
