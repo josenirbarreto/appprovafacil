@@ -90,7 +90,7 @@ export const Badge: React.FC<{ children: React.ReactNode; color?: 'blue' | 'gree
   return <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${colors[color]}`}>{children}</span>;
 };
 
-// Novo Componente Modal
+// Novo Componente Modal (Z-INDEX 100 para evitar sobreposições)
 export const Modal: React.FC<{ 
     isOpen: boolean; 
     onClose: () => void; 
@@ -102,7 +102,7 @@ export const Modal: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in print:fixed print:inset-0 print:bg-white print:p-0 print:z-[100] print:block print:h-auto print:overflow-visible">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in print:fixed print:inset-0 print:bg-white print:p-0 print:z-[100] print:block print:h-auto print:overflow-visible">
             <div className={`bg-white rounded-2xl shadow-2xl w-full ${maxWidth} max-h-[90vh] flex flex-col overflow-hidden animate-scale-in print:shadow-none print:w-full print:max-w-none print:max-h-none print:rounded-none print:overflow-visible print:h-auto`}>
                 <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50/50 print:hidden">
                     <h3 className="text-xl font-display font-bold text-brand-dark">{title}</h3>

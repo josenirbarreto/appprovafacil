@@ -56,7 +56,6 @@ const Login = () => {
             if(!cleanEmail) throw new Error("Informe seu email para recuperação.");
             
             // 1. Tenta envio nativo do Firebase (funciona para Admins e contas criadas via Auth)
-            // Nota: Pode falhar silenciosamente se o email não existir (segurança)
             await FirebaseService.resetPassword(cleanEmail).catch(err => console.log("Firebase Reset skipped:", err.code));
             
             // 2. Tenta envio via EmailJS (fallback para garantir entrega, especialmente para Professores cadastrados apenas no Banco)
@@ -109,119 +108,144 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-            <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md animate-fade-in">
-                <div className="text-center mb-6">
-                    <div className="w-12 h-12 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-xl mx-auto mb-4 shadow-lg shadow-blue-200">PF</div>
-                    <h1 className="text-2xl font-bold text-brand-dark">Prova Fácil</h1>
-                    <p className="text-slate-500">
-                        {isRecovering 
-                            ? 'Recuperar acesso' 
-                            : (isRegistering ? 'Crie sua conta grátis' : 'Faça login para continuar')}
+        <div className="flex min-h-screen bg-white overflow-hidden">
+            {/* Esquerda - Branding (Apenas Desktop) */}
+            <div className="hidden md:flex md:w-1/2 bg-brand-blue flex-col justify-center items-center text-white p-12 relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-blue-900 opacity-50"></div>
+                <div className="relative z-10 text-center max-w-lg">
+                    <div className="w-24 h-24 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl font-bold mb-8 mx-auto shadow-xl border border-white/20">
+                        PF
+                    </div>
+                    <h1 className="text-4xl font-display font-bold mb-6">Prova Fácil</h1>
+                    <p className="text-blue-50 text-lg leading-relaxed">
+                        A plataforma completa para gestão escolar, banco de questões inteligente e aplicação de provas online.
                     </p>
                 </div>
-                
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded mb-4 text-sm flex items-start gap-2 animate-fade-in">
-                        <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>{error}</span>
-                    </div>
-                )}
+                {/* Elementos Decorativos de Fundo */}
+                <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+                <div className="absolute top-12 right-12 w-40 h-40 bg-orange-500/20 rounded-full blur-2xl"></div>
+            </div>
 
-                {successMsg && (
-                    <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded mb-4 text-sm flex items-start gap-2 animate-fade-in">
-                        <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        <span>{successMsg}</span>
-                    </div>
-                )}
-
-                {isRecovering ? (
-                    // FORMULÁRIO DE RECUPERAÇÃO
-                    <form onSubmit={handleRecover} className="space-y-4 animate-fade-in">
-                        <div className="bg-blue-50 text-blue-800 p-3 rounded text-xs border border-blue-100">
-                            Enviaremos instruções de recuperação para o seu e-mail.
-                        </div>
-                        <Input label="Email Cadastrado" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" />
-                        <Button type="submit" className="w-full justify-center" disabled={loading}>
-                            {loading ? 'Processando...' : 'Enviar Instruções'}
-                        </Button>
-                        <button 
-                            type="button"
-                            onClick={() => { setIsRecovering(false); setError(''); setSuccessMsg(''); }} 
-                            className="w-full text-center text-sm text-slate-500 hover:text-slate-800 mt-2"
-                        >
-                            Voltar para o Login
-                        </button>
-                    </form>
-                ) : (
-                    // FORMULÁRIO DE LOGIN / CADASTRO
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {isRegistering && (
-                            <div className="animate-fade-in space-y-4">
-                                <Input 
-                                    label="Nome Completo" 
-                                    type="text" 
-                                    value={name} 
-                                    onChange={e => setName(e.target.value)} 
-                                    required={isRegistering} 
-                                    placeholder="Seu nome" 
-                                />
-                                
-                                {/* Opção de Teste para Gestor */}
-                                <label className="flex items-start gap-3 p-3 border border-orange-200 bg-orange-50 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        className="mt-1 w-4 h-4 text-brand-orange rounded border-orange-300 focus:ring-brand-orange"
-                                        checked={isManager}
-                                        onChange={e => setIsManager(e.target.checked)}
-                                    />
-                                    <div>
-                                        <span className="block text-sm font-bold text-orange-800">Sou um Gestor Escolar</span>
-                                        <span className="block text-xs text-orange-700">Habilita o Painel Administrativo para cadastrar professores.</span>
-                                    </div>
-                                </label>
-                            </div>
-                        )}
-                        <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="ex: professor@escola.com" />
+            {/* Direita - Formulário */}
+            <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-12 bg-white">
+                <div className="w-full max-w-md animate-fade-in">
+                    <div className="text-center md:text-left mb-8">
+                        {/* Logo Mobile */}
+                        <div className="md:hidden w-12 h-12 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-xl mx-auto mb-4 shadow-lg shadow-blue-200">PF</div>
                         
-                        <div>
-                            <Input label="Senha" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="******" />
-                            {!isRegistering && (
-                                <div className="text-right mt-1">
-                                    <button 
-                                        type="button"
-                                        onClick={() => { setIsRecovering(true); setError(''); setSuccessMsg(''); }}
-                                        className="text-xs text-brand-blue hover:underline"
-                                    >
-                                        Esqueci minha senha
-                                    </button>
+                        <h2 className="text-2xl font-bold text-brand-dark mb-2">
+                            {isRecovering ? 'Recuperar Senha' : (isRegistering ? 'Criar Nova Conta' : 'Bem-vindo de volta')}
+                        </h2>
+                        <p className="text-slate-500">
+                            {isRecovering 
+                                ? 'Informe seus dados para recuperar o acesso.' 
+                                : (isRegistering ? 'Preencha os dados abaixo para começar.' : 'Insira suas credenciais para acessar o painel.')}
+                        </p>
+                    </div>
+                    
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg mb-6 text-sm flex items-start gap-3 animate-fade-in">
+                            <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span>{error}</span>
+                        </div>
+                    )}
+
+                    {successMsg && (
+                        <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-lg mb-6 text-sm flex items-start gap-3 animate-fade-in">
+                            <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            <span>{successMsg}</span>
+                        </div>
+                    )}
+
+                    {isRecovering ? (
+                        // FORMULÁRIO DE RECUPERAÇÃO
+                        <form onSubmit={handleRecover} className="space-y-5">
+                            <div className="bg-blue-50 text-blue-800 p-4 rounded-lg text-sm border border-blue-100">
+                                Enviaremos instruções de recuperação para o seu e-mail cadastrado.
+                            </div>
+                            <Input label="Email Cadastrado" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" className="h-11" />
+                            <Button type="submit" className="w-full justify-center h-11 text-base" disabled={loading}>
+                                {loading ? 'Processando...' : 'Enviar Instruções'}
+                            </Button>
+                            <button 
+                                type="button"
+                                onClick={() => { setIsRecovering(false); setError(''); setSuccessMsg(''); }} 
+                                className="w-full text-center text-sm text-slate-500 hover:text-slate-800 mt-2 font-medium py-2"
+                            >
+                                Voltar para o Login
+                            </button>
+                        </form>
+                    ) : (
+                        // FORMULÁRIO DE LOGIN / CADASTRO
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            {isRegistering && (
+                                <div className="animate-fade-in space-y-5">
+                                    <Input 
+                                        label="Nome Completo" 
+                                        type="text" 
+                                        value={name} 
+                                        onChange={e => setName(e.target.value)} 
+                                        required={isRegistering} 
+                                        placeholder="Seu nome"
+                                        className="h-11" 
+                                    />
+                                    
+                                    {/* Opção de Teste para Gestor */}
+                                    <label className="flex items-start gap-3 p-4 border border-orange-200 bg-orange-50 rounded-xl cursor-pointer hover:bg-orange-100 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            className="mt-1 w-5 h-5 text-brand-orange rounded border-orange-300 focus:ring-brand-orange"
+                                            checked={isManager}
+                                            onChange={e => setIsManager(e.target.checked)}
+                                        />
+                                        <div>
+                                            <span className="block text-sm font-bold text-orange-900">Sou um Gestor Escolar</span>
+                                            <span className="block text-xs text-orange-700 mt-1">Habilita o Painel Administrativo para cadastrar professores.</span>
+                                        </div>
+                                    </label>
                                 </div>
                             )}
+                            <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="ex: professor@escola.com" className="h-11" />
+                            
+                            <div>
+                                <Input label="Senha" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="******" className="h-11" />
+                                {!isRegistering && (
+                                    <div className="text-right mt-2">
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setIsRecovering(true); setError(''); setSuccessMsg(''); }}
+                                            className="text-sm text-brand-blue font-medium hover:underline"
+                                        >
+                                            Esqueci minha senha
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <Button type="submit" className="w-full justify-center h-11 text-base shadow-lg shadow-blue-100" disabled={loading}>
+                                {loading 
+                                    ? (isRegistering ? 'Criando conta...' : 'Entrando...') 
+                                    : (isRegistering ? 'Cadastrar Grátis' : 'Entrar')
+                                }
+                            </Button>
+                        </form>
+                    )}
+                    
+                    {!isRecovering && (
+                        <div className="mt-8 text-center pt-6 border-t border-slate-100">
+                            <p className="text-sm text-slate-600 mb-3">
+                                {isRegistering ? 'Já possui uma conta?' : 'Ainda não tem uma conta?'}
+                            </p>
+                            <button 
+                                type="button"
+                                onClick={toggleMode} 
+                                className="text-brand-blue font-bold hover:text-blue-700 hover:underline transition-colors"
+                            >
+                                {isRegistering ? 'Fazer Login' : 'Criar nova conta gratuitamente'}
+                            </button>
                         </div>
-                        
-                        <Button type="submit" className="w-full justify-center" disabled={loading}>
-                            {loading 
-                                ? (isRegistering ? 'Criando conta...' : 'Entrando...') 
-                                : (isRegistering ? 'Cadastrar Grátis' : 'Entrar')
-                            }
-                        </Button>
-                    </form>
-                )}
-                
-                {!isRecovering && (
-                    <div className="mt-6 text-center pt-4 border-t border-slate-100">
-                        <p className="text-sm text-slate-600 mb-2">
-                            {isRegistering ? 'Já possui uma conta?' : 'Ainda não tem uma conta?'}
-                        </p>
-                        <button 
-                            type="button"
-                            onClick={toggleMode} 
-                            className="text-brand-blue font-bold hover:underline text-sm"
-                        >
-                            {isRegistering ? 'Fazer Login' : 'Criar nova conta'}
-                        </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );
