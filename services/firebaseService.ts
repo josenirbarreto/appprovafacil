@@ -18,7 +18,8 @@ import {
     signInWithEmailAndPassword, 
     signOut, 
     updateProfile, 
-    deleteUser
+    deleteUser,
+    sendPasswordResetEmail
 } from "firebase/auth";
 import { db, auth } from "../firebaseConfig";
 import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment } from '../types';
@@ -136,6 +137,15 @@ export const FirebaseService = {
 
     logout: async () => {
         await signOut(auth);
+    },
+
+    resetPassword: async (email: string) => {
+        try {
+            await sendPasswordResetEmail(auth, email);
+        } catch (error) {
+            safeLog("Erro ao enviar email de redefinição:", error);
+            throw error;
+        }
     },
 
     getCurrentUserData: async () => {

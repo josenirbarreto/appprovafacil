@@ -6,6 +6,8 @@ import { UserRole } from '../types';
 
 const Login = () => {
     const [isRegistering, setIsRegistering] = useState(false);
+    const [isRecovering, setIsRecovering] = useState(false);
+    
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -14,11 +16,13 @@ const Login = () => {
     const [isManager, setIsManager] = useState(false);
     
     const [error, setError] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setSuccessMsg('');
         setLoading(true);
         
         try {
@@ -34,35 +38,67 @@ const Login = () => {
             }
             // O redirecionamento acontece automaticamente pelo AuthContext no App.tsx
         } catch (err: any) {
-            console.error("Auth Error:", err);
+            handleError(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRecover = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setSuccessMsg('');
+        setLoading(true);
+
+        try {
+            if(!email) throw new Error("Informe seu email para recuperação.");
             
-            // Tratamento de erros específicos do Firebase Auth
-            const errorCode = err.code;
-            if (errorCode === 'auth/email-already-in-use') {
-                setError('Este e-mail já está cadastrado.');
-            } else if (errorCode === 'auth/weak-password') {
-                setError('A senha deve ter pelo menos 6 caracteres.');
-            } else if (errorCode === 'auth/invalid-email') {
-                setError('O formato do e-mail é inválido.');
-            } else if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password') {
-                setError('Email ou senha incorretos.');
-            } else if (errorCode === 'auth/user-not-found') {
-                setError('Usuário não cadastrado.');
-            } else if (errorCode === 'auth/too-many-requests') {
-                setError('Muitas tentativas falhas. Tente novamente mais tarde.');
-            } else if (errorCode === 'permission-denied') {
-                setError('Permissão negada no banco de dados. Verifique as regras do Firestore.');
+            // USANDO FIREBASE NATIVO PARA GARANTIR O LINK DE REDEFINIÇÃO
+            // O EmailJS (frontend) não consegue gerar tokens de segurança para resetar a senha.
+            // Para traduzir o e-mail do Firebase:
+            // Vá no Firebase Console -> Authentication -> Templates -> Password Reset -> Ícone Lápis -> Idioma Português.
+            await FirebaseService.resetPassword(email);
+            
+            setSuccessMsg("Email com link de redefinição enviado! Verifique sua caixa de entrada (e spam).");
+        } catch (err: any) {
+            console.error(err);
+            if (err.code === 'auth/user-not-found') {
+                setError("Email não encontrado no sistema.");
             } else {
-                setError(`${err.message || 'Ocorreu um erro. Tente novamente.'}`);
+                setError("Erro ao enviar email. Verifique o endereço digitado.");
             }
         } finally {
             setLoading(false);
         }
     };
 
+    const handleError = (err: any) => {
+        console.error("Auth Error:", err);
+        const errorCode = err.code;
+        if (errorCode === 'auth/email-already-in-use') {
+            setError('Este e-mail já está cadastrado.');
+        } else if (errorCode === 'auth/weak-password') {
+            setError('A senha deve ter pelo menos 6 caracteres.');
+        } else if (errorCode === 'auth/invalid-email') {
+            setError('O formato do e-mail é inválido.');
+        } else if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password') {
+            setError('Email ou senha incorretos.');
+        } else if (errorCode === 'auth/user-not-found') {
+            setError('Usuário não cadastrado.');
+        } else if (errorCode === 'auth/too-many-requests') {
+            setError('Muitas tentativas falhas. Tente novamente mais tarde.');
+        } else if (errorCode === 'permission-denied') {
+            setError('Permissão negada no banco de dados. Verifique as regras do Firestore.');
+        } else {
+            setError(`${err.message || 'Ocorreu um erro. Tente novamente.'}`);
+        }
+    };
+
     const toggleMode = () => {
         setIsRegistering(!isRegistering);
+        setIsRecovering(false);
         setError('');
+        setSuccessMsg('');
         setName('');
         setEmail('');
         setPassword('');
@@ -76,7 +112,9 @@ const Login = () => {
                     <div className="w-12 h-12 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-xl mx-auto mb-4 shadow-lg shadow-blue-200">PF</div>
                     <h1 className="text-2xl font-bold text-brand-dark">Prova Fácil</h1>
                     <p className="text-slate-500">
-                        {isRegistering ? 'Crie sua conta grátis' : 'Faça login para continuar'}
+                        {isRecovering 
+                            ? 'Recuperar acesso' 
+                            : (isRegistering ? 'Crie sua conta grátis' : 'Faça login para continuar')}
                     </p>
                 </div>
                 
@@ -87,56 +125,100 @@ const Login = () => {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {isRegistering && (
-                        <div className="animate-fade-in space-y-4">
-                            <Input 
-                                label="Nome Completo" 
-                                type="text" 
-                                value={name} 
-                                onChange={e => setName(e.target.value)} 
-                                required={isRegistering} 
-                                placeholder="Seu nome" 
-                            />
-                            
-                            {/* Opção de Teste para Gestor */}
-                            <label className="flex items-start gap-3 p-3 border border-orange-200 bg-orange-50 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors">
-                                <input 
-                                    type="checkbox" 
-                                    className="mt-1 w-4 h-4 text-brand-orange rounded border-orange-300 focus:ring-brand-orange"
-                                    checked={isManager}
-                                    onChange={e => setIsManager(e.target.checked)}
-                                />
-                                <div>
-                                    <span className="block text-sm font-bold text-orange-800">Sou um Gestor Escolar</span>
-                                    <span className="block text-xs text-orange-700">Habilita o Painel Administrativo para cadastrar professores.</span>
-                                </div>
-                            </label>
+                {successMsg && (
+                    <div className="bg-green-50 border border-green-200 text-green-600 p-3 rounded mb-4 text-sm flex items-start gap-2 animate-fade-in">
+                        <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        <span>{successMsg}</span>
+                    </div>
+                )}
+
+                {isRecovering ? (
+                    // FORMULÁRIO DE RECUPERAÇÃO
+                    <form onSubmit={handleRecover} className="space-y-4 animate-fade-in">
+                        <div className="bg-blue-50 text-blue-800 p-3 rounded text-xs border border-blue-100">
+                            Enviaremos um link seguro para o seu e-mail para que você possa criar uma nova senha.
                         </div>
-                    )}
-                    <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="ex: professor@escola.com" />
-                    <Input label="Senha" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="******" />
-                    
-                    <Button type="submit" className="w-full justify-center" disabled={loading}>
-                        {loading 
-                            ? (isRegistering ? 'Criando conta...' : 'Entrando...') 
-                            : (isRegistering ? 'Cadastrar Grátis' : 'Entrar')
-                        }
-                    </Button>
-                </form>
+                        <Input label="Email Cadastrado" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" />
+                        <Button type="submit" className="w-full justify-center" disabled={loading}>
+                            {loading ? 'Enviando...' : 'Enviar Link de Recuperação'}
+                        </Button>
+                        <button 
+                            type="button"
+                            onClick={() => { setIsRecovering(false); setError(''); setSuccessMsg(''); }} 
+                            className="w-full text-center text-sm text-slate-500 hover:text-slate-800 mt-2"
+                        >
+                            Voltar para o Login
+                        </button>
+                    </form>
+                ) : (
+                    // FORMULÁRIO DE LOGIN / CADASTRO
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        {isRegistering && (
+                            <div className="animate-fade-in space-y-4">
+                                <Input 
+                                    label="Nome Completo" 
+                                    type="text" 
+                                    value={name} 
+                                    onChange={e => setName(e.target.value)} 
+                                    required={isRegistering} 
+                                    placeholder="Seu nome" 
+                                />
+                                
+                                {/* Opção de Teste para Gestor */}
+                                <label className="flex items-start gap-3 p-3 border border-orange-200 bg-orange-50 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        className="mt-1 w-4 h-4 text-brand-orange rounded border-orange-300 focus:ring-brand-orange"
+                                        checked={isManager}
+                                        onChange={e => setIsManager(e.target.checked)}
+                                    />
+                                    <div>
+                                        <span className="block text-sm font-bold text-orange-800">Sou um Gestor Escolar</span>
+                                        <span className="block text-xs text-orange-700">Habilita o Painel Administrativo para cadastrar professores.</span>
+                                    </div>
+                                </label>
+                            </div>
+                        )}
+                        <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="ex: professor@escola.com" />
+                        
+                        <div>
+                            <Input label="Senha" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="******" />
+                            {!isRegistering && (
+                                <div className="text-right mt-1">
+                                    <button 
+                                        type="button"
+                                        onClick={() => { setIsRecovering(true); setError(''); setSuccessMsg(''); }}
+                                        className="text-xs text-brand-blue hover:underline"
+                                    >
+                                        Esqueci minha senha
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <Button type="submit" className="w-full justify-center" disabled={loading}>
+                            {loading 
+                                ? (isRegistering ? 'Criando conta...' : 'Entrando...') 
+                                : (isRegistering ? 'Cadastrar Grátis' : 'Entrar')
+                            }
+                        </Button>
+                    </form>
+                )}
                 
-                <div className="mt-6 text-center pt-4 border-t border-slate-100">
-                    <p className="text-sm text-slate-600 mb-2">
-                        {isRegistering ? 'Já possui uma conta?' : 'Ainda não tem uma conta?'}
-                    </p>
-                    <button 
-                        type="button"
-                        onClick={toggleMode} 
-                        className="text-brand-blue font-bold hover:underline text-sm"
-                    >
-                        {isRegistering ? 'Fazer Login' : 'Criar nova conta'}
-                    </button>
-                </div>
+                {!isRecovering && (
+                    <div className="mt-6 text-center pt-4 border-t border-slate-100">
+                        <p className="text-sm text-slate-600 mb-2">
+                            {isRegistering ? 'Já possui uma conta?' : 'Ainda não tem uma conta?'}
+                        </p>
+                        <button 
+                            type="button"
+                            onClick={toggleMode} 
+                            className="text-brand-blue font-bold hover:underline text-sm"
+                        >
+                            {isRegistering ? 'Fazer Login' : 'Criar nova conta'}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
