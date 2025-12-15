@@ -32,9 +32,9 @@ const Login = () => {
                 // Define a Role baseada no checkbox de teste
                 const roleToRegister = isManager ? UserRole.MANAGER : UserRole.TEACHER;
                 
-                await FirebaseService.register(email, password, name, roleToRegister);
+                await FirebaseService.register(email.trim(), password, name, roleToRegister);
             } else {
-                await FirebaseService.login(email, password);
+                await FirebaseService.login(email.trim(), password);
             }
             // O redirecionamento acontece automaticamente pelo AuthContext no App.tsx
         } catch (err: any) {
@@ -49,23 +49,26 @@ const Login = () => {
         setError('');
         setSuccessMsg('');
         setLoading(true);
+        const cleanEmail = email.trim();
 
         try {
-            if(!email) throw new Error("Informe seu email para recuperação.");
+            if(!cleanEmail) throw new Error("Informe seu email para recuperação.");
             
-            // USANDO FIREBASE NATIVO PARA GARANTIR O LINK DE REDEFINIÇÃO
-            // O EmailJS (frontend) não consegue gerar tokens de segurança para resetar a senha.
-            // Para traduzir o e-mail do Firebase:
-            // Vá no Firebase Console -> Authentication -> Templates -> Password Reset -> Ícone Lápis -> Idioma Português.
-            await FirebaseService.resetPassword(email);
+            // Envia solicitação ao Firebase. 
+            // NOTA: Por segurança, o Firebase pode não retornar erro se o e-mail não existir (para evitar enumeração de usuários).
+            // A mensagem de sucesso deve refletir isso.
+            await FirebaseService.resetPassword(cleanEmail);
             
-            setSuccessMsg("Email com link de redefinição enviado! Verifique sua caixa de entrada (e spam).");
+            setSuccessMsg(`Se o e-mail "${cleanEmail}" estiver cadastrado, você receberá o link de redefinição em instantes.`);
         } catch (err: any) {
             console.error(err);
             if (err.code === 'auth/user-not-found') {
+                // Esse erro só aparece se a "Proteção de Enumeração de Email" estiver DESATIVADA no console do Firebase
                 setError("Email não encontrado no sistema.");
+            } else if (err.code === 'auth/invalid-email') {
+                setError("Formato de e-mail inválido.");
             } else {
-                setError("Erro ao enviar email. Verifique o endereço digitado.");
+                setError("Erro ao processar solicitação. Tente novamente.");
             }
         } finally {
             setLoading(false);
@@ -126,8 +129,8 @@ const Login = () => {
                 )}
 
                 {successMsg && (
-                    <div className="bg-green-50 border border-green-200 text-green-600 p-3 rounded mb-4 text-sm flex items-start gap-2 animate-fade-in">
-                        <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded mb-4 text-sm flex items-start gap-2 animate-fade-in">
+                        <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                         <span>{successMsg}</span>
                     </div>
                 )}
@@ -140,7 +143,7 @@ const Login = () => {
                         </div>
                         <Input label="Email Cadastrado" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" />
                         <Button type="submit" className="w-full justify-center" disabled={loading}>
-                            {loading ? 'Enviando...' : 'Enviar Link de Recuperação'}
+                            {loading ? 'Processando...' : 'Enviar Link de Recuperação'}
                         </Button>
                         <button 
                             type="button"
