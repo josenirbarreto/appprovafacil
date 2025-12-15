@@ -15,7 +15,8 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",
     "@google/genai": "*",
-    "pdfjs-dist": "4.0.379"
+    "pdfjs-dist": "4.0.379",
+    "@emailjs/browser": "^3.12.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
