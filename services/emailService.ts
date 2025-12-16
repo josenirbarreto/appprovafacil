@@ -10,8 +10,38 @@ const EMAILJS_CONFIG = {
 
 export const EmailService = {
     /**
+     * Envia e-mail de boas-vindas com a senha inicial gerada.
+     */
+    sendWelcomeCredentials: async (email: string, name: string, tempPassword: string) => {
+        const header = `
+========================================
+    BEM-VINDO AO PROVA FÁCIL
+========================================
+        `;
+
+        const body = `
+Olá, ${name}.
+
+Sua conta de professor foi criada com sucesso pelo Gestor da sua escola.
+
+Aqui estão suas credenciais de acesso temporárias:
+
+E-mail: ${email}
+Senha Provisória: ${tempPassword}
+
+IMPORTANTE:
+Ao fazer o primeiro login, você será obrigado a definir uma nova senha pessoal e segura.
+
+Acesse agora: https://app-provafacil.firebaseapp.com/ (ou o link da sua aplicação)
+        `;
+
+        const fullMessage = `${header}\n${body}`;
+
+        return EmailService.sendEmailInternal(email, name, 'Acesso Criado - Prova Fácil', fullMessage);
+    },
+
+    /**
      * Envia instruções de recuperação de senha via EmailJS.
-     * @param type 'MANAGED' para usuários criados pelo Gestor (sem link) ou 'REAL' para usuários Auth (com link)
      */
     sendRecoveryInstructions: async (email: string, name?: string, type: 'MANAGED' | 'REAL' = 'REAL') => {
         
@@ -32,7 +62,7 @@ Isso significa que você NÃO possui redefinição automática por link.
 
 O QUE FAZER:
 1. Entre em contato com o Gestor da sua escola.
-2. Solicite que ele defina uma nova senha manualmente no painel (Menu Usuários > Editar).
+2. Solicite que ele redefina sua conta (Excluir e criar novamente com nova senha).
 
 Não é possível alterar sua senha por este e-mail.
             `;
@@ -49,15 +79,18 @@ Tentamos enviar um LINK AUTOMÁTICO DE REDEFINIÇÃO do Firebase para: ${email}.
    Esses provedores costumam bloquear e-mails automáticos.
    
    SE O LINK NÃO CHEGAR EM 2 MINUTOS:
-   Não se preocupe! Peça ao Gestor da sua escola ou Administrador do sistema.
-   Eles podem definir uma "Senha Manual" para você no Painel de Usuários imediatamente.
+   Peça ao Gestor da sua escola. Eles podem excluir e recriar seu usuário definindo uma senha manual.
 
 Verifique também sua caixa de SPAM ou LIXEIRA.
             `;
         }
 
         const fullMessage = `${header}\n${body}`;
+        return EmailService.sendEmailInternal(email, name || 'Usuário', 'Instruções de Acesso - Prova Fácil', fullMessage);
+    },
 
+    // Função interna auxiliar para evitar duplicação de código EmailJS
+    sendEmailInternal: async (email: string, name: string, subject: string, message: string) => {
         try {
             const isConfigured = 
                 EMAILJS_CONFIG.PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && 
@@ -65,12 +98,12 @@ Verifique também sua caixa de SPAM ou LIXEIRA.
                 !EMAILJS_CONFIG.PUBLIC_KEY.includes('YOUR_');
 
             if (!isConfigured) {
-                console.log(`[EmailJS Simulado] Enviando recuperação para: ${email}`);
+                console.log(`[EmailJS Simulado] Assunto: ${subject} | Para: ${email}`);
                 return { 
                     status: 200, 
                     text: 'OK', 
                     simulated: true, 
-                    emailContent: fullMessage 
+                    emailContent: message 
                 };
             }
 
@@ -80,9 +113,9 @@ Verifique também sua caixa de SPAM ou LIXEIRA.
                 user_email: email,
                 recipient: email,
                 reply_to: email,
-                to_name: name || 'Usuário',
-                subject: 'Instruções de Acesso - Prova Fácil', 
-                message: fullMessage
+                to_name: name,
+                subject: subject, 
+                message: message
             };
 
             const response = await emailjs.send(
@@ -97,7 +130,6 @@ Verifique também sua caixa de SPAM ou LIXEIRA.
             let errorText = 'Erro desconhecido';
             if (error?.text) errorText = error.text; 
             else if (error?.message) errorText = error.message; 
-            else if (typeof error === 'object') try { errorText = JSON.stringify(error); } catch { errorText = String(error); }
             else errorText = String(error);
 
             console.error(`Erro ao enviar email via EmailJS:`, errorText);

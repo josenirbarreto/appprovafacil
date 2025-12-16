@@ -149,19 +149,20 @@ const UsersPage = () => {
                 });
 
                 if (password.trim()) {
-                    // Explicação didática sobre a limitação de segurança e a solução
                     alert("⚠️ Atenção sobre a Senha:\n\nPor regras de segurança do sistema, não é possível alterar a senha de um usuário já existente por aqui.\n\nSOLUÇÃO:\nSe o professor não recebeu o e-mail ou esqueceu a senha, exclua este usuário e cadastre-o novamente com a nova senha desejada.");
                 } else {
                     alert("Dados do perfil atualizados com sucesso!");
                 }
             } else {
                 // CRIAÇÃO DE NOVO USUÁRIO
+                const finalPassword = password || Math.random().toString(36).slice(-8); // Garante que temos uma senha
+                
                 const newUser = await FirebaseService.createSubUser(user, {
                     name: userData.name,
                     email: userData.email,
                     role: userData.role,
                     subjects: userData.subjects,
-                    password: password // Passa a senha para criar no Auth
+                    password: finalPassword
                 });
                 
                 // Atualiza access grants após criação (se houver, e se admin)
@@ -169,7 +170,15 @@ const UsersPage = () => {
                      await FirebaseService.updateUser(newUser.id, { accessGrants: userData.accessGrants });
                 }
                 
-                alert("Usuário cadastrado com sucesso! Login habilitado.");
+                // ENVIA E-MAIL AUTOMATICAMENTE COM A SENHA
+                const response: any = await EmailService.sendWelcomeCredentials(userData.email, userData.name, finalPassword);
+                
+                if (response && response.simulated) {
+                    setSimulatedEmail(response.emailContent);
+                    alert("Usuário criado! Veja o e-mail simulado com a senha.");
+                } else {
+                    alert(`Usuário cadastrado com sucesso! As credenciais foram enviadas para ${userData.email}.`);
+                }
             }
             
             setIsModalOpen(false);
@@ -351,6 +360,7 @@ const UsersPage = () => {
                 footer={activeTab !== 'FINANCE' ? <Button onClick={handleSaveUser}>{editingUserId ? "Salvar Alterações" : "Cadastrar"}</Button> : null}
                 maxWidth="max-w-4xl"
             >
+                {/* ... CONTEÚDO DO MODAL MANTIDO IGUAL AO ANTERIOR ... */}
                 {editingUserId && isAdmin && (
                     <div className="flex gap-4 border-b border-slate-200 mb-6">
                         <button className={`pb-2 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'PROFILE' ? 'border-brand-blue text-brand-blue' : 'border-transparent text-slate-500 hover:text-slate-700'}`} onClick={() => setActiveTab('PROFILE')}>Perfil</button>
@@ -411,7 +421,10 @@ const UsersPage = () => {
                                          </div>
                                      </div>
                                  ) : (
-                                     <p className="text-xs text-slate-500">Esta senha permitirá o primeiro acesso do professor.</p>
+                                     <div className="text-xs text-slate-600">
+                                         <p className="font-bold">Política de Acesso:</p>
+                                         <p>A senha definida aqui será enviada por e-mail para o professor. No primeiro acesso, o sistema exigirá que ele crie uma nova senha pessoal.</p>
+                                     </div>
                                  )}
                              </div>
                         </div>

@@ -7,6 +7,7 @@ import { Icons } from './components/Icons';
 import { AuthContext, useAuth } from './contexts/AuthContext';
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
+import { Modal, Input, Button } from './components/UI'; // Importações adicionadas
 
 // Pages Imports
 import Login from './pages/Login';
@@ -21,6 +22,65 @@ import InstitutionPage from './pages/Institutions';
 import ProfilePage from './pages/Profile';
 import UsersPage from './pages/Users';
 import PlansPage from './pages/Plans';
+
+const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async () => {
+        if (newPassword.length < 6) return setError("A senha deve ter pelo menos 6 caracteres.");
+        if (newPassword !== confirmPassword) return setError("As senhas não conferem.");
+        
+        setLoading(true);
+        setError('');
+        try {
+            await FirebaseService.changeUserPassword(newPassword);
+            alert("Senha alterada com sucesso!");
+            await refreshUser(); // Atualiza o contexto para remover a flag e fechar o modal
+        } catch (e: any) {
+            console.error(e);
+            setError("Erro ao alterar senha. Tente novamente.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Modal 
+            isOpen={true} 
+            onClose={() => {}} // Impede fechar clicando fora ou no X (se houvesse)
+            title="Troca de Senha Obrigatória"
+            maxWidth="max-w-md"
+        >
+            <div className="space-y-4">
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 text-sm text-yellow-800">
+                    <p className="font-bold">Primeiro Acesso</p>
+                    <p>Por segurança, você deve alterar a senha provisória fornecida pelo gestor para uma senha pessoal.</p>
+                </div>
+                {error && <p className="text-red-500 text-sm font-bold">{error}</p>}
+                <Input 
+                    label="Nova Senha" 
+                    type="password" 
+                    value={newPassword} 
+                    onChange={e => setNewPassword(e.target.value)} 
+                    placeholder="Mínimo 6 caracteres"
+                />
+                <Input 
+                    label="Confirmar Nova Senha" 
+                    type="password" 
+                    value={confirmPassword} 
+                    onChange={e => setConfirmPassword(e.target.value)} 
+                    placeholder="Repita a senha"
+                />
+                <Button onClick={handleSubmit} disabled={loading} className="w-full justify-center">
+                    {loading ? 'Salvando...' : 'Definir Nova Senha'}
+                </Button>
+            </div>
+        </Modal>
+    );
+};
 
 const Layout = ({ children }: { children?: React.ReactNode }) => {
     const location = useLocation();
@@ -200,6 +260,11 @@ const App = () => {
     return (
         <AuthContext.Provider value={{ user, loading, refreshUser }}>
             <HashRouter>
+                {/* MODAL DE TROCA DE SENHA OBRIGATÓRIA (BLOQUEANTE) */}
+                {user && user.requiresPasswordChange && (
+                    <ForcePasswordChangeModal user={user} refreshUser={refreshUser} />
+                )}
+
                 <Routes>
                     {/* ROTA PÚBLICA (ALUNO) - Fora do Auth Guard */}
                     <Route path="/p/:examId" element={<PublicExam />} />

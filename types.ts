@@ -19,6 +19,7 @@ export interface User {
   ownerId?: string; // ID do Gestor que criou este usuário
   accessGrants?: string[]; // NOVO: IDs das Disciplinas que este usuário pode acessar no Banco Global
   subjects?: string[]; // NOVO: IDs das Disciplinas que o professor leciona (Componente Curricular)
+  requiresPasswordChange?: boolean; // NOVO: Força troca de senha no próximo login
 }
 
 export interface Payment {
