@@ -248,12 +248,22 @@ export const FirebaseService = {
                     aiConfig: { totalGenerations: 0, monthlyLimit: 1000, costPerRequestEst: 0.0015 },
                     whiteLabel: { appName: 'Prova Fácil', primaryColor: '#3A72EC' }
                 };
-                // Cria o documento padrão silenciosamente
-                await setDoc(docRef, defaultSettings);
+                
+                // Tenta criar o documento padrão silenciosamente
+                try {
+                    await setDoc(docRef, defaultSettings);
+                } catch (e) {
+                    // Silently fail if unable to write (e.g. permissions or offline)
+                }
+                
                 return defaultSettings;
             }
-        } catch (error) {
-            safeLog("Erro ao buscar configurações globais:", error);
+        } catch (error: any) {
+            // Suprime erro 'unavailable' para não poluir o console em redes instáveis ou offline
+            if (error?.code !== 'unavailable' && error?.message !== 'unavailable') {
+                safeLog("Erro ao buscar configurações globais:", error);
+            }
+            
             // Fallback em caso de erro de rede ou permissão
             return {
                 banner: { active: false, message: '', type: 'INFO' },

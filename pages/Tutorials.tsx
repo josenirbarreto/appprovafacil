@@ -206,9 +206,14 @@ const TutorialsPage = () => {
                                                     {CATEGORIES.find(c => c.id === tutorial.category)?.label}
                                                 </span>
                                                 {isAdmin && (
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(tutorial.id); }} className="text-slate-300 hover:text-red-500 transition-colors">
-                                                        <Icons.Trash />
-                                                    </button>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={(e) => { e.stopPropagation(); setEditing(tutorial); setIsEditModalOpen(true); }} className="text-slate-300 hover:text-brand-blue transition-colors p-1" title="Editar">
+                                                            <Icons.Edit />
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(tutorial.id); }} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Excluir">
+                                                            <Icons.Trash />
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                             <h3 className="font-bold text-slate-800 mb-2 line-clamp-2 group-hover:text-brand-blue transition-colors">
@@ -286,6 +291,25 @@ const TutorialsPage = () => {
                             onChange={html => setEditing({...editing, contentBody: html})} 
                         />
                     </div>
+
+                    {/* ATTACHMENT SECTION (FILE DOWNLOAD) */}
+                    <div className="border-t pt-4">
+                        <h4 className="text-sm font-bold text-slate-700 mb-2">Material de Apoio (Download)</h4>
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-2 gap-4">
+                            <Input 
+                                label="Nome do Arquivo" 
+                                value={editing.attachmentLabel || ''} 
+                                onChange={e => setEditing({...editing, attachmentLabel: e.target.value})} 
+                                placeholder="Ex: Slides da Aula (PDF)" 
+                            />
+                            <Input 
+                                label="Link do Arquivo (URL)" 
+                                value={editing.attachmentUrl || ''} 
+                                onChange={e => setEditing({...editing, attachmentUrl: e.target.value})} 
+                                placeholder="https://drive.google.com/..." 
+                            />
+                        </div>
+                    </div>
                 </div>
             </Modal>
 
@@ -300,7 +324,7 @@ const TutorialsPage = () => {
                 <div className="space-y-6">
                     {/* VIDEO PLAYER SECTION */}
                     {viewingTutorial?.type === 'VIDEO' && viewingTutorial.contentUrl && (
-                        <div className="w-full aspect-video bg-black rounded-xl overflow-hidden shadow-lg relative">
+                        <div className="w-full max-w-full aspect-video bg-black rounded-xl overflow-hidden shadow-lg relative mx-auto">
                             {getYoutubeId(viewingTutorial.contentUrl) ? (
                                 <iframe 
                                     className="absolute top-0 left-0 w-full h-full"
@@ -323,6 +347,28 @@ const TutorialsPage = () => {
                         </div>
                     )}
                     
+                    {/* DOWNLOAD SECTION */}
+                    {viewingTutorial?.attachmentUrl && (
+                        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-3">
+                            <div className="p-3 bg-blue-100 text-brand-blue rounded-lg">
+                                <Icons.Download />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-slate-800 text-sm">Material Complementar</h4>
+                                <p className="text-sm font-semibold text-slate-700">{viewingTutorial.attachmentLabel || 'Arquivo Disponível'}</p>
+                                <p className="text-xs text-slate-500">Faça o download do arquivo anexado a esta aula.</p>
+                            </div>
+                            <a 
+                                href={viewingTutorial.attachmentUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="bg-white border border-slate-200 text-brand-blue px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-2"
+                            >
+                                Baixar {viewingTutorial.attachmentLabel || 'Arquivo'}
+                            </a>
+                        </div>
+                    )}
+
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 mt-4">
                         <h4 className="font-bold text-slate-800 text-sm mb-1">Sobre este tutorial</h4>
                         <p className="text-slate-600 text-sm">{viewingTutorial?.description}</p>

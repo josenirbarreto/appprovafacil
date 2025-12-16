@@ -32,6 +32,8 @@ export interface Tutorial {
   contentUrl?: string; // Para Vídeos (YouTube link)
   contentBody?: string; // Para Artigos (HTML)
   videoDuration?: string; // Ex: "5 min"
+  attachmentUrl?: string; // NOVO: Link para arquivo
+  attachmentLabel?: string; // NOVO: Nome do arquivo para exibição
   createdAt: string;
 }
 
