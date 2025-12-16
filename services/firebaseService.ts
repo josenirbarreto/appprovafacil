@@ -27,7 +27,7 @@ import {
 } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app"; 
 import { db, auth, firebaseConfig } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage, Coupon, SystemSettings } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage, Coupon, SystemSettings, Tutorial } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -47,7 +47,8 @@ const COLLECTIONS = {
     AUDIT_LOGS: 'audit_logs',
     TICKETS: 'tickets',
     TICKET_MESSAGES: 'ticket_messages',
-    SETTINGS: 'settings' // NOVO: Coleção de configurações
+    SETTINGS: 'settings',
+    TUTORIALS: 'tutorials' // NOVO
 };
 
 const safeLog = (message: string, error: any) => {
@@ -192,7 +193,47 @@ const logAuditAction = async (
 };
 
 export const FirebaseService = {
-    // --- SYSTEM SETTINGS (NOVO) ---
+    // --- TUTORIALS (NOVO) ---
+    getTutorials: async (): Promise<Tutorial[]> => {
+        try {
+            const q = query(collection(db, COLLECTIONS.TUTORIALS), orderBy("createdAt", "desc"));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Tutorial));
+        } catch (error) {
+            safeLog("Erro ao buscar tutoriais:", error);
+            // Fallback sem orderBy
+            try {
+                const snapshot = await getDocs(collection(db, COLLECTIONS.TUTORIALS));
+                return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Tutorial));
+            } catch (e) {
+                return [];
+            }
+        }
+    },
+
+    addTutorial: async (tutorial: Omit<Tutorial, 'id' | 'createdAt'>) => {
+        try {
+            const data = cleanPayload({ ...tutorial, createdAt: new Date().toISOString() });
+            const docRef = await addDoc(collection(db, COLLECTIONS.TUTORIALS), data);
+            await logAuditAction('CREATE', 'SYSTEM', `Tutorial criado: ${tutorial.title}`, docRef.id);
+            return docRef.id;
+        } catch (error) {
+            safeLog("Erro ao criar tutorial:", error);
+            throw error;
+        }
+    },
+
+    deleteTutorial: async (id: string) => {
+        try {
+            await deleteDoc(doc(db, COLLECTIONS.TUTORIALS, id));
+            await logAuditAction('DELETE', 'SYSTEM', `Tutorial excluído`, id);
+        } catch (error) {
+            safeLog("Erro ao excluir tutorial:", error);
+            throw error;
+        }
+    },
+
+    // --- SYSTEM SETTINGS ---
     getSystemSettings: async (): Promise<SystemSettings> => {
         try {
             const docRef = doc(db, COLLECTIONS.SETTINGS, 'global');
@@ -245,7 +286,7 @@ export const FirebaseService = {
         }
     },
 
-    // --- SUPPORT / TICKETS (NOVO) ---
+    // --- SUPPORT / TICKETS ---
     getTickets: async (currentUser: User) => {
         try {
             let q;
@@ -324,14 +365,6 @@ export const FirebaseService = {
             // Atualiza timestamp do ticket para subir na lista
             const updateData: any = { updatedAt: new Date().toISOString() };
             
-            // Se Admin responder, status muda para IN_PROGRESS automaticamente se estiver OPEN
-            if (isAdminReply) {
-                // Check current status first ideally, but blind update is acceptable for MVP
-                // Optional: updateData.status = 'IN_PROGRESS';
-            } else {
-                // Se usuário responder, reabre se estiver RESOLVED? (Regra de negócio opcional)
-            }
-
             await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), updateData);
 
         } catch (error) {
@@ -368,7 +401,7 @@ export const FirebaseService = {
         }
     },
 
-    // --- AUDIT LOGS (NOVO) ---
+    // --- AUDIT LOGS ---
     getAuditLogs: async () => {
         try {
             // Busca os últimos 100 logs
@@ -393,7 +426,7 @@ export const FirebaseService = {
         }
     },
 
-    // --- MARKETING COUPONS (NOVO) ---
+    // --- MARKETING COUPONS ---
     getCoupons: async () => {
         try {
             const q = query(collection(db, COLLECTIONS.COUPONS));

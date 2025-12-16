@@ -29,6 +29,7 @@ import AuditLogsPage from './pages/AuditLogs';
 import SupportPage from './pages/Support';
 import ModerationPage from './pages/Moderation';
 import SystemSettingsPage from './pages/SystemSettings';
+import TutorialsPage from './pages/Tutorials';
 
 const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [newPassword, setNewPassword] = useState('');
@@ -164,6 +165,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         {
             title: 'AJUDA',
             items: [
+                { path: '/tutorials', label: 'Tutoriais', icon: Icons.GraduationCap },
                 { 
                     path: '/support', 
                     label: 'Suporte', 
@@ -312,6 +314,7 @@ const AppContent = () => {
                                 <Route path="/support" element={<SupportPage />} />
                                 <Route path="/moderation" element={<ModerationPage />} />
                                 <Route path="/settings" element={<SystemSettingsPage />} />
+                                <Route path="/tutorials" element={<TutorialsPage />} />
                                 <Route path="*" element={<Navigate to="/" replace />} />
                             </Routes>
                         </Layout>

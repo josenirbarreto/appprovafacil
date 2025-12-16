@@ -54,14 +54,14 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
 export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label?: string }> = ({ label, className = '', ...props }) => (
   <div className="flex flex-col gap-1 w-full">
     {label && <label className="text-sm font-semibold text-slate-700">{label}</label>}
-    <input className={`border border-slate-300 bg-white text-slate-900 rounded-md px-3 py-2 focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none transition-all ${className}`} {...props} />
+    <input className={`border border-slate-300 bg-white !text-slate-900 rounded-md px-3 py-2 focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none transition-all ${className}`} {...props} />
   </div>
 );
 
 export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement> & { label?: string }> = ({ label, className = '', children, ...props }) => (
   <div className="flex flex-col gap-1 w-full">
     {label && <label className="text-sm font-semibold text-slate-700">{label}</label>}
-    <select className={`border border-slate-300 bg-white text-slate-900 rounded-md px-3 py-2 focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none ${className}`} {...props}>
+    <select className={`border border-slate-300 bg-white !text-slate-900 rounded-md px-3 py-2 focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none ${className}`} {...props}>
       {children}
     </select>
   </div>

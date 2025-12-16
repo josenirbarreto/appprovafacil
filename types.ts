@@ -22,6 +22,19 @@ export interface User {
   requiresPasswordChange?: boolean; // NOVO: Força troca de senha no próximo login
 }
 
+// NOVO: Tutoriais e Knowledge Base
+export interface Tutorial {
+  id: string;
+  title: string;
+  description: string;
+  category: 'ONBOARDING' | 'EXAMS' | 'MANAGEMENT' | 'FINANCE' | 'OTHER';
+  type: 'VIDEO' | 'ARTICLE';
+  contentUrl?: string; // Para Vídeos (YouTube link)
+  contentBody?: string; // Para Artigos (HTML)
+  videoDuration?: string; // Ex: "5 min"
+  createdAt: string;
+}
+
 // NOVO: Configurações Globais do Sistema
 export interface SystemSettings {
   banner: {
