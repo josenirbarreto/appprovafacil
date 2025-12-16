@@ -72,8 +72,7 @@ const TutorialsPage = () => {
         
         try {
             if (editing.id) {
-                // Como não existe updateTutorial no serviço genérico ainda, vamos simular deletando e criando (ou update direto se implementado)
-                // Para simplificar neste contexto sem mudar o service:
+                // Simula update deletando e criando novamente para manter consistência sem alterar service
                 await FirebaseService.deleteTutorial(editing.id);
             }
             await FirebaseService.addTutorial(editing as Tutorial);
@@ -337,7 +336,8 @@ const TutorialsPage = () => {
                 <div className="space-y-6">
                     {/* VIDEO PLAYER SECTION */}
                     {viewingTutorial?.type === 'VIDEO' && viewingTutorial.contentUrl && (
-                        <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-lg mx-auto">
+                        /* Correção: Limitar largura para w-10/12 (aprox 83%) e centralizar com mx-auto */
+                        <div className="relative w-full md:w-10/12 mx-auto aspect-video bg-black rounded-xl overflow-hidden shadow-lg">
                             {getYoutubeId(viewingTutorial.contentUrl) ? (
                                 <iframe 
                                     className="absolute top-0 left-0 w-full h-full"
