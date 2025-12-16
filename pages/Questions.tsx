@@ -40,14 +40,18 @@ const QuestionsPage = () => {
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [aiParams, setAiParams] = useState({
         disciplineId: '', chapterId: '', unitId: '', topicId: '',
-        type: QuestionType.MULTIPLE_CHOICE, difficulty: 'Medium', instruction: ''
+        type: QuestionType.MULTIPLE_CHOICE, difficulty: 'Medium' as 'Easy' | 'Medium' | 'Hard', instruction: ''
     });
 
     // --- ESTADOS - MODAL IMPORTAÇÃO PDF ---
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importStep, setImportStep] = useState<'CONFIG' | 'REVIEW'>('CONFIG');
     const [importFile, setImportFile] = useState<File | null>(null);
-    const [importContext, setImportContext] = useState({ disciplineId: '', chapterId: '', unitId: '', topicId: '' });
+    // Adicionado visibility ao contexto de importação
+    const [importContext, setImportContext] = useState({ 
+        disciplineId: '', chapterId: '', unitId: '', topicId: '', 
+        visibility: 'PUBLIC' as 'PUBLIC' | 'PRIVATE' | 'INSTITUTION' 
+    });
     const [extractedQuestions, setExtractedQuestions] = useState<Partial<Question>[]>([]);
     const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
     const [importLoading, setImportLoading] = useState(false);
@@ -107,7 +111,6 @@ const QuestionsPage = () => {
 
     const openNewModal = () => {
         setIsCloneMode(false);
-        // DEFINIDO DEFAULT COMO PUBLICO CONFORME SOLICITADO
         setEditing({ 
             type: QuestionType.MULTIPLE_CHOICE, 
             options: Array(4).fill({text:'', isCorrect:false}), 
@@ -162,9 +165,15 @@ const QuestionsPage = () => {
         return <Badge color="blue">Privada</Badge>;
     };
 
-    // --- FUNÇÕES DE IMPORTAÇÃO DE PDF (RESTAURADAS) ---
+    // --- FUNÇÕES DE IMPORTAÇÃO DE PDF ---
     const openImportModal = () => { 
-        setImportContext({ disciplineId: selDisc, chapterId: selChap, unitId: selUnit, topicId: selTopic }); 
+        setImportContext({ 
+            disciplineId: selDisc, 
+            chapterId: selChap, 
+            unitId: selUnit, 
+            topicId: selTopic, 
+            visibility: 'PUBLIC' 
+        }); 
         setImportFile(null); 
         setExtractedQuestions([]); 
         setImportStep('CONFIG'); 
@@ -186,8 +195,8 @@ const QuestionsPage = () => {
                 ...q,
                 id: `temp-${Date.now()}-${i}`,
                 ...importContext,
-                // Default visibility for imported questions
-                visibility: 'PUBLIC' as const 
+                // Força visibility selecionada
+                visibility: importContext.visibility 
             }));
             
             setExtractedQuestions(processed);
@@ -199,6 +208,44 @@ const QuestionsPage = () => {
         } finally {
             setImportLoading(false);
         }
+    };
+
+    const updateExtractedQuestion = (id: string, newEnunciado: string) => {
+        setExtractedQuestions(prev => prev.map(q => 
+            q.id === id ? { ...q, enunciado: newEnunciado } : q
+        ));
+    };
+
+    // --- FUNÇÕES DE EDIÇÃO DE ALTERNATIVAS (IMPORTAÇÃO) ---
+    const updateExtractedQuestionOption = (qId: string, optIdx: number, field: 'text' | 'isCorrect', value: any) => {
+        setExtractedQuestions(prev => prev.map(q => {
+            if (q.id !== qId) return q;
+            const newOptions = [...(q.options || [])];
+            
+            if (field === 'isCorrect') {
+                // Comportamento de Radio Button: Desmarca os outros
+                newOptions.forEach((o, i) => o.isCorrect = i === optIdx);
+            } else {
+                newOptions[optIdx] = { ...newOptions[optIdx], [field]: value };
+            }
+            return { ...q, options: newOptions };
+        }));
+    };
+
+    const addExtractedQuestionOption = (qId: string) => {
+        setExtractedQuestions(prev => prev.map(q => {
+            if (q.id !== qId) return q;
+            return { ...q, options: [...(q.options || []), { id: Date.now().toString(), text: '', isCorrect: false }] };
+        }));
+    };
+
+    const removeExtractedQuestionOption = (qId: string, optIdx: number) => {
+        setExtractedQuestions(prev => prev.map(q => {
+            if (q.id !== qId) return q;
+            const newOptions = [...(q.options || [])];
+            newOptions.splice(optIdx, 1);
+            return { ...q, options: newOptions };
+        }));
     };
 
     const toggleImportSelection = (id: string) => {
@@ -234,13 +281,13 @@ const QuestionsPage = () => {
         }
     };
 
-    // --- FUNÇÕES DE GERAÇÃO POR IA (RESTAURADAS) ---
+    // --- FUNÇÕES DE GERAÇÃO POR IA ---
     const openAiModal = () => { 
         setAiParams({
             disciplineId: selDisc, 
             chapterId: selChap, 
             unitId: selUnit, 
-            topicId: selTopic,
+            topicId: selTopic, 
             type: QuestionType.MULTIPLE_CHOICE, 
             difficulty: 'Medium', 
             instruction: ''
@@ -253,9 +300,18 @@ const QuestionsPage = () => {
         
         setGenerating(true);
         try {
-            const disciplineName = hierarchy.find(d => d.id === aiParams.disciplineId)?.name || '';
-            // Combina hierarquia e instrução extra para o prompt
-            const fullTopic = `${disciplineName} ${aiParams.instruction ? `- ${aiParams.instruction}` : ''}`;
+            const disc = hierarchy.find(d => d.id === aiParams.disciplineId);
+            const chap = disc?.chapters.find(c => c.id === aiParams.chapterId);
+            const unit = chap?.units.find(u => u.id === aiParams.unitId);
+            const topic = unit?.topics.find(t => t.id === aiParams.topicId);
+
+            // Constrói o contexto hierárquico completo para o prompt
+            let fullTopic = disc?.name || '';
+            if (chap) fullTopic += ` > ${chap.name}`;
+            if (unit) fullTopic += ` > ${unit.name}`;
+            if (topic) fullTopic += ` > ${topic.name}`;
+            
+            if (aiParams.instruction) fullTopic += `. Instrução extra: ${aiParams.instruction}`;
             
             const newQ = await GeminiService.generateQuestion(fullTopic, aiParams.type, aiParams.difficulty);
             
@@ -264,7 +320,8 @@ const QuestionsPage = () => {
                 setEditing({
                     ...newQ, 
                     visibility: 'PUBLIC', // Default Public
-                    ...aiParams
+                    ...aiParams,
+                    difficulty: aiParams.difficulty as 'Easy' | 'Medium' | 'Hard'
                 }); 
                 setIsAiModalOpen(false); 
                 setIsModalOpen(true); // Abre o modal de edição para revisar a questão gerada
@@ -384,24 +441,46 @@ const QuestionsPage = () => {
                 </div>
             </Modal>
             
-            {/* MODAL DE IA */}
+            {/* MODAL DE IA (GERAÇÃO) */}
             <Modal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} title="Gerar Questão com IA" footer={<Button onClick={confirmAiGeneration} disabled={generating}>{generating ? 'Gerando...' : 'Gerar Questão'}</Button>}>
                 <div className="space-y-4">
                     <div className="bg-purple-50 p-4 rounded-lg text-purple-900 text-sm border border-purple-200">
-                        A Inteligência Artificial criará uma questão única baseada no tópico e parâmetros selecionados.
+                        A Inteligência Artificial criará uma questão única baseada nos detalhes selecionados.
                     </div>
+                    
                     <div className="grid grid-cols-2 gap-4">
-                        <Select label="Disciplina" value={aiParams.disciplineId} onChange={e => setAiParams({...aiParams, disciplineId: e.target.value})}>
+                        <Select label="Disciplina" value={aiParams.disciplineId} onChange={e => setAiParams({...aiParams, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}>
                             <option value="">Selecione...</option>
                             {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </Select>
-                        <Select label="Dificuldade" value={aiParams.difficulty} onChange={e => setAiParams({...aiParams, difficulty: e.target.value})}>
+                        <Select label="Capítulo" value={aiParams.chapterId} onChange={e => setAiParams({...aiParams, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!aiParams.disciplineId}>
+                            <option value="">Selecione...</option>
+                            {hierarchy.find(d => d.id === aiParams.disciplineId)?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </Select>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <Select label="Unidade" value={aiParams.unitId} onChange={e => setAiParams({...aiParams, unitId: e.target.value, topicId: ''})} disabled={!aiParams.chapterId}>
+                            <option value="">Selecione...</option>
+                            {hierarchy.find(d => d.id === aiParams.disciplineId)?.chapters.find(c => c.id === aiParams.chapterId)?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </Select>
+                        <Select label="Tópico" value={aiParams.topicId} onChange={e => setAiParams({...aiParams, topicId: e.target.value})} disabled={!aiParams.unitId}>
+                            <option value="">Selecione...</option>
+                            {hierarchy.find(d => d.id === aiParams.disciplineId)?.chapters.find(c => c.id === aiParams.chapterId)?.units.find(u => u.id === aiParams.unitId)?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Select label="Tipo" value={aiParams.type} onChange={e => setAiParams({...aiParams, type: e.target.value as any})}>
+                            {Object.entries(QuestionTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                        </Select>
+                        <Select label="Dificuldade" value={aiParams.difficulty} onChange={e => setAiParams({...aiParams, difficulty: e.target.value as any})}>
                             <option value="Easy">Fácil</option>
                             <option value="Medium">Médio</option>
                             <option value="Hard">Difícil</option>
                         </Select>
                     </div>
-                    <Input label="Tópico Específico / Instrução Extra" value={aiParams.instruction} onChange={e => setAiParams({...aiParams, instruction: e.target.value})} placeholder="Ex: Focar na Era Vargas, citar 2 eventos..." />
+                    <Input label="Instrução Extra (Opcional)" value={aiParams.instruction} onChange={e => setAiParams({...aiParams, instruction: e.target.value})} placeholder="Ex: Citar 2 eventos históricos..." />
                 </div>
             </Modal>
 
@@ -419,10 +498,22 @@ const QuestionsPage = () => {
                         
                         <div className="border-t border-slate-200 pt-4">
                             <h4 className="font-bold text-slate-700 mb-3">Destino das Questões</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                <Select label="Disciplina" value={importContext.disciplineId} onChange={e => setImportContext({...importContext, disciplineId: e.target.value})}><option value="">Selecione...</option>{hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
-                                <Select label="Capítulo" value={importContext.chapterId} onChange={e => setImportContext({...importContext, chapterId: e.target.value})} disabled={!importContext.disciplineId}><option value="">Selecione...</option>{hierarchy.find(d => d.id === importContext.disciplineId)?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <Select label="Disciplina" value={importContext.disciplineId} onChange={e => setImportContext({...importContext, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}><option value="">Selecione...</option>{hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
+                                <Select label="Capítulo" value={importContext.chapterId} onChange={e => setImportContext({...importContext, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!importContext.disciplineId}><option value="">Selecione...</option>{hierarchy.find(d => d.id === importContext.disciplineId)?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
                             </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <Select label="Unidade" value={importContext.unitId} onChange={e => setImportContext({...importContext, unitId: e.target.value, topicId: ''})} disabled={!importContext.chapterId}><option value="">Selecione...</option>{hierarchy.find(d => d.id === importContext.disciplineId)?.chapters.find(c => c.id === importContext.chapterId)?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
+                                <Select label="Tópico" value={importContext.topicId} onChange={e => setImportContext({...importContext, topicId: e.target.value})} disabled={!importContext.unitId}><option value="">Selecione...</option>{hierarchy.find(d => d.id === importContext.disciplineId)?.chapters.find(c => c.id === importContext.chapterId)?.units.find(u => u.id === importContext.unitId)?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+                            </div>
+
+                            <Select label="Visibilidade Padrão" value={importContext.visibility} onChange={e => setImportContext({...importContext, visibility: e.target.value as any})}>
+                                <option value="PUBLIC">🌍 Banco Global (Pública)</option>
+                                <option value="INSTITUTION">🏫 Minha Escola (Institucional)</option>
+                                <option value="PRIVATE">🔒 Somente Eu (Privada)</option>
+                            </Select>
                         </div>
                     </div>
                 ) : (
@@ -435,36 +526,75 @@ const QuestionsPage = () => {
                             </div>
                         </div>
                         <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-3">
-                            {extractedQuestions.map((q, idx) => (
-                                <div key={q.id} className={`border rounded-lg p-3 transition-colors ${selectedImportIds.has(q.id!) ? 'border-brand-blue bg-blue-50' : 'border-slate-200 bg-white'}`}>
-                                    <div className="flex gap-3 items-start cursor-pointer" onClick={() => toggleImportSelection(q.id!)}>
-                                        <input type="checkbox" checked={selectedImportIds.has(q.id!)} readOnly className="mt-1" />
-                                        <div className="flex-1">
-                                            <div className="flex justify-between">
-                                                <span className="font-bold text-slate-700 text-sm">Questão {idx + 1}</span>
-                                                <Badge>{QuestionTypeLabels[q.type!]}</Badge>
+                            {extractedQuestions.map((q, idx) => {
+                                const isExpanded = expandedImportId === q.id;
+                                return (
+                                    <div key={q.id} className={`border rounded-lg p-3 transition-colors ${selectedImportIds.has(q.id!) ? 'border-brand-blue bg-blue-50' : 'border-slate-200 bg-white'}`}>
+                                        <div className="flex gap-3 items-start cursor-pointer" onClick={() => toggleImportSelection(q.id!)}>
+                                            <input type="checkbox" checked={selectedImportIds.has(q.id!)} readOnly className="mt-1" />
+                                            <div className="flex-1">
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold text-slate-700 text-sm">Questão {idx + 1}</span>
+                                                    <Badge>{QuestionTypeLabels[q.type!]}</Badge>
+                                                </div>
+                                                {!isExpanded && <div className="text-sm text-slate-600 mt-1 line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado || ''}} />}
                                             </div>
-                                            <p className="text-sm text-slate-600 mt-1 line-clamp-2">{q.enunciado}</p>
+                                            <button onClick={(e) => { e.stopPropagation(); setExpandedImportId(isExpanded ? null : q.id!); }} className="text-slate-400 hover:text-slate-600"><Icons.ChevronDown /></button>
                                         </div>
-                                        <button onClick={(e) => { e.stopPropagation(); setExpandedImportId(expandedImportId === q.id ? null : q.id!); }} className="text-slate-400 hover:text-slate-600"><Icons.ChevronDown /></button>
+                                        
+                                        {isExpanded && (
+                                            <div className="mt-3 pt-3 border-t border-blue-200 animate-fade-in" onClick={e => e.stopPropagation()}>
+                                                <label className="text-xs font-bold text-slate-500 mb-1 block">Enunciado (Editável)</label>
+                                                <div className="mb-4">
+                                                    <RichTextEditor 
+                                                        value={q.enunciado || ''} 
+                                                        onChange={(html) => updateExtractedQuestion(q.id!, html)} 
+                                                    />
+                                                </div>
+                                                
+                                                <div className="pl-2">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <p className="text-xs font-bold text-slate-500">Alternativas e Gabarito</p>
+                                                        <span className="text-[10px] text-slate-400">Marque a caixa para definir a correta</span>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        {q.options?.map((opt, i) => (
+                                                            <div key={i} className="flex gap-2 items-center group">
+                                                                <input 
+                                                                    type="radio" 
+                                                                    name={`correct-${q.id}`} 
+                                                                    checked={opt.isCorrect} 
+                                                                    onChange={() => updateExtractedQuestionOption(q.id!, i, 'isCorrect', true)}
+                                                                    className="cursor-pointer w-4 h-4 text-brand-blue focus:ring-brand-blue"
+                                                                    title="Marcar como correta"
+                                                                />
+                                                                <span className="text-sm font-bold w-6 text-slate-500">{String.fromCharCode(65+i)})</span>
+                                                                <input 
+                                                                    type="text"
+                                                                    value={opt.text} 
+                                                                    onChange={(e) => updateExtractedQuestionOption(q.id!, i, 'text', e.target.value)}
+                                                                    className="flex-1 border border-slate-300 bg-white text-slate-900 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none transition-all"
+                                                                    placeholder={`Alternativa ${String.fromCharCode(65+i)}`}
+                                                                />
+                                                                <button 
+                                                                    onClick={() => removeExtractedQuestionOption(q.id!, i)}
+                                                                    className="text-slate-300 hover:text-red-500 p-1"
+                                                                    title="Remover alternativa"
+                                                                >
+                                                                    <Icons.Trash />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                        <Button variant="ghost" onClick={() => addExtractedQuestionOption(q.id!)} className="text-xs h-8 mt-2">
+                                                            <Icons.Plus /> Adicionar Alternativa
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    
-                                    {expandedImportId === q.id && (
-                                        <div className="mt-3 pt-3 border-t border-blue-200 pl-6 text-sm animate-fade-in">
-                                            <p className="font-bold text-slate-800 mb-2">{q.enunciado}</p>
-                                            <ul className="space-y-1">
-                                                {q.options?.map((opt, i) => (
-                                                    <li key={i} className={`flex gap-2 ${opt.isCorrect ? 'text-green-700 font-bold' : 'text-slate-600'}`}>
-                                                        <span>{String.fromCharCode(65+i)})</span>
-                                                        <span>{opt.text}</span>
-                                                        {opt.isCorrect && <Icons.Check />}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}
