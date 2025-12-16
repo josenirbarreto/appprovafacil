@@ -26,7 +26,8 @@ import AdminExamsPage from './pages/AdminExams';
 import MarketingPage from './pages/Marketing';
 import FinancePage from './pages/Finance';
 import AuditLogsPage from './pages/AuditLogs';
-import SupportPage from './pages/Support'; // NOVO IMPORT
+import SupportPage from './pages/Support';
+import ModerationPage from './pages/Moderation'; // NOVO IMPORT
 
 const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [newPassword, setNewPassword] = useState('');
@@ -80,19 +81,21 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     const { user } = useAuth();
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const [openTicketsCount, setOpenTicketsCount] = useState(0);
+    const [pendingQuestionsCount, setPendingQuestionsCount] = useState(0); // NOVO
     
     useEffect(() => { setSidebarOpen(false); }, [location]);
 
-    // Check for open tickets (Admin notification)
+    // Check for open tickets and moderation items (Admin notification)
     useEffect(() => {
         if (user?.role === UserRole.ADMIN) {
-            const checkTickets = async () => {
-                const count = await FirebaseService.getAdminOpenTicketsCount();
-                setOpenTicketsCount(count);
+            const checkNotifications = async () => {
+                const tCount = await FirebaseService.getAdminOpenTicketsCount();
+                const qCount = (await FirebaseService.getPendingQuestions()).length; // Check simples
+                setOpenTicketsCount(tCount);
+                setPendingQuestionsCount(qCount);
             };
-            checkTickets();
-            // Polling simples a cada 30s
-            const interval = setInterval(checkTickets, 30000);
+            checkNotifications();
+            const interval = setInterval(checkNotifications, 30000);
             return () => clearInterval(interval);
         }
     }, [user]);
@@ -119,6 +122,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 ...(isAdmin ? [ { path: '/finance', label: 'Financeiro', icon: Icons.Bank } ] : []),
                 ...(isAdmin ? [ { path: '/marketing', label: 'Marketing', icon: Icons.Megaphone } ] : []),
                 ...(isAdmin ? [ { path: '/audit', label: 'Auditoria', icon: Icons.Shield } ] : []),
+                ...(isAdmin ? [ { path: '/moderation', label: 'Moderação', icon: Icons.Check, badge: pendingQuestionsCount > 0 ? pendingQuestionsCount : undefined } ] : []),
             ]
         },
         {
@@ -265,7 +269,8 @@ const App = () => {
                                 <Route path="/marketing" element={<MarketingPage />} />
                                 <Route path="/finance" element={<FinancePage />} />
                                 <Route path="/audit" element={<AuditLogsPage />} />
-                                <Route path="/support" element={<SupportPage />} /> {/* NOVA ROTA */}
+                                <Route path="/support" element={<SupportPage />} />
+                                <Route path="/moderation" element={<ModerationPage />} /> {/* NOVA ROTA */}
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="*" element={<Navigate to="/" />} />
                             </Routes>

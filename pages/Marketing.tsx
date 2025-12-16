@@ -1,20 +1,23 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Campaign, UserRole, Plan } from '../types';
+import { User, Campaign, UserRole, Plan, Coupon } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { EmailService } from '../services/emailService';
-import { Button, Card, Badge, Input, Select, RichTextEditor } from '../components/UI';
+import { Button, Card, Badge, Input, Select, RichTextEditor, Modal } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
 
 const MarketingPage = () => {
     const { user } = useAuth();
     const [view, setView] = useState<'LIST' | 'NEW'>('LIST');
+    const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'COUPONS'>('CAMPAIGNS');
+    
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [coupons, setCoupons] = useState<Coupon[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [plans, setPlans] = useState<Plan[]>([]);
     
-    // Wizard States
+    // Wizard States (Campaigns)
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     
@@ -26,6 +29,12 @@ const MarketingPage = () => {
         content: { subject: '', body: '' }
     });
     
+    // Coupon Modal & Data
+    const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+    const [editingCoupon, setEditingCoupon] = useState<Partial<Coupon>>({
+        code: '', type: 'PERCENTAGE', value: 0, maxUses: 0, isActive: true
+    });
+
     // Filtered Targets
     const [targets, setTargets] = useState<User[]>([]);
     
@@ -38,17 +47,69 @@ const MarketingPage = () => {
 
     const loadData = async () => {
         setLoading(true);
-        const [c, u, p] = await Promise.all([
+        const [c, u, p, cps] = await Promise.all([
             FirebaseService.getCampaigns(),
             FirebaseService.getUsers(user),
-            FirebaseService.getPlans()
+            FirebaseService.getPlans(),
+            FirebaseService.getCoupons()
         ]);
         setCampaigns(c);
         setUsers(u);
         setPlans(p);
+        setCoupons(cps);
         setLoading(false);
     };
 
+    // --- COUPONS HANDLERS ---
+    const openCouponModal = (coupon?: Coupon) => {
+        if (coupon) {
+            setEditingCoupon(coupon);
+        } else {
+            setEditingCoupon({
+                code: '',
+                type: 'PERCENTAGE',
+                value: 10,
+                maxUses: 0,
+                usedCount: 0,
+                isActive: true,
+                createdAt: new Date().toISOString()
+            });
+        }
+        setIsCouponModalOpen(true);
+    };
+
+    const handleSaveCoupon = async () => {
+        if (!editingCoupon.code || !editingCoupon.value) return alert("Código e Valor são obrigatórios.");
+        
+        try {
+            const payload: any = {
+                ...editingCoupon,
+                code: editingCoupon.code.toUpperCase().replace(/\s/g, ''), // Formata código
+                maxUses: Number(editingCoupon.maxUses) || 0,
+                value: Number(editingCoupon.value)
+            };
+
+            if (editingCoupon.id) {
+                await FirebaseService.updateCoupon(editingCoupon.id, payload);
+            } else {
+                await FirebaseService.addCoupon(payload as Coupon);
+            }
+            setIsCouponModalOpen(false);
+            loadData(); // Recarrega para ver atualizações
+        } catch (error: any) {
+            console.error(error);
+            alert(error.message || "Erro ao salvar cupom.");
+        }
+    };
+
+    const handleDeleteCoupon = async (id: string) => {
+        if (confirm("Tem certeza que deseja excluir este cupom?")) {
+            await FirebaseService.deleteCoupon(id);
+            loadData();
+        }
+    };
+
+    // --- CAMPAIGN HANDLERS (EXISTING) ---
     // --- STEP 1: SEGMENTATION ---
     const updateSegmentation = (field: 'roles' | 'plans' | 'status', value: string) => {
         const current = newCampaign.segmentation?.[field] as string[] || [];
@@ -171,7 +232,7 @@ const MarketingPage = () => {
         return `https://wa.me/${finalPhone}?text=${encodedBody}`;
     };
 
-    if (loading && view === 'LIST') return <div className="p-8 text-center text-slate-500">Carregando campanhas...</div>;
+    if (loading && view === 'LIST' && coupons.length === 0) return <div className="p-8 text-center text-slate-500">Carregando dados...</div>;
 
     return (
         <div className="p-8 h-full bg-slate-50 overflow-y-auto custom-scrollbar">
@@ -180,11 +241,11 @@ const MarketingPage = () => {
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-3xl font-display font-bold text-slate-800 flex items-center gap-2">
-                        <Icons.Megaphone /> Marketing & CRM
+                        <Icons.Megaphone /> Marketing & Promoções
                     </h2>
-                    <p className="text-slate-500">Gerencie comunicações e engajamento com escolas e professores.</p>
+                    <p className="text-slate-500">Gerencie campanhas de comunicação e cupons de desconto.</p>
                 </div>
-                {view === 'LIST' && (
+                {view === 'LIST' && activeTab === 'CAMPAIGNS' && (
                     <Button onClick={() => { 
                         setNewCampaign({ 
                             title: '', channel: 'EMAIL', 
@@ -198,11 +259,89 @@ const MarketingPage = () => {
                         <Icons.Plus /> Nova Campanha
                     </Button>
                 )}
+                {activeTab === 'COUPONS' && (
+                    <Button onClick={() => openCouponModal()}>
+                        <Icons.Plus /> Novo Cupom
+                    </Button>
+                )}
             </div>
 
-            {view === 'LIST' ? (
+            {/* Tabs */}
+            {view === 'LIST' && (
+                <div className="flex gap-4 border-b border-slate-200 mb-6">
+                    <button 
+                        className={`pb-2 px-4 font-bold text-sm transition-colors ${activeTab === 'CAMPAIGNS' ? 'border-b-2 border-brand-blue text-brand-blue' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={() => setActiveTab('CAMPAIGNS')}
+                    >
+                        Campanhas
+                    </button>
+                    <button 
+                        className={`pb-2 px-4 font-bold text-sm transition-colors ${activeTab === 'COUPONS' ? 'border-b-2 border-brand-blue text-brand-blue' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={() => setActiveTab('COUPONS')}
+                    >
+                        Cupons de Desconto
+                    </button>
+                </div>
+            )}
+
+            {/* TAB: COUPONS */}
+            {activeTab === 'COUPONS' && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {coupons.map(coupon => {
+                            const isExpired = coupon.expiresAt && new Date(coupon.expiresAt) < new Date();
+                            const isDepleted = coupon.maxUses && coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses;
+                            const isActive = coupon.isActive && !isExpired && !isDepleted;
+
+                            return (
+                                <Card key={coupon.id} className={`relative border-t-4 ${isActive ? 'border-t-green-500' : 'border-t-slate-300 opacity-75'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <Badge color={isActive ? 'green' : 'red'}>{isActive ? 'ATIVO' : 'INATIVO'}</Badge>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => openCouponModal(coupon)} className="text-slate-400 hover:text-brand-blue p-1"><Icons.Edit /></button>
+                                            <button onClick={() => handleDeleteCoupon(coupon.id)} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="text-center py-4 border-b border-slate-100 border-dashed mb-4">
+                                        <h3 className="text-2xl font-mono font-bold text-slate-800 tracking-wider">{coupon.code}</h3>
+                                        <p className="text-sm text-slate-500 font-bold">
+                                            {coupon.type === 'PERCENTAGE' ? `${coupon.value}% OFF` : 
+                                             coupon.type === 'FIXED' ? `R$ ${coupon.value.toFixed(2)} OFF` : 
+                                             `${coupon.value} Dias Grátis`}
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2 text-xs text-slate-600">
+                                        <div className="flex justify-between">
+                                            <span>Usos:</span>
+                                            <span className="font-bold">{coupon.usedCount} / {coupon.maxUses || '∞'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Validade:</span>
+                                            <span className={isExpired ? 'text-red-500 font-bold' : ''}>
+                                                {coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : 'Indeterminada'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                        
+                        {coupons.length === 0 && (
+                            <div className="col-span-3 text-center py-12 border-2 border-dashed border-slate-200 rounded-xl text-slate-400">
+                                <p>Nenhum cupom criado.</p>
+                                <Button variant="outline" onClick={() => openCouponModal()} className="mt-4">Criar Primeiro Cupom</Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* TAB: CAMPAIGNS (Original View) */}
+            {activeTab === 'CAMPAIGNS' && view === 'LIST' && (
                 /* --- DASHBOARD VIEW --- */
-                <div className="space-y-6">
+                <div className="space-y-6 animate-fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Card className="flex items-center gap-4 border-l-4 border-blue-500">
                             <div className="p-3 bg-blue-50 rounded-full text-blue-600"><Icons.Megaphone /></div>
@@ -263,9 +402,12 @@ const MarketingPage = () => {
                         </table>
                     </Card>
                 </div>
-            ) : (
+            )}
+
+            {/* CAMPAIGN WIZARD (Visible when view === 'NEW') */}
+            {view === 'NEW' && (
                 /* --- CAMPAIGN WIZARD --- */
-                <Card className="max-w-4xl mx-auto min-h-[600px] flex flex-col">
+                <Card className="max-w-4xl mx-auto min-h-[600px] flex flex-col animate-fade-in">
                     {/* Wizard Header */}
                     <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
                         <div className="flex items-center gap-2">
@@ -443,10 +585,6 @@ const MarketingPage = () => {
                                         {targets.map(t => {
                                             const message = newCampaign.content?.body?.replace(/{nome}/g, t.name) || '';
                                             const link = getWhatsAppLink(t.email, message); // Hack: using email field, assume phone might be stored somewhere or fallback
-                                            // NOTE: Current user model doesn't strictly have phone on root, might be in institution. 
-                                            // Assuming user might not have phone, link will be broken. 
-                                            // For MVP, if phone exists on Institution, we could use that, but User object in list might not have it populated.
-                                            // Let's assume we implement phone in User profile later. For now, it opens generic link.
                                             
                                             return (
                                                 <div key={t.id} className="flex justify-between items-center p-3 border border-slate-100 rounded hover:bg-slate-50">
@@ -489,6 +627,66 @@ const MarketingPage = () => {
                     </div>
                 </Card>
             )}
+
+            {/* COUPON MODAL */}
+            <Modal
+                isOpen={isCouponModalOpen}
+                onClose={() => setIsCouponModalOpen(false)}
+                title={editingCoupon.id ? 'Editar Cupom' : 'Novo Cupom'}
+                footer={<Button onClick={handleSaveCoupon}>Salvar Cupom</Button>}
+                maxWidth="max-w-md"
+            >
+                <div className="space-y-4">
+                    <Input 
+                        label="Código Promocional" 
+                        value={editingCoupon.code} 
+                        onChange={e => setEditingCoupon({...editingCoupon, code: e.target.value.toUpperCase()})} 
+                        placeholder="EX: PROMO10" 
+                        autoFocus
+                    />
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <Select label="Tipo de Benefício" value={editingCoupon.type} onChange={e => setEditingCoupon({...editingCoupon, type: e.target.value as any})}>
+                            <option value="PERCENTAGE">Desconto (%)</option>
+                            <option value="FIXED">Desconto Fixo (R$)</option>
+                            <option value="TRIAL_DAYS">Dias Grátis (Trial)</option>
+                        </Select>
+                        
+                        <Input 
+                            label="Valor" 
+                            type="number" 
+                            value={editingCoupon.value} 
+                            onChange={e => setEditingCoupon({...editingCoupon, value: Number(e.target.value)})} 
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input 
+                            label="Limite de Usos (0 = Ilimitado)" 
+                            type="number" 
+                            value={editingCoupon.maxUses} 
+                            onChange={e => setEditingCoupon({...editingCoupon, maxUses: Number(e.target.value)})} 
+                        />
+                        <Input 
+                            label="Validade (Opcional)" 
+                            type="date" 
+                            value={editingCoupon.expiresAt?.split('T')[0] || ''} 
+                            onChange={e => setEditingCoupon({...editingCoupon, expiresAt: e.target.value ? new Date(e.target.value).toISOString() : undefined})} 
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-2 border p-3 rounded bg-slate-50 mt-2">
+                        <input 
+                            type="checkbox" 
+                            id="isActive"
+                            checked={editingCoupon.isActive} 
+                            onChange={e => setEditingCoupon({...editingCoupon, isActive: e.target.checked})} 
+                            className="w-5 h-5 text-brand-blue rounded"
+                        />
+                        <label htmlFor="isActive" className="font-bold text-slate-700 cursor-pointer">Cupom Ativo</label>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

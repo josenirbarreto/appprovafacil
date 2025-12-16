@@ -26,7 +26,7 @@ import {
 } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app"; 
 import { db, auth, firebaseConfig } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage, Coupon } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -42,6 +42,7 @@ const COLLECTIONS = {
     PLANS: 'plans',
     PAYMENTS: 'payments',
     CAMPAIGNS: 'campaigns',
+    COUPONS: 'coupons', // NOVO
     AUDIT_LOGS: 'audit_logs',
     TICKETS: 'tickets', // NOVO
     TICKET_MESSAGES: 'ticket_messages' // NOVO
@@ -127,13 +128,18 @@ const isVisible = (item: any, user: User | null | undefined) => {
     // 4. Lógica Específica para QUESTÕES
     if ('enunciado' in item || 'visibility' in item) { 
         const q = item as Question;
+        
+        // LÓGICA DE STATUS: Se não for 'APPROVED', só o dono ou admin vê (já tratado no passo 1 e 2).
+        // Se for público, mas estiver PENDING ou REJECTED, não deve aparecer para terceiros.
+        if (q.reviewStatus && q.reviewStatus !== 'APPROVED') return false;
+
         if (!q.visibility) return false; 
         if (q.visibility === 'PRIVATE') return false; 
         if (q.visibility === 'INSTITUTION') return sameInstitution || false;
         if (q.visibility === 'PUBLIC') {
             const userGrants = user.accessGrants || [];
             if (q.disciplineId && userGrants.includes(q.disciplineId)) return true;
-            return false;
+            return false; // Se não tiver grant explícito, não vê (regra rigorosa)
         }
     }
 
@@ -202,12 +208,13 @@ export const FirebaseService = {
             const snapshot = await getDocs(q);
             return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
         } catch (error) {
-            safeLog("Erro ao buscar tickets:", error);
+            safeLog("Erro ao buscar tickets (tentando fallback):", error);
             // Fallback sem orderBy se índice não existir
             try {
                 const qFallback = query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
                 const snap = await getDocs(qFallback);
-                return snap.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
+                const tickets = snap.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
+                return tickets.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
             } catch (e) {
                 return [];
             }
@@ -318,8 +325,67 @@ export const FirebaseService = {
             const snapshot = await getDocs(q);
             return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as AuditLog));
         } catch (error) {
-            safeLog("Erro ao buscar logs:", error);
+            safeLog("Erro ao buscar logs (tentando fallback):", error);
+            try {
+                // Fallback sem orderBy
+                const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), limit(100));
+                const snapshot = await getDocs(q);
+                const logs = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as AuditLog));
+                return logs.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            } catch(e) {
+                return [];
+            }
+        }
+    },
+
+    // --- MARKETING COUPONS (NOVO) ---
+    getCoupons: async () => {
+        try {
+            const q = query(collection(db, COLLECTIONS.COUPONS));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Coupon))
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        } catch (error) {
+            safeLog("Erro ao buscar cupons:", error);
             return [];
+        }
+    },
+
+    addCoupon: async (coupon: Omit<Coupon, 'id'>) => {
+        try {
+            // Verifica duplicidade de código
+            const q = query(collection(db, COLLECTIONS.COUPONS), where("code", "==", coupon.code));
+            const snap = await getDocs(q);
+            if (!snap.empty) throw new Error("Este código de cupom já existe.");
+
+            const data = cleanPayload(coupon);
+            const docRef = await addDoc(collection(db, COLLECTIONS.COUPONS), data);
+            await logAuditAction('CREATE', 'MARKETING', `Cupom criado: ${coupon.code}`, docRef.id);
+            return { ...coupon, id: docRef.id };
+        } catch (error) {
+            safeLog("Erro ao criar cupom:", error);
+            throw error;
+        }
+    },
+
+    updateCoupon: async (id: string, data: Partial<Coupon>) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.COUPONS, id);
+            await updateDoc(docRef, cleanPayload(data));
+            await logAuditAction('UPDATE', 'MARKETING', `Cupom atualizado`, id);
+        } catch (error) {
+            safeLog("Erro ao atualizar cupom:", error);
+            throw error;
+        }
+    },
+
+    deleteCoupon: async (id: string) => {
+        try {
+            await deleteDoc(doc(db, COLLECTIONS.COUPONS, id));
+            await logAuditAction('DELETE', 'MARKETING', `Cupom excluído`, id);
+        } catch (error) {
+            safeLog("Erro ao excluir cupom:", error);
+            throw error;
         }
     },
 
@@ -751,18 +817,74 @@ export const FirebaseService = {
     
     getQuestions: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.QUESTIONS)); return snapshot.docs.map(d => { const data = d.data() as any; data.id = d.id; return data as Question; }).filter(item => isVisible(item, currentUser)); },
     
+    // --- MODERAÇÃO DE QUESTÕES (NOVO) ---
+    // Retorna questões pendentes de aprovação para Admins
+    getPendingQuestions: async () => {
+        try {
+            // Removido orderBy do query para evitar erro de índice (failed-precondition)
+            // A ordenação será feita no cliente.
+            const q = query(
+                collection(db, COLLECTIONS.QUESTIONS),
+                where("reviewStatus", "==", "PENDING")
+            );
+            const snapshot = await getDocs(q);
+            const questions = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Question));
+            
+            // Ordenação Client-Side (Mais recente primeiro)
+            return questions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        } catch (error) {
+            safeLog("Erro ao buscar questões pendentes:", error);
+            return [];
+        }
+    },
+
+    approveQuestion: async (id: string) => {
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'APPROVED', rejectionReason: null });
+        await logAuditAction('UPDATE', 'MODERATION', 'Questão aprovada', id);
+    },
+
+    rejectQuestion: async (id: string, reason: string) => {
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'REJECTED', rejectionReason: reason });
+        await logAuditAction('UPDATE', 'MODERATION', `Questão rejeitada: ${reason}`, id);
+    },
+
     addQuestion: async (q: Question) => { 
         const data: any = cleanPayload(q); 
         if (data.id) delete data.id; 
-        if (auth.currentUser) { 
-            if (!data.authorId) data.authorId = auth.currentUser.uid; 
-            if (!data.institutionId) { 
-                const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid)); 
-                const u = userDoc.data() as User; 
-                if (u.institutionId) data.institutionId = u.institutionId; 
-            } 
-        } 
+        
+        const currentUser = auth.currentUser;
+        if (currentUser) { 
+            if (!data.authorId) data.authorId = currentUser.uid; 
+            
+            // Busca dados completos do usuário para checar Role
+            const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, currentUser.uid));
+            const userData = userDoc.data() as User;
+
+            if (!data.institutionId && userData.institutionId) { 
+                data.institutionId = userData.institutionId; 
+            }
+            
+            // --- LÓGICA DE MODERAÇÃO ---
+            // Se for PUBLIC e quem cria NÃO é ADMIN -> PENDING
+            // Se for ADMIN -> APPROVED
+            // Se for PRIVATE/INSTITUTION -> APPROVED
+            if (data.visibility === 'PUBLIC') {
+                if (userData.role === UserRole.ADMIN) {
+                    data.reviewStatus = 'APPROVED';
+                } else {
+                    data.reviewStatus = 'PENDING';
+                }
+            } else {
+                data.reviewStatus = 'APPROVED';
+            }
+        } else {
+            // Fallback para segurança
+            if (data.visibility === 'PUBLIC') data.reviewStatus = 'PENDING';
+            else data.reviewStatus = 'APPROVED';
+        }
+
         if (!data.visibility) data.visibility = 'PUBLIC'; 
+        
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data); 
         return { ...q, id: docRef.id }; 
     },
@@ -770,8 +892,21 @@ export const FirebaseService = {
     updateQuestion: async (q: Question) => { 
         const { id, ...rest } = q; 
         if (!id) throw new Error("ID da questão obrigatório"); 
-        const clean = cleanPayload(rest); 
-        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), clean); 
+        
+        const data: any = cleanPayload(rest);
+        
+        // Se editar uma questão PÚBLICA, ela volta para PENDING se não for admin
+        // (Isso previne aprovar e depois mudar o conteúdo para algo ruim)
+        const currentUser = auth.currentUser;
+        if (currentUser && data.visibility === 'PUBLIC') {
+             const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, currentUser.uid));
+             const userData = userDoc.data() as User;
+             if (userData.role !== UserRole.ADMIN) {
+                 data.reviewStatus = 'PENDING';
+             }
+        }
+
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), data); 
     },
     
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },

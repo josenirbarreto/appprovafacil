@@ -161,7 +161,11 @@ const QuestionsPage = () => {
     };
 
     const getVisibilityBadge = (q: Question) => {
-        if (q.visibility === 'PUBLIC') return <Badge color="green">Global</Badge>;
+        if (q.visibility === 'PUBLIC') {
+            if (q.reviewStatus === 'PENDING') return <Badge color="yellow">Em Análise</Badge>;
+            if (q.reviewStatus === 'REJECTED') return <Badge color="red">Rejeitada</Badge>;
+            return <Badge color="green">Global (Aprovada)</Badge>;
+        }
         if (q.visibility === 'INSTITUTION') return <Badge color="orange">Escola</Badge>;
         return <Badge color="blue">Privada</Badge>;
     };
@@ -397,7 +401,17 @@ const QuestionsPage = () => {
                     {selectedQuestion ? (
                         <div className="max-w-3xl mx-auto w-full animate-fade-in bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-start">
-                                <div><h3 className="text-lg font-bold text-brand-dark">Detalhes</h3><p className="text-xs text-slate-500">{FirebaseService.getFullHierarchyString(selectedQuestion, hierarchy)}</p></div>
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="text-lg font-bold text-brand-dark">Detalhes</h3>
+                                        {selectedQuestion.reviewStatus === 'REJECTED' && (
+                                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded border border-red-200 font-bold" title={selectedQuestion.rejectionReason}>
+                                                Motivo da Rejeição: {selectedQuestion.rejectionReason}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-500">{FirebaseService.getFullHierarchyString(selectedQuestion, hierarchy)}</p>
+                                </div>
                                 <div className="flex gap-2">
                                     <Button variant="ghost" onClick={() => openEditModal(selectedQuestion)} className="h-8 text-xs">
                                         <Icons.Edit /> {selectedQuestion.authorId === user?.id || user?.role === UserRole.ADMIN ? 'Editar' : 'Clonar e Editar'}
@@ -440,6 +454,12 @@ const QuestionsPage = () => {
                             <option value="PRIVATE">🔒 Somente Eu (Privada)</option>
                         </Select>
                     </div>
+                    {/* Aviso de Moderação */}
+                    {editing.visibility === 'PUBLIC' && user?.role !== 'ADMIN' && (
+                        <div className="col-span-2 text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
+                            <strong>Nota:</strong> Questões públicas novas ou editadas entrarão em status <strong>Pendente</strong> até aprovação da moderação.
+                        </div>
+                    )}
                 </div>
                 <div className="space-y-4">
                     <RichTextEditor label="Enunciado" value={editing.enunciado || ''} onChange={html => setEditing({...editing, enunciado: html})} />

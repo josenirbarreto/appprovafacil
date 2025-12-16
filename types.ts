@@ -104,6 +104,21 @@ export interface Campaign {
   sentAt?: string;
 }
 
+// NOVO: Marketing Coupons
+export type CouponType = 'PERCENTAGE' | 'FIXED' | 'TRIAL_DAYS';
+
+export interface Coupon {
+  id: string;
+  code: string; // Ex: VOLTAASAULAS
+  type: CouponType;
+  value: number; // 20 (%), 50 (R$), 30 (dias)
+  maxUses?: number; // 0 ou undefined = ilimitado
+  usedCount: number;
+  expiresAt?: string; // ISO String data validade
+  isActive: boolean;
+  createdAt: string;
+}
+
 // Institution & Classes
 export interface Institution {
   id: string;
@@ -151,11 +166,19 @@ export interface AssociationPair {
   itemB: string;
 }
 
+// NOVO: Quality Control
+export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export interface Question {
   id: string;
   authorId?: string; // ID do usuário que criou a questão
   institutionId?: string; // NOVO: ID da escola (para visibilidade INSTITUTION)
   visibility?: 'PRIVATE' | 'INSTITUTION' | 'PUBLIC'; // NOVO: Nível de compartilhamento
+  
+  // Moderation Fields
+  reviewStatus?: ReviewStatus; // Default: APPROVED for private/inst, PENDING for public
+  rejectionReason?: string;
+  
   enunciado: string; // The question text
   type: QuestionType;
   disciplineId: string;

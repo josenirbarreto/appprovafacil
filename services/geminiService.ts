@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QuestionType } from "../types";
 
@@ -149,6 +150,64 @@ export const GeminiService = {
         } catch (error) {
             console.error("Gemini Parse Error:", error);
             return [];
+        }
+    },
+
+    checkSimilarity: async (newQuestionText: string, candidates: Question[]): Promise<{ isDuplicate: boolean, score: number, matchId?: string, reason?: string }> => {
+        try {
+            if (candidates.length === 0) return { isDuplicate: false, score: 0 };
+
+            const ai = getClient();
+            
+            const candidatesJson = candidates.map(c => ({
+                id: c.id,
+                text: c.enunciado.replace(/<[^>]*>?/gm, '').substring(0, 300) // Strip HTML e trunca
+            }));
+
+            const prompt = `
+                Analise se a "NOVA QUESTÃO" é semanticamente duplicada ou muito parecida com alguma das "CANDIDATAS".
+                
+                NOVA QUESTÃO: "${newQuestionText.replace(/<[^>]*>?/gm, '')}"
+                
+                CANDIDATAS:
+                ${JSON.stringify(candidatesJson)}
+                
+                Critérios:
+                - Se for a mesma pergunta com palavras levemente diferentes -> Duplicada.
+                - Se for sobre o mesmo assunto mas pergunta diferente -> Não duplicada.
+                
+                Responda APENAS o JSON.
+            `;
+
+            const schema: Schema = {
+                type: Type.OBJECT,
+                properties: {
+                    isDuplicate: { type: Type.BOOLEAN },
+                    matchId: { type: Type.STRING, nullable: true },
+                    score: { type: Type.NUMBER, description: "Similarity score from 0 to 100" },
+                    reason: { type: Type.STRING, description: "Why it is considered duplicate" }
+                },
+                required: ["isDuplicate", "score"]
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema,
+                    temperature: 0.1 // Baixa criatividade para ser analítico
+                }
+            });
+
+            if (response.text) {
+                return JSON.parse(response.text);
+            }
+            return { isDuplicate: false, score: 0 };
+
+        } catch (error) {
+            console.error("Similarity Check Error:", error);
+            return { isDuplicate: false, score: 0 };
         }
     }
 };
