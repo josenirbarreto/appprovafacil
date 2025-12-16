@@ -319,9 +319,9 @@ const QuestionsPage = () => {
                 setIsCloneMode(false); 
                 setEditing({
                     ...newQ, 
-                    visibility: 'PUBLIC', // Default Public
                     ...aiParams,
-                    difficulty: aiParams.difficulty as 'Easy' | 'Medium' | 'Hard'
+                    difficulty: aiParams.difficulty as 'Easy' | 'Medium' | 'Hard',
+                    visibility: 'PUBLIC' // FORÇA VISIBILIDADE PÚBLICA PARA IA
                 }); 
                 setIsAiModalOpen(false); 
                 setIsModalOpen(true); // Abre o modal de edição para revisar a questão gerada
@@ -385,7 +385,8 @@ const QuestionsPage = () => {
                         </div>
                     )}
                 </div>
-                <div className="flex-1 bg-slate-50/50 overflow-y-auto custom-scrollbar p-6 md:p-10 flex flex-col">
+                {/* PAINEL DIREITO: Removido 'flex-col' para corrigir rolagem em telas pequenas ou conteúdo longo */}
+                <div className="flex-1 bg-slate-50/50 overflow-y-auto custom-scrollbar p-6 md:p-10 block">
                     {selectedQuestion ? (
                         <div className="max-w-3xl mx-auto w-full animate-fade-in bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-start">
@@ -406,7 +407,7 @@ const QuestionsPage = () => {
                                 {selectedQuestion.type === QuestionType.MULTIPLE_CHOICE && <div className="space-y-2">{selectedQuestion.options?.map((opt, idx) => (<div key={idx} className={`p-3 rounded-lg border flex gap-3 items-center ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}><div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${opt.isCorrect ? 'bg-green-500 border-green-500 text-white' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>{String.fromCharCode(65 + idx)}</div><span className="flex-1 text-sm">{opt.text}</span>{opt.isCorrect && <Icons.Check />}</div>))}</div>}
                             </div>
                         </div>
-                    ) : <div className="flex-1 flex flex-col items-center justify-center text-slate-300"><div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4"><Icons.Eye /></div><p className="text-lg font-medium">Selecione uma questão</p></div>}
+                    ) : <div className="h-full flex flex-col items-center justify-center text-slate-300"><div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4"><Icons.Eye /></div><p className="text-lg font-medium">Selecione uma questão</p></div>}
                 </div>
             </div>
 
