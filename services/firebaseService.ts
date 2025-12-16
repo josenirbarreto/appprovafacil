@@ -26,7 +26,7 @@ import {
 } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app"; 
 import { db, auth, firebaseConfig } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -42,7 +42,9 @@ const COLLECTIONS = {
     PLANS: 'plans',
     PAYMENTS: 'payments',
     CAMPAIGNS: 'campaigns',
-    AUDIT_LOGS: 'audit_logs' // Nova coleção
+    AUDIT_LOGS: 'audit_logs',
+    TICKETS: 'tickets', // NOVO
+    TICKET_MESSAGES: 'ticket_messages' // NOVO
 };
 
 const safeLog = (message: string, error: any) => {
@@ -159,7 +161,7 @@ const logAuditAction = async (
         const userSnap = await getDoc(userDocRef);
         const userData = userSnap.exists() ? userSnap.data() as User : null;
 
-        const logEntry: Omit<AuditLog, 'id'> = {
+        const logEntry: any = {
             actorId: currentUser.uid,
             actorName: userData?.name || currentUser.displayName || 'Unknown',
             actorRole: userData?.role || 'UNKNOWN',
@@ -167,11 +169,14 @@ const logAuditAction = async (
             targetResource: resource,
             targetId,
             details,
-            metadata: cleanPayload(metadata),
+            metadata,
             timestamp: new Date().toISOString()
         };
 
-        await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), logEntry);
+        // Aplica cleanPayload no objeto inteiro para remover chaves com valor undefined
+        const cleanedLogEntry = cleanPayload(logEntry);
+
+        await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), cleanedLogEntry);
     } catch (e) {
         // Falha silenciosa no log para não bloquear a ação principal, mas log no console
         console.error("Failed to write audit log:", e);
@@ -179,6 +184,128 @@ const logAuditAction = async (
 };
 
 export const FirebaseService = {
+    // --- SUPPORT / TICKETS (NOVO) ---
+    getTickets: async (currentUser: User) => {
+        try {
+            let q;
+            if (currentUser.role === UserRole.ADMIN) {
+                // Admin vê todos, ordenado por data de atualização (mais recente primeiro)
+                q = query(collection(db, COLLECTIONS.TICKETS), orderBy("updatedAt", "desc"));
+            } else {
+                // Usuário vê apenas os seus
+                q = query(
+                    collection(db, COLLECTIONS.TICKETS), 
+                    where("authorId", "==", currentUser.id),
+                    orderBy("updatedAt", "desc")
+                );
+            }
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Ticket));
+        } catch (error) {
+            safeLog("Erro ao buscar tickets:", error);
+            // Fallback sem orderBy se índice não existir
+            try {
+                const qFallback = query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
+                const snap = await getDocs(qFallback);
+                return snap.docs.map(d => ({ ...d.data(), id: d.id } as Ticket));
+            } catch (e) {
+                return [];
+            }
+        }
+    },
+
+    getAdminOpenTicketsCount: async () => {
+        try {
+            // Conta rápida para o badge do menu
+            const q = query(
+                collection(db, COLLECTIONS.TICKETS), 
+                where("status", "==", "OPEN")
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.size;
+        } catch (error) {
+            return 0;
+        }
+    },
+
+    createTicket: async (data: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'>) => {
+        try {
+            const ticketData = {
+                ...cleanPayload(data),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                lastMessageAt: new Date().toISOString()
+            };
+            const docRef = await addDoc(collection(db, COLLECTIONS.TICKETS), ticketData);
+            
+            await logAuditAction('CREATE', 'TICKET', `Novo chamado aberto: ${data.subject}`, docRef.id);
+            return docRef.id;
+        } catch (error) {
+            safeLog("Erro ao criar ticket:", error);
+            throw error;
+        }
+    },
+
+    addTicketMessage: async (ticketId: string, authorId: string, authorName: string, message: string, isAdminReply: boolean) => {
+        try {
+            const msgData: Omit<TicketMessage, 'id'> = {
+                ticketId,
+                authorId,
+                authorName,
+                message,
+                createdAt: new Date().toISOString(),
+                isAdminReply
+            };
+            
+            await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), cleanPayload(msgData));
+            
+            // Atualiza timestamp do ticket para subir na lista
+            const updateData: any = { updatedAt: new Date().toISOString() };
+            
+            // Se Admin responder, status muda para IN_PROGRESS automaticamente se estiver OPEN
+            if (isAdminReply) {
+                // Check current status first ideally, but blind update is acceptable for MVP
+                // Optional: updateData.status = 'IN_PROGRESS';
+            } else {
+                // Se usuário responder, reabre se estiver RESOLVED? (Regra de negócio opcional)
+            }
+
+            await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), updateData);
+
+        } catch (error) {
+            safeLog("Erro ao enviar mensagem:", error);
+            throw error;
+        }
+    },
+
+    getTicketMessages: async (ticketId: string) => {
+        try {
+            const q = query(
+                collection(db, COLLECTIONS.TICKET_MESSAGES), 
+                where("ticketId", "==", ticketId),
+                orderBy("createdAt", "asc")
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as TicketMessage));
+        } catch (error) {
+            safeLog("Erro ao buscar mensagens:", error);
+            return [];
+        }
+    },
+
+    updateTicketStatus: async (ticketId: string, status: Ticket['status']) => {
+        try {
+            await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { 
+                status,
+                updatedAt: new Date().toISOString()
+            });
+            await logAuditAction('UPDATE', 'TICKET', `Status alterado para ${status}`, ticketId);
+        } catch (error) {
+            safeLog("Erro ao atualizar status:", error);
+            throw error;
+        }
+    },
+
     // --- AUDIT LOGS (NOVO) ---
     getAuditLogs: async () => {
         try {

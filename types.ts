@@ -37,6 +37,36 @@ export interface AuditLog {
   ip?: string; // Opcional (difícil de pegar via client-side puro com precisão, mas deixamos o campo)
 }
 
+// NOVO: Suporte / Helpdesk
+export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface Ticket {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string; // Facilitar contato
+  authorRole: UserRole;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  category: 'BUG' | 'DOUBT' | 'BILLING' | 'FEATURE_REQUEST' | 'OTHER';
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt?: string; // Para ordenar por atividade recente
+}
+
+export interface TicketMessage {
+  id: string;
+  ticketId: string;
+  authorId: string; // Quem escreveu a mensagem
+  authorName: string;
+  message: string;
+  createdAt: string;
+  isAdminReply: boolean; // Se true, foi o suporte que respondeu
+}
+
 export interface Payment {
   id: string;
   userId: string;

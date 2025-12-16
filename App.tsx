@@ -25,7 +25,8 @@ import PlansPage from './pages/Plans';
 import AdminExamsPage from './pages/AdminExams';
 import MarketingPage from './pages/Marketing';
 import FinancePage from './pages/Finance';
-import AuditLogsPage from './pages/AuditLogs'; // NOVO IMPORT
+import AuditLogsPage from './pages/AuditLogs';
+import SupportPage from './pages/Support'; // NOVO IMPORT
 
 const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [newPassword, setNewPassword] = useState('');
@@ -78,8 +79,23 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     const location = useLocation();
     const { user } = useAuth();
     const [isSidebarOpen, setSidebarOpen] = useState(false);
+    const [openTicketsCount, setOpenTicketsCount] = useState(0);
     
     useEffect(() => { setSidebarOpen(false); }, [location]);
+
+    // Check for open tickets (Admin notification)
+    useEffect(() => {
+        if (user?.role === UserRole.ADMIN) {
+            const checkTickets = async () => {
+                const count = await FirebaseService.getAdminOpenTicketsCount();
+                setOpenTicketsCount(count);
+            };
+            checkTickets();
+            // Polling simples a cada 30s
+            const interval = setInterval(checkTickets, 30000);
+            return () => clearInterval(interval);
+        }
+    }, [user]);
 
     const isAdmin = user?.role === UserRole.ADMIN;
     const isManager = user?.role === UserRole.MANAGER;
@@ -102,7 +118,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 ...(isAdmin ? [ { path: '/plans', label: 'Planos', icon: Icons.Filter } ] : []),
                 ...(isAdmin ? [ { path: '/finance', label: 'Financeiro', icon: Icons.Bank } ] : []),
                 ...(isAdmin ? [ { path: '/marketing', label: 'Marketing', icon: Icons.Megaphone } ] : []),
-                ...(isAdmin ? [ { path: '/audit', label: 'Auditoria', icon: Icons.Shield } ] : []), // NOVO ITEM
+                ...(isAdmin ? [ { path: '/audit', label: 'Auditoria', icon: Icons.Shield } ] : []),
             ]
         },
         {
@@ -110,6 +126,17 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
             items: [
                 { path: '/questions', label: 'Questões', icon: Icons.Questions },
                 { path: '/exams', label: 'Minhas Provas', icon: Icons.Exams },
+            ]
+        },
+        {
+            title: 'AJUDA',
+            items: [
+                { 
+                    path: '/support', 
+                    label: 'Suporte', 
+                    icon: Icons.LifeBuoy,
+                    badge: (isAdmin && openTicketsCount > 0) ? openTicketsCount : undefined
+                },
             ]
         }
     ];
@@ -148,9 +175,14 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                                 {group.items.map(link => {
                                     const active = location.pathname === link.path;
                                     return (
-                                        <Link key={link.path} to={link.path} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${active ? 'bg-brand-blue text-white font-semibold shadow-md shadow-blue-900/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                                        <Link key={link.path} to={link.path} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${active ? 'bg-brand-blue text-white font-semibold shadow-md shadow-blue-900/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                                             <div className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'}`}><link.icon /></div>
                                             {link.label}
+                                            {link.badge && (
+                                                <span className="absolute right-3 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">
+                                                    {link.badge}
+                                                </span>
+                                            )}
                                         </Link>
                                     );
                                 })}
@@ -233,6 +265,7 @@ const App = () => {
                                 <Route path="/marketing" element={<MarketingPage />} />
                                 <Route path="/finance" element={<FinancePage />} />
                                 <Route path="/audit" element={<AuditLogsPage />} />
+                                <Route path="/support" element={<SupportPage />} /> {/* NOVA ROTA */}
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="*" element={<Navigate to="/" />} />
                             </Routes>
