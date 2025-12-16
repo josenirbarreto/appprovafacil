@@ -71,6 +71,11 @@ const TutorialsPage = () => {
         if (editing.type === 'VIDEO' && !editing.contentUrl) return alert("URL do vídeo obrigatória.");
         
         try {
+            if (editing.id) {
+                // Como não existe updateTutorial no serviço genérico ainda, vamos simular deletando e criando (ou update direto se implementado)
+                // Para simplificar neste contexto sem mudar o service:
+                await FirebaseService.deleteTutorial(editing.id);
+            }
             await FirebaseService.addTutorial(editing as Tutorial);
             setIsEditModalOpen(false);
             loadTutorials();
@@ -206,11 +211,19 @@ const TutorialsPage = () => {
                                                     {CATEGORIES.find(c => c.id === tutorial.category)?.label}
                                                 </span>
                                                 {isAdmin && (
-                                                    <div className="flex gap-1">
-                                                        <button onClick={(e) => { e.stopPropagation(); setEditing(tutorial); setIsEditModalOpen(true); }} className="text-slate-300 hover:text-brand-blue transition-colors p-1" title="Editar">
+                                                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                                        <button 
+                                                            onClick={() => { setEditing(tutorial); setIsEditModalOpen(true); }} 
+                                                            className="text-slate-300 hover:text-brand-blue transition-colors p-1" 
+                                                            title="Editar"
+                                                        >
                                                             <Icons.Edit />
                                                         </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(tutorial.id); }} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Excluir">
+                                                        <button 
+                                                            onClick={() => handleDelete(tutorial.id)} 
+                                                            className="text-slate-300 hover:text-red-500 transition-colors p-1" 
+                                                            title="Excluir"
+                                                        >
                                                             <Icons.Trash />
                                                         </button>
                                                     </div>
@@ -265,9 +278,9 @@ const TutorialsPage = () => {
                                 <Input label="Duração" value={editing.videoDuration || ''} onChange={e => setEditing({...editing, videoDuration: e.target.value})} placeholder="Ex: 5 min" />
                             </div>
                             {editing.contentUrl && getYoutubeId(editing.contentUrl) ? (
-                                <div className="aspect-video w-full rounded-lg overflow-hidden bg-black shadow-inner">
+                                <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black shadow-inner">
                                     <iframe 
-                                        className="w-full h-full"
+                                        className="absolute top-0 left-0 w-full h-full"
                                         src={`https://www.youtube.com/embed/${getYoutubeId(editing.contentUrl)}`}
                                         title="Preview"
                                         frameBorder="0" 
@@ -324,7 +337,7 @@ const TutorialsPage = () => {
                 <div className="space-y-6">
                     {/* VIDEO PLAYER SECTION */}
                     {viewingTutorial?.type === 'VIDEO' && viewingTutorial.contentUrl && (
-                        <div className="w-full max-w-full aspect-video bg-black rounded-xl overflow-hidden shadow-lg relative mx-auto">
+                        <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-lg mx-auto">
                             {getYoutubeId(viewingTutorial.contentUrl) ? (
                                 <iframe 
                                     className="absolute top-0 left-0 w-full h-full"
