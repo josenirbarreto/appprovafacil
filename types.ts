@@ -22,6 +22,25 @@ export interface User {
   requiresPasswordChange?: boolean; // NOVO: Força troca de senha no próximo login
 }
 
+// NOVO: Configurações Globais do Sistema
+export interface SystemSettings {
+  banner: {
+    active: boolean;
+    message: string;
+    type: 'INFO' | 'WARNING' | 'ERROR';
+  };
+  aiConfig: {
+    totalGenerations: number; // Contador acumulativo
+    monthlyLimit: number; // Alerta visual
+    costPerRequestEst: number; // Custo estimado (USD)
+  };
+  whiteLabel: {
+    appName: string;
+    logoUrl?: string;
+    primaryColor?: string;
+  };
+}
+
 // NOVO: Interface para Logs de Auditoria
 export interface AuditLog {
   id: string;

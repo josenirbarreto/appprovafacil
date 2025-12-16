@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QuestionType } from "../types";
+import { FirebaseService } from "./firebaseService";
 
 const getClient = () => {
     const apiKey = process.env.API_KEY || ''; 
@@ -59,6 +60,9 @@ export const GeminiService = {
                     temperature: 0.7
                 }
             });
+
+            // TRACK USAGE
+            FirebaseService.trackAiUsage();
 
             if (response.text) {
                 const data = JSON.parse(response.text);
@@ -132,6 +136,9 @@ export const GeminiService = {
                 }
             });
 
+            // TRACK USAGE
+            FirebaseService.trackAiUsage();
+
             if (response.text) {
                 const data = JSON.parse(response.text);
                 // Adiciona IDs temporários
@@ -199,6 +206,9 @@ export const GeminiService = {
                     temperature: 0.1 // Baixa criatividade para ser analítico
                 }
             });
+
+            // TRACK USAGE
+            FirebaseService.trackAiUsage();
 
             if (response.text) {
                 return JSON.parse(response.text);

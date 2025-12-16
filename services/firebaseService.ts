@@ -12,7 +12,8 @@ import {
     setDoc,
     writeBatch,
     orderBy,
-    limit
+    limit,
+    increment
 } from "firebase/firestore";
 import { 
     createUserWithEmailAndPassword, 
@@ -26,7 +27,7 @@ import {
 } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app"; 
 import { db, auth, firebaseConfig } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage, Coupon } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage, Coupon, SystemSettings } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -42,10 +43,11 @@ const COLLECTIONS = {
     PLANS: 'plans',
     PAYMENTS: 'payments',
     CAMPAIGNS: 'campaigns',
-    COUPONS: 'coupons', // NOVO
+    COUPONS: 'coupons', 
     AUDIT_LOGS: 'audit_logs',
-    TICKETS: 'tickets', // NOVO
-    TICKET_MESSAGES: 'ticket_messages' // NOVO
+    TICKETS: 'tickets',
+    TICKET_MESSAGES: 'ticket_messages',
+    SETTINGS: 'settings' // NOVO: Coleção de configurações
 };
 
 const safeLog = (message: string, error: any) => {
@@ -190,6 +192,59 @@ const logAuditAction = async (
 };
 
 export const FirebaseService = {
+    // --- SYSTEM SETTINGS (NOVO) ---
+    getSystemSettings: async (): Promise<SystemSettings> => {
+        try {
+            const docRef = doc(db, COLLECTIONS.SETTINGS, 'global');
+            const snap = await getDoc(docRef);
+            
+            if (snap.exists()) {
+                return snap.data() as SystemSettings;
+            } else {
+                // Configuração padrão se não existir
+                const defaultSettings: SystemSettings = {
+                    banner: { active: false, message: 'Bem-vindo ao Prova Fácil!', type: 'INFO' },
+                    aiConfig: { totalGenerations: 0, monthlyLimit: 1000, costPerRequestEst: 0.0015 },
+                    whiteLabel: { appName: 'Prova Fácil', primaryColor: '#3A72EC' }
+                };
+                // Cria o documento padrão silenciosamente
+                await setDoc(docRef, defaultSettings);
+                return defaultSettings;
+            }
+        } catch (error) {
+            safeLog("Erro ao buscar configurações globais:", error);
+            // Fallback em caso de erro de rede ou permissão
+            return {
+                banner: { active: false, message: '', type: 'INFO' },
+                aiConfig: { totalGenerations: 0, monthlyLimit: 1000, costPerRequestEst: 0 },
+                whiteLabel: { appName: 'Prova Fácil' }
+            };
+        }
+    },
+
+    saveSystemSettings: async (settings: SystemSettings) => {
+        try {
+            await updateDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), cleanPayload(settings));
+            await logAuditAction('UPDATE', 'SYSTEM', 'Configurações globais atualizadas');
+        } catch (error) {
+            safeLog("Erro ao salvar configurações:", error);
+            throw error;
+        }
+    },
+
+    trackAiUsage: async () => {
+        try {
+            const docRef = doc(db, COLLECTIONS.SETTINGS, 'global');
+            // Incrementa atômico no Firestore
+            await updateDoc(docRef, {
+                "aiConfig.totalGenerations": increment(1)
+            });
+        } catch (error) {
+            // Falha silenciosa para não quebrar a UX do usuário
+            console.error("Failed to track AI usage", error);
+        }
+    },
+
     // --- SUPPORT / TICKETS (NOVO) ---
     getTickets: async (currentUser: User) => {
         try {
