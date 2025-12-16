@@ -11,7 +11,8 @@ import {
     getDoc, 
     setDoc,
     writeBatch,
-    orderBy
+    orderBy,
+    limit
 } from "firebase/firestore";
 import { 
     createUserWithEmailAndPassword, 
@@ -25,7 +26,7 @@ import {
 } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app"; 
 import { db, auth, firebaseConfig } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -40,7 +41,8 @@ const COLLECTIONS = {
     TOPICS: 'topics',
     PLANS: 'plans',
     PAYMENTS: 'payments',
-    CAMPAIGNS: 'campaigns'
+    CAMPAIGNS: 'campaigns',
+    AUDIT_LOGS: 'audit_logs' // Nova coleção
 };
 
 const safeLog = (message: string, error: any) => {
@@ -56,6 +58,11 @@ const cleanPayload = (data: any): any => {
         if (obj === null || typeof obj !== 'object') return obj;
         if (obj instanceof Date) return obj.toISOString();
         
+        // Evita objetos complexos do DOM ou React que causam erro de ciclo
+        if (obj.constructor && (obj.constructor.name === 'SyntheticBaseEvent' || obj.nodeType)) {
+            return null;
+        }
+
         if (seen.has(obj)) {
             // Se encontrar ciclo, ignora ou retorna null
             return null;
@@ -71,6 +78,10 @@ const cleanPayload = (data: any): any => {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 const value = obj[key];
                 if (value !== undefined && typeof value !== 'function') {
+                    // Evita recursão em propriedades internas do Firebase ou objetos desconhecidos
+                    if (key.startsWith('_') || key === 'auth' || key === 'firestore' || key === 'app') {
+                        continue;
+                    }
                     newObj[key] = process(value);
                 }
             }
@@ -130,7 +141,61 @@ const isVisible = (item: any, user: User | null | undefined) => {
     return false;
 };
 
+// --- HELPER: REGISTRO DE AUDITORIA INTERNO ---
+const logAuditAction = async (
+    action: AuditLog['action'], 
+    resource: string, 
+    details: string, 
+    targetId?: string,
+    metadata?: any
+) => {
+    try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) return; // Só loga ações de usuários autenticados
+
+        // Busca dados extras do usuário (role, name)
+        // Otimização: Se já tivermos o User object na sessão, usaríamos, mas aqui garantimos consistência
+        const userDocRef = doc(db, COLLECTIONS.USERS, currentUser.uid);
+        const userSnap = await getDoc(userDocRef);
+        const userData = userSnap.exists() ? userSnap.data() as User : null;
+
+        const logEntry: Omit<AuditLog, 'id'> = {
+            actorId: currentUser.uid,
+            actorName: userData?.name || currentUser.displayName || 'Unknown',
+            actorRole: userData?.role || 'UNKNOWN',
+            action,
+            targetResource: resource,
+            targetId,
+            details,
+            metadata: cleanPayload(metadata),
+            timestamp: new Date().toISOString()
+        };
+
+        await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), logEntry);
+    } catch (e) {
+        // Falha silenciosa no log para não bloquear a ação principal, mas log no console
+        console.error("Failed to write audit log:", e);
+    }
+};
+
 export const FirebaseService = {
+    // --- AUDIT LOGS (NOVO) ---
+    getAuditLogs: async () => {
+        try {
+            // Busca os últimos 100 logs
+            const q = query(
+                collection(db, COLLECTIONS.AUDIT_LOGS), 
+                orderBy("timestamp", "desc"), 
+                limit(100)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as AuditLog));
+        } catch (error) {
+            safeLog("Erro ao buscar logs:", error);
+            return [];
+        }
+    },
+
     // --- AUTENTICAÇÃO ---
     register: async (email: string, pass: string, name: string, role: UserRole) => {
         const userCred = await createUserWithEmailAndPassword(auth, email, pass);
@@ -151,6 +216,10 @@ export const FirebaseService = {
             };
 
             await setDoc(doc(db, COLLECTIONS.USERS, user.uid), userData);
+            
+            // LOG REGISTRO
+            await logAuditAction('CREATE', 'USER', `Novo usuário registrado: ${email}`, user.uid);
+            
             return userData;
         } catch (error: any) {
             safeLog("Erro no cadastro Firestore:", error);
@@ -195,6 +264,9 @@ export const FirebaseService = {
 
             await setDoc(doc(db, COLLECTIONS.USERS, newUserAuth.uid), newUserDoc);
             
+            // LOG CRIAÇÃO SUBUSER
+            await logAuditAction('CREATE', 'USER', `Gestor criou sub-usuário: ${data.email}`, newUserAuth.uid, { createdBy: manager.id });
+
             await signOut(secondaryAuth);
             
             return newUserDoc as User;
@@ -209,7 +281,9 @@ export const FirebaseService = {
 
     login: async (email: string, pass: string) => {
         try {
-            await signInWithEmailAndPassword(auth, email, pass);
+            const cred = await signInWithEmailAndPassword(auth, email, pass);
+            // LOG LOGIN (INSTRUMENTADO)
+            await logAuditAction('LOGIN', 'SESSION', `Login realizado com sucesso`, cred.user.uid);
             return await FirebaseService.getCurrentUserData();
         } catch (error) {
             safeLog("Erro no login:", error);
@@ -230,6 +304,7 @@ export const FirebaseService = {
             await updatePassword(user, newPassword);
             // Atualiza Firestore para não pedir mais
             await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), { requiresPasswordChange: false });
+            await logAuditAction('UPDATE', 'USER', 'Senha alterada pelo usuário', user.uid);
             return true;
         } catch (error) {
             safeLog("Erro ao trocar senha:", error);
@@ -240,6 +315,7 @@ export const FirebaseService = {
     resetPassword: async (email: string) => {
         try {
             await sendPasswordResetEmail(auth, email);
+            await logAuditAction('SECURITY', 'USER', `Solicitação de reset de senha para ${email}`);
         } catch (error) {
             safeLog("Erro ao enviar email de redefinição:", error);
             throw error;
@@ -310,6 +386,12 @@ export const FirebaseService = {
                      await updateProfile(auth.currentUser, profileUpdates);
                 }
             }
+            
+            // LOG UPDATE
+            if (Object.keys(data).length > 0) {
+                await logAuditAction('UPDATE', 'USER', `Perfil de usuário atualizado`, uid, { fields: Object.keys(data) });
+            }
+
         } catch (error) {
             safeLog("Erro ao atualizar usuário:", error);
             throw error;
@@ -319,6 +401,8 @@ export const FirebaseService = {
     deleteUserDocument: async (uid: string) => {
         try {
             await deleteDoc(doc(db, COLLECTIONS.USERS, uid));
+            // LOG DELETE USER (INSTRUMENTADO)
+            await logAuditAction('DELETE', 'USER', `Usuário excluído do sistema`, uid);
         } catch (error) {
             safeLog("Erro ao excluir documento de usuário:", error);
             throw error;
@@ -344,8 +428,9 @@ export const FirebaseService = {
     // --- PAGAMENTOS ---
     addPayment: async (paymentData: Omit<Payment, 'id' | 'date'>) => {
         try {
+            const payload = cleanPayload(paymentData);
             const paymentRef = await addDoc(collection(db, COLLECTIONS.PAYMENTS), {
-                ...paymentData,
+                ...payload,
                 date: new Date().toISOString()
             });
 
@@ -366,6 +451,9 @@ export const FirebaseService = {
                     status: 'ACTIVE'
                 });
             }
+            
+            // LOG PAGAMENTO
+            await logAuditAction('UPDATE', 'FINANCE', `Pagamento registrado: R$ ${paymentData.amount}`, paymentData.userId);
 
             return paymentRef.id;
         } catch (error) {
@@ -382,6 +470,18 @@ export const FirebaseService = {
         const snapshot = await getDocs(q);
         const payments = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Payment));
         return payments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    },
+
+    // NOVO: Busca TODOS os pagamentos para o Dashboard Financeiro
+    getAllPayments: async () => {
+        try {
+            const q = query(collection(db, COLLECTIONS.PAYMENTS), orderBy("date", "desc"));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Payment));
+        } catch (error) {
+            safeLog("Erro ao buscar todos pagamentos:", error);
+            return [];
+        }
     },
 
     // --- MARKETING (CAMPAIGNS) ---
@@ -574,7 +674,16 @@ export const FirebaseService = {
         } 
     },
     
-    deleteExam: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.EXAMS, id)); },
+    deleteExam: async (id: string) => { 
+        try {
+            await deleteDoc(doc(db, COLLECTIONS.EXAMS, id)); 
+            // LOG EXCLUSÃO DE PROVA (INSTRUMENTADO)
+            await logAuditAction('DELETE', 'EXAM', `Prova excluída`, id);
+        } catch (error) {
+            safeLog("Erro ao excluir prova:", error);
+            throw error;
+        }
+    },
     
     getPlans: async () => { const snapshot = await getDocs(collection(db, COLLECTIONS.PLANS)); return snapshot.docs.map(d => { const data = d.data() as any; data.id = d.id; return data as Plan; }); },
     
@@ -594,8 +703,21 @@ export const FirebaseService = {
     deletePlan: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.PLANS, id)); },
     
     startAttempt: async (examId: string, studentName: string, studentIdentifier: string): Promise<ExamAttempt> => { const attempt: Partial<ExamAttempt> = { examId, studentName, studentIdentifier, startedAt: new Date().toISOString(), answers: {}, score: 0, status: 'IN_PROGRESS' }; const docRef = await addDoc(collection(db, COLLECTIONS.ATTEMPTS), attempt); return { ...attempt, id: docRef.id } as ExamAttempt; },
+    
     submitAttempt: async (id: string, answers: Record<string, string>, score: number, totalQuestions: number) => { const docRef = doc(db, COLLECTIONS.ATTEMPTS, id); await updateDoc(docRef, { answers, score, totalQuestions, submittedAt: new Date().toISOString(), status: 'COMPLETED' }); },
-    updateAttemptScore: async (id: string, score: number) => { const docRef = doc(db, COLLECTIONS.ATTEMPTS, id); await updateDoc(docRef, { score }); },
+    
+    updateAttemptScore: async (id: string, score: number) => { 
+        try {
+            const docRef = doc(db, COLLECTIONS.ATTEMPTS, id); 
+            await updateDoc(docRef, { score }); 
+            // LOG ALTERAÇÃO DE NOTA (INSTRUMENTADO - CRÍTICO)
+            await logAuditAction('UPDATE', 'ATTEMPT', `Nota alterada manualmente para ${score}`, id);
+        } catch (error) {
+            safeLog("Erro ao atualizar nota:", error);
+            throw error;
+        }
+    },
+    
     getStudentAttempts: async (examId: string, identifier: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId), where("studentIdentifier", "==", identifier)); const snapshot = await getDocs(q); return snapshot.docs.map(d => { const data = d.data() as any; data.id = d.id; return data as ExamAttempt; }); },
     getExamResults: async (examId: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId)); const snapshot = await getDocs(q); return snapshot.docs.map(d => { const data = d.data() as any; data.id = d.id; return data as ExamAttempt; }); },
     getFullHierarchyString: (q: Question, hierarchy: Discipline[]) => { const disc = hierarchy.find(d => d.id === q.disciplineId); const chap = disc?.chapters.find(c => c.id === q.chapterId); const unit = chap?.units.find(u => u.id === q.unitId); const topic = unit?.topics.find(t => t.id === q.topicId); return `${disc?.name || '?'} > ${chap?.name || '?'} > ${unit?.name || '?'} > ${topic?.name || '?'}`; }

@@ -23,7 +23,9 @@ import ProfilePage from './pages/Profile';
 import UsersPage from './pages/Users';
 import PlansPage from './pages/Plans';
 import AdminExamsPage from './pages/AdminExams';
-import MarketingPage from './pages/Marketing'; // NOVO IMPORT
+import MarketingPage from './pages/Marketing';
+import FinancePage from './pages/Finance';
+import AuditLogsPage from './pages/AuditLogs'; // NOVO IMPORT
 
 const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [newPassword, setNewPassword] = useState('');
@@ -98,7 +100,9 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 { path: '/hierarchy', label: 'Conteúdos', icon: Icons.BookOpen },
                 ...((isAdmin || isManager) ? [ { path: '/users', label: isManager ? 'Professores' : 'Usuários', icon: Icons.User } ] : []),
                 ...(isAdmin ? [ { path: '/plans', label: 'Planos', icon: Icons.Filter } ] : []),
-                ...(isAdmin ? [ { path: '/marketing', label: 'Marketing', icon: Icons.Megaphone } ] : []), // NOVO ITEM
+                ...(isAdmin ? [ { path: '/finance', label: 'Financeiro', icon: Icons.Bank } ] : []),
+                ...(isAdmin ? [ { path: '/marketing', label: 'Marketing', icon: Icons.Megaphone } ] : []),
+                ...(isAdmin ? [ { path: '/audit', label: 'Auditoria', icon: Icons.Shield } ] : []), // NOVO ITEM
             ]
         },
         {
@@ -227,6 +231,8 @@ const App = () => {
                                 <Route path="/users" element={<UsersPage />} />
                                 <Route path="/plans" element={<PlansPage />} />
                                 <Route path="/marketing" element={<MarketingPage />} />
+                                <Route path="/finance" element={<FinancePage />} />
+                                <Route path="/audit" element={<AuditLogsPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="*" element={<Navigate to="/" />} />
                             </Routes>

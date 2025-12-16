@@ -22,6 +22,21 @@ export interface User {
   requiresPasswordChange?: boolean; // NOVO: Força troca de senha no próximo login
 }
 
+// NOVO: Interface para Logs de Auditoria
+export interface AuditLog {
+  id: string;
+  actorId: string; // Quem fez a ação
+  actorName: string;
+  actorRole: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'EXPORT' | 'SECURITY';
+  targetResource: string; // Ex: "Prova de Matemática", "Usuário João"
+  targetId?: string; // ID do recurso afetado
+  details: string; // Descrição humanizada
+  metadata?: any; // Dados técnicos (ex: nota anterior vs nova)
+  timestamp: string;
+  ip?: string; // Opcional (difícil de pegar via client-side puro com precisão, mas deixamos o campo)
+}
+
 export interface Payment {
   id: string;
   userId: string;
