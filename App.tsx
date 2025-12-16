@@ -28,7 +28,7 @@ import FinancePage from './pages/Finance';
 import AuditLogsPage from './pages/AuditLogs';
 import SupportPage from './pages/Support';
 import ModerationPage from './pages/Moderation';
-import SystemSettingsPage from './pages/SystemSettings'; // NOVO IMPORT
+import SystemSettingsPage from './pages/SystemSettings';
 
 const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [newPassword, setNewPassword] = useState('');
@@ -151,7 +151,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 ...(isAdmin ? [ { path: '/marketing', label: 'Marketing', icon: Icons.Megaphone } ] : []),
                 ...(isAdmin ? [ { path: '/audit', label: 'Auditoria', icon: Icons.Shield } ] : []),
                 ...(isAdmin ? [ { path: '/moderation', label: 'Moderação', icon: Icons.Check, badge: pendingQuestionsCount > 0 ? pendingQuestionsCount : undefined } ] : []),
-                ...(isAdmin ? [ { path: '/settings', label: 'Sistema', icon: Icons.Settings } ] : []), // ÍCONE ATUALIZADO
+                ...(isAdmin ? [ { path: '/settings', label: 'Sistema', icon: Icons.Settings } ] : []),
             ]
         },
         {
@@ -177,8 +177,6 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     // White Label overrides
     const appName = globalSettings?.whiteLabel?.appName || 'Prova Fácil';
     const logoUrl = globalSettings?.whiteLabel?.logoUrl;
-    // Primary color handling via inline styles would require more complex context or CSS vars injection. 
-    // Keeping it simple for MVP: Banner logic only.
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
