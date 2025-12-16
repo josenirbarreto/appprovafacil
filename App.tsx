@@ -7,7 +7,7 @@ import { Icons } from './components/Icons';
 import { AuthContext, useAuth } from './contexts/AuthContext';
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Modal, Input, Button } from './components/UI'; // Importações adicionadas
+import { Modal, Input, Button } from './components/UI';
 
 // Pages Imports
 import Login from './pages/Login';
@@ -22,6 +22,8 @@ import InstitutionPage from './pages/Institutions';
 import ProfilePage from './pages/Profile';
 import UsersPage from './pages/Users';
 import PlansPage from './pages/Plans';
+import AdminExamsPage from './pages/AdminExams';
+import MarketingPage from './pages/Marketing'; // NOVO IMPORT
 
 const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [newPassword, setNewPassword] = useState('');
@@ -38,7 +40,7 @@ const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUs
         try {
             await FirebaseService.changeUserPassword(newPassword);
             alert("Senha alterada com sucesso!");
-            await refreshUser(); // Atualiza o contexto para remover a flag e fechar o modal
+            await refreshUser(); 
         } catch (e: any) {
             console.error(e);
             setError("Erro ao alterar senha. Tente novamente.");
@@ -50,7 +52,7 @@ const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUs
     return (
         <Modal 
             isOpen={true} 
-            onClose={() => {}} // Impede fechar clicando fora ou no X (se houvesse)
+            onClose={() => {}} 
             title="Troca de Senha Obrigatória"
             maxWidth="max-w-md"
         >
@@ -60,20 +62,8 @@ const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUs
                     <p>Por segurança, você deve alterar a senha provisória fornecida pelo gestor para uma senha pessoal.</p>
                 </div>
                 {error && <p className="text-red-500 text-sm font-bold">{error}</p>}
-                <Input 
-                    label="Nova Senha" 
-                    type="password" 
-                    value={newPassword} 
-                    onChange={e => setNewPassword(e.target.value)} 
-                    placeholder="Mínimo 6 caracteres"
-                />
-                <Input 
-                    label="Confirmar Nova Senha" 
-                    type="password" 
-                    value={confirmPassword} 
-                    onChange={e => setConfirmPassword(e.target.value)} 
-                    placeholder="Repita a senha"
-                />
+                <Input label="Nova Senha" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                <Input label="Confirmar Nova Senha" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repita a senha" />
                 <Button onClick={handleSubmit} disabled={loading} className="w-full justify-center">
                     {loading ? 'Salvando...' : 'Definir Nova Senha'}
                 </Button>
@@ -87,15 +77,11 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     const { user } = useAuth();
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     
-    // Fechar sidebar ao navegar em mobile
-    useEffect(() => {
-        setSidebarOpen(false);
-    }, [location]);
+    useEffect(() => { setSidebarOpen(false); }, [location]);
 
     const isAdmin = user?.role === UserRole.ADMIN;
     const isManager = user?.role === UserRole.MANAGER;
 
-    // Definição dinâmica do menu baseada no Role
     const menuGroups = [
         {
             title: null, 
@@ -106,27 +92,20 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         {
             title: 'GESTÃO',
             items: [
-                // Itens compartilhados
                 { path: '/institutions', label: 'Instituições', icon: Icons.Building },
                 { path: '/classes', label: 'Turmas', icon: Icons.UsersGroup },
+                ...((isAdmin || isManager) ? [ { path: '/admin-exams', label: 'Todas as Provas', icon: Icons.FileText } ] : []),
                 { path: '/hierarchy', label: 'Conteúdos', icon: Icons.BookOpen },
-                
-                // Usuários: Admin (Global) ou Manager (Professores da Escola)
-                ...((isAdmin || isManager) ? [
-                    { path: '/users', label: isManager ? 'Professores' : 'Usuários', icon: Icons.User },
-                ] : []),
-                
-                // Planos: Apenas Admin
-                ...(isAdmin ? [
-                    { path: '/plans', label: 'Planos', icon: Icons.Filter } 
-                ] : []),
+                ...((isAdmin || isManager) ? [ { path: '/users', label: isManager ? 'Professores' : 'Usuários', icon: Icons.User } ] : []),
+                ...(isAdmin ? [ { path: '/plans', label: 'Planos', icon: Icons.Filter } ] : []),
+                ...(isAdmin ? [ { path: '/marketing', label: 'Marketing', icon: Icons.Megaphone } ] : []), // NOVO ITEM
             ]
         },
         {
             title: 'AVALIAÇÃO',
             items: [
                 { path: '/questions', label: 'Questões', icon: Icons.Questions },
-                { path: '/exams', label: 'Provas', icon: Icons.Exams },
+                { path: '/exams', label: 'Minhas Provas', icon: Icons.Exams },
             ]
         }
     ];
@@ -136,67 +115,37 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
             {/* Mobile Header */}
             <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-brand-dark z-30 flex items-center px-4 justify-between shadow-md">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => setSidebarOpen(true)} className="text-slate-300 hover:text-white p-1">
-                        <Icons.Menu />
-                    </button>
+                    <button onClick={() => setSidebarOpen(true)} className="text-slate-300 hover:text-white p-1"><Icons.Menu /></button>
                     <span className="font-display font-bold text-lg text-white tracking-tight">Prova Fácil</span>
                 </div>
             </div>
 
-            {/* Overlay para Mobile */}
-            {isSidebarOpen && (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
+            {/* Overlay */}
+            {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity" onClick={() => setSidebarOpen(false)} />}
 
-            {/* Sidebar Dark Theme - Responsive */}
-            <aside className={`
-                fixed inset-y-0 left-0 z-50 w-64 bg-brand-dark border-r border-slate-700 flex flex-col shrink-0 transition-transform duration-300
-                ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-                md:relative md:translate-x-0 md:z-auto
-            `}>
+            {/* Sidebar */}
+            <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand-dark border-r border-slate-700 flex flex-col shrink-0 transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 md:z-auto`}>
                 <div className="p-6 border-b border-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/50">PF</div>
                         <div className="flex flex-col">
                             <span className="font-display font-bold text-xl text-white tracking-tight leading-none">Prova Fácil</span>
-                            <span className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-wider">
-                                {isAdmin ? 'Painel Admin' : isManager ? 'Painel Gestor' : 'Painel Professor'}
-                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-wider">{isAdmin ? 'Painel Admin' : isManager ? 'Painel Gestor' : 'Painel Professor'}</span>
                         </div>
                     </div>
-                    {/* Close Button Mobile */}
-                    <button onClick={() => setSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
-                        <Icons.X />
-                    </button>
+                    <button onClick={() => setSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white"><Icons.X /></button>
                 </div>
 
                 <nav className="flex-1 p-4 space-y-6 overflow-y-auto custom-scrollbar">
                     {menuGroups.map((group, groupIdx) => (
                         <div key={groupIdx}>
-                            {group.title && (
-                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-4">
-                                    {group.title}
-                                </h4>
-                            )}
+                            {group.title && <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-4">{group.title}</h4>}
                             <div className="space-y-1">
                                 {group.items.map(link => {
                                     const active = location.pathname === link.path;
                                     return (
-                                        <Link 
-                                            key={link.path} 
-                                            to={link.path} 
-                                            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
-                                                active 
-                                                ? 'bg-brand-blue text-white font-semibold shadow-md shadow-blue-900/30' 
-                                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                                            }`}
-                                        >
-                                            <div className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'}`}>
-                                                <link.icon />
-                                            </div>
+                                        <Link key={link.path} to={link.path} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${active ? 'bg-brand-blue text-white font-semibold shadow-md shadow-blue-900/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                                            <div className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'}`}><link.icon /></div>
                                             {link.label}
                                         </Link>
                                     );
@@ -260,16 +209,9 @@ const App = () => {
     return (
         <AuthContext.Provider value={{ user, loading, refreshUser }}>
             <HashRouter>
-                {/* MODAL DE TROCA DE SENHA OBRIGATÓRIA (BLOQUEANTE) */}
-                {user && user.requiresPasswordChange && (
-                    <ForcePasswordChangeModal user={user} refreshUser={refreshUser} />
-                )}
-
+                {user && user.requiresPasswordChange && <ForcePasswordChangeModal user={user} refreshUser={refreshUser} />}
                 <Routes>
-                    {/* ROTA PÚBLICA (ALUNO) - Fora do Auth Guard */}
                     <Route path="/p/:examId" element={<PublicExam />} />
-
-                    {/* ROTAS PROTEGIDAS (PROFESSOR) */}
                     <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
                     <Route path="/*" element={user ? (
                         <Layout>
@@ -278,14 +220,13 @@ const App = () => {
                                 <Route path="/hierarchy" element={<HierarchyPage />} />
                                 <Route path="/questions" element={<QuestionsPage />} />
                                 <Route path="/exams" element={<ExamsPage />} />
+                                <Route path="/admin-exams" element={<AdminExamsPage />} />
                                 <Route path="/exam-results" element={<ExamResults />} />
                                 <Route path="/classes" element={<ClassesPage />} />
-                                
-                                {/* Rotas de Admin */}
                                 <Route path="/institutions" element={<InstitutionPage />} />
                                 <Route path="/users" element={<UsersPage />} />
                                 <Route path="/plans" element={<PlansPage />} />
-                                
+                                <Route path="/marketing" element={<MarketingPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="*" element={<Navigate to="/" />} />
                             </Routes>

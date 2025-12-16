@@ -32,7 +32,7 @@ Senha Provisória: ${tempPassword}
 IMPORTANTE:
 Ao fazer o primeiro login, você será obrigado a definir uma nova senha pessoal e segura.
 
-Acesse agora: https://app-provafacil.firebaseapp.com/ (ou o link da sua aplicação)
+Acesse agora: https://appprovafacil-six.vercel.app/
         `;
 
         const fullMessage = `${header}\n${body}`;
@@ -87,6 +87,28 @@ Verifique também sua caixa de SPAM ou LIXEIRA.
 
         const fullMessage = `${header}\n${body}`;
         return EmailService.sendEmailInternal(email, name || 'Usuário', 'Instruções de Acesso - Prova Fácil', fullMessage);
+    },
+
+    /**
+     * Envia e-mail de marketing formatado.
+     * OBS: O EmailJS free tier tem limites diários.
+     */
+    sendMarketingEmail: async (email: string, name: string, subject: string, htmlBody: string) => {
+        // Substituição de variáveis simples
+        const parsedBody = htmlBody
+            .replace(/{nome}/g, name)
+            .replace(/{email}/g, email);
+
+        // Como o EmailJS template básico espera 'message' como string simples,
+        // para HTML complexo idealmente precisaríamos de um template EmailJS configurado como HTML.
+        // Assumindo que o template suporta texto rico ou que estamos enviando texto limpo convertido.
+        // Para este MVP, removeremos tags HTML básicas para o formato texto se o template não suportar, 
+        // ou enviaremos o HTML cru se o template renderizar HTML.
+        
+        // Simples strip tags para garantir legibilidade no modo texto se necessário
+        const textBody = parsedBody.replace(/<[^>]*>?/gm, '');
+
+        return EmailService.sendEmailInternal(email, name, subject, textBody);
     },
 
     // Função interna auxiliar para evitar duplicação de código EmailJS

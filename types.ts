@@ -35,6 +35,30 @@ export interface Payment {
   notes?: string;
 }
 
+// Marketing Campaigns
+export interface Campaign {
+  id: string;
+  title: string;
+  channel: 'EMAIL' | 'WHATSAPP';
+  status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+  segmentation: {
+    roles: UserRole[];
+    plans?: string[];
+    status?: string[];
+  };
+  content: {
+    subject?: string;
+    body: string; // HTML ou Texto
+  };
+  stats: {
+    targetCount: number;
+    sentCount: number;
+    failedCount: number;
+  };
+  createdAt: string;
+  sentAt?: string;
+}
+
 // Institution & Classes
 export interface Institution {
   id: string;

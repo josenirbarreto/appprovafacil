@@ -62,7 +62,8 @@ const QuestionsPage = () => {
     }, [user]);
     
     const load = async () => {
-        const [qs, hs] = await Promise.all([FirebaseService.getQuestions(user), FirebaseService.getHierarchy()]);
+        // CORREÇÃO: Passando user para getHierarchy para filtrar disciplinas
+        const [qs, hs] = await Promise.all([FirebaseService.getQuestions(user), FirebaseService.getHierarchy(user)]);
         setAllQuestions(qs);
         setHierarchy(hs);
     };
@@ -360,13 +361,19 @@ const QuestionsPage = () => {
                     </div>
                     <div className="w-40"><select className="w-full text-sm border-slate-300 rounded p-1.5 bg-white outline-none" value={selDisc} onChange={e => { setSelDisc(e.target.value); setSelChap(''); setSelUnit(''); setSelTopic(''); }}><option value="">Todas Disciplinas</option>{hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
                     <div className="w-40"><select className="w-full text-sm border-slate-300 rounded p-1.5 bg-white outline-none" value={selChap} onChange={e => { setSelChap(e.target.value); setSelUnit(''); setSelTopic(''); }} disabled={!selDisc}><option value="">Todos Capítulos</option>{hierarchy.find(d => d.id === selDisc)?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                    <div className="flex-1 min-w-[200px] relative"><input type="text" className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded outline-none" placeholder="Buscar..." value={searchText} onChange={e => setSearchText(e.target.value)} /><div className="absolute left-2.5 top-2 text-slate-400"><Icons.Search /></div></div>
+                    <div className="flex-1 min-w-[200px] relative"><input type="text" className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded outline-none bg-white text-slate-800" placeholder="Buscar..." value={searchText} onChange={e => setSearchText(e.target.value)} /><div className="absolute left-2.5 top-2 text-slate-400"><Icons.Search /></div></div>
                 </div>
             </div>
 
             {/* MAIN CONTENT SPLIT */}
             <div className="flex flex-1 overflow-hidden">
                 <div className="w-1/3 min-w-[300px] max-w-[450px] border-r border-slate-200 bg-white overflow-y-auto custom-scrollbar flex flex-col">
+                    <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Lista de Questões</span>
+                        <span className="text-xs font-medium text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                            {filteredQuestions.length} de {allQuestions.length} questões
+                        </span>
+                    </div>
                     {filteredQuestions.length === 0 ? <div className="p-8 text-center text-slate-400">Nenhuma questão encontrada.</div> : (
                         <div className="divide-y divide-slate-100">
                             {filteredQuestions.map(q => (

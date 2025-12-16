@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { SchoolClass, Institution } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Select, Input, Card, Badge } from '../components/UI';
@@ -8,6 +9,12 @@ import { useAuth } from '../contexts/AuthContext';
 
 const ClassesPage = () => {
     const { user } = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
+    
+    // Filtro vindo de outra página (ex: Botão "Turmas" na tela de Instituições)
+    const filterInstitutionId = location.state?.institutionId;
+
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [institutions, setInstitutions] = useState<Institution[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -15,11 +22,26 @@ const ClassesPage = () => {
     const [expandedInstitutions, setExpandedInstitutions] = useState<Record<string, boolean>>({});
     const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
 
-    useEffect(() => { if(user) load(); }, [user]);
+    useEffect(() => { if(user) load(); }, [user, filterInstitutionId]);
+    
     const load = async () => {
         const [cls, insts] = await Promise.all([FirebaseService.getClasses(user), FirebaseService.getInstitutions(user)]);
+        
+        // Se houver filtro, mostra apenas a instituição selecionada
+        let visibleInsts = insts.sort((a,b) => a.name.localeCompare(b.name));
+        if (filterInstitutionId) {
+            visibleInsts = visibleInsts.filter(i => i.id === filterInstitutionId);
+            // Auto expande a instituição filtrada
+            setExpandedInstitutions(prev => ({ ...prev, [filterInstitutionId]: true }));
+        }
+
         setClasses(cls);
-        setInstitutions(insts.sort((a,b) => a.name.localeCompare(b.name)));
+        setInstitutions(visibleInsts);
+    };
+
+    const clearFilter = () => {
+        // Remove o state da navegação e recarrega tudo
+        navigate(location.pathname, { replace: true, state: {} });
     };
 
     const handleSave = async () => {
@@ -36,9 +58,35 @@ const ClassesPage = () => {
 
     return (
         <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar">
-            <div className="flex justify-between items-center mb-6"><div><h2 className="text-3xl font-display font-bold text-slate-800">Turmas</h2><p className="text-slate-500 mt-1">Gerencie suas turmas por Instituição e Ano Letivo.</p></div><Button onClick={() => { setEditing({ year: new Date().getFullYear() }); setIsModalOpen(true); }}><Icons.Plus /> Nova Turma</Button></div>
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-3xl font-display font-bold text-slate-800">Turmas</h2>
+                    <p className="text-slate-500 mt-1">Gerencie suas turmas por Instituição e Ano Letivo.</p>
+                </div>
+                <div className="flex gap-2">
+                    {filterInstitutionId && (
+                        <Button variant="outline" onClick={clearFilter}>
+                            <Icons.Refresh /> Ver Todas
+                        </Button>
+                    )}
+                    <Button onClick={() => { 
+                        setEditing({ 
+                            year: new Date().getFullYear(),
+                            institutionId: filterInstitutionId || '' // Preenche auto se estiver filtrado
+                        }); 
+                        setIsModalOpen(true); 
+                    }}>
+                        <Icons.Plus /> Nova Turma
+                    </Button>
+                </div>
+            </div>
+
             <div className="space-y-4">
-                {institutions.length === 0 && <div className="text-center py-10 text-slate-400">Nenhuma instituição cadastrada.</div>}
+                {institutions.length === 0 && (
+                    <div className="text-center py-10 text-slate-400">
+                        {filterInstitutionId ? 'Instituição não encontrada.' : 'Nenhuma instituição cadastrada.'}
+                    </div>
+                )}
                 {institutions.map(inst => {
                     const instClasses = classes.filter(c => c.institutionId === inst.id);
                     const years = Array.from(new Set(instClasses.map(c => c.year))).sort((a, b) => Number(b) - Number(a));
@@ -52,7 +100,15 @@ const ClassesPage = () => {
                 })}
             </div>
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? 'Editar Turma' : 'Nova Turma'} footer={<Button onClick={handleSave}>Salvar</Button>}>
-                <div className="space-y-4"><Select label="Instituição" value={editing.institutionId || ''} onChange={e => setEditing({...editing, institutionId: e.target.value})}><option value="">Selecione...</option>{institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</Select><Input label="Ano Letivo" type="number" value={editing.year || ''} onChange={e => setEditing({...editing, year: Number(e.target.value)})} /><Input label="Nome da Turma" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" /></div>
+                <div className="space-y-4">
+                    <Select label="Instituição" value={editing.institutionId || ''} onChange={e => setEditing({...editing, institutionId: e.target.value})} disabled={!!filterInstitutionId}>
+                        <option value="">Selecione...</option>
+                        {/* Se tiver filtro, mostra só a filtrada (ou todas disponíveis se user quiser trocar) */}
+                        {(filterInstitutionId ? institutions : institutions).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                    </Select>
+                    <Input label="Ano Letivo" type="number" value={editing.year || ''} onChange={e => setEditing({...editing, year: Number(e.target.value)})} />
+                    <Input label="Nome da Turma" value={editing.name || ''} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="Ex: 3º Ano A" />
+                </div>
             </Modal>
         </div>
     );

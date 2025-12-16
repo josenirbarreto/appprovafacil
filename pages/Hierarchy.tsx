@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Discipline } from '../types';
 import { FirebaseService } from '../services/firebaseService';
-import { Button } from '../components/UI';
+import { Button, Modal, Input } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -13,14 +13,21 @@ const HierarchyPage = () => {
     const [expandedDisciplines, setExpandedDisciplines] = useState<Record<string, boolean>>({});
     const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
     
+    // Modal States
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [newItemName, setNewItemName] = useState('');
+    const [modalConfig, setModalConfig] = useState<{
+        type: 'discipline' | 'chapter' | 'unit' | 'topic';
+        title: string;
+        dId?: string;
+        cId?: string;
+        uId?: string;
+    }>({ type: 'discipline', title: '' });
+
     useEffect(() => { if(user) load(); }, [user]);
     const load = async () => { setHierarchy(await FirebaseService.getHierarchy(user)); setLoading(false); };
 
-    const addD = async (name: string) => { await FirebaseService.addDiscipline(name); load(); }
-    const addC = async (dId: string, name: string) => { await FirebaseService.addChapter(dId, name); load(); }
-    const addU = async (dId: string, cId: string, name: string) => { await FirebaseService.addUnit(dId, cId, name); load(); }
-    const addT = async (dId: string, cId: string, uId: string, name: string) => { await FirebaseService.addTopic(dId, cId, uId, name); load(); }
-
+    // Delete Handler
     const handleDelete = async (type: any, ids: any) => {
         if(confirm('Tem certeza? Isso apagará todos os itens filhos.')) {
             await FirebaseService.deleteItem(type, ids);
@@ -28,10 +35,38 @@ const HierarchyPage = () => {
         }
     }
     
-    const promptAdd = (type: string, callback: (name: string) => void) => {
-        const name = prompt(`Nome do novo ${type}:`);
-        if(name) callback(name);
-    }
+    // Modal Handlers
+    const handleOpenModal = (type: 'discipline' | 'chapter' | 'unit' | 'topic', ids: { dId?: string, cId?: string, uId?: string } = {}) => {
+        let title = '';
+        switch(type) {
+            case 'discipline': title = 'Nova Disciplina'; break;
+            case 'chapter': title = 'Novo Capítulo'; break;
+            case 'unit': title = 'Nova Unidade'; break;
+            case 'topic': title = 'Novo Tópico'; break;
+        }
+        setModalConfig({ type, title, ...ids });
+        setNewItemName('');
+        setIsModalOpen(true);
+    };
+
+    const handleSave = async () => {
+        if (!newItemName.trim()) return;
+        
+        const { type, dId, cId, uId } = modalConfig;
+        
+        try {
+            if (type === 'discipline') await FirebaseService.addDiscipline(newItemName);
+            else if (type === 'chapter' && dId) await FirebaseService.addChapter(dId, newItemName);
+            else if (type === 'unit' && dId && cId) await FirebaseService.addUnit(dId, cId, newItemName);
+            else if (type === 'topic' && dId && cId && uId) await FirebaseService.addTopic(dId, cId, uId, newItemName);
+            
+            setIsModalOpen(false);
+            load();
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao salvar item.");
+        }
+    };
 
     const toggleDiscipline = (id: string) => {
         setExpandedDisciplines(prev => ({ ...prev, [id]: !prev[id] }));
@@ -60,14 +95,16 @@ const HierarchyPage = () => {
                     <h2 className="text-3xl font-display font-bold text-slate-800">Conteúdos</h2>
                     <p className="text-slate-500 text-sm mt-1">Gerencie a estrutura hierárquica das disciplinas, Capítulos, Unidades e tópicos.</p>
                 </div>
-                <Button onClick={() => promptAdd('Disciplina', addD)}><Icons.Plus /> Nova Disciplina</Button>
+                {user?.role !== 'TEACHER' && (
+                    <Button onClick={() => handleOpenModal('discipline')}><Icons.Plus /> Nova Disciplina</Button>
+                )}
             </div>
 
             <div className="grid gap-6">
                 {hierarchy.length === 0 && (
                     <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200 text-slate-400">
                         <div className="mb-2"><Icons.BookOpen /></div>
-                        <p>Nenhuma disciplina cadastrada.</p>
+                        <p>{user?.role === 'TEACHER' ? 'Nenhuma disciplina atribuída ao seu perfil.' : 'Nenhuma disciplina cadastrada.'}</p>
                     </div>
                 )}
 
@@ -83,12 +120,14 @@ const HierarchyPage = () => {
                                     <h3 className="text-lg font-bold tracking-wide">{d.name}</h3>
                                 </div>
                                 <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                    <Button variant="ghost" className="text-white/80 hover:text-white hover:bg-white/20 text-xs py-1 px-2 h-auto" onClick={() => promptAdd('Capítulo', (n) => addC(d.id, n))}>
+                                    <Button variant="ghost" className="text-white/80 hover:text-white hover:bg-white/20 text-xs py-1 px-2 h-auto" onClick={() => handleOpenModal('chapter', { dId: d.id })}>
                                         + Capítulo
                                     </Button>
-                                    <button onClick={() => handleDelete('discipline', { dId: d.id })} className="text-white/70 hover:text-white p-1.5 rounded hover:bg-white/20 transition-colors">
-                                        <Icons.Trash />
-                                    </button>
+                                    {user?.role !== 'TEACHER' && (
+                                        <button onClick={() => handleDelete('discipline', { dId: d.id })} className="text-white/70 hover:text-white p-1.5 rounded hover:bg-white/20 transition-colors">
+                                            <Icons.Trash />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -107,7 +146,7 @@ const HierarchyPage = () => {
                                                             <span className="font-semibold text-slate-800">{c.name}</span>
                                                         </div>
                                                         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                                            <Button variant="ghost" className="text-xs h-7 px-2 bg-white/50 hover:bg-white" onClick={() => promptAdd('Unidade', (n) => addU(d.id, c.id, n))}>+ Unidade</Button>
+                                                            <Button variant="ghost" className="text-xs h-7 px-2 bg-white/50 hover:bg-white" onClick={() => handleOpenModal('unit', { dId: d.id, cId: c.id })}>+ Unidade</Button>
                                                             <button onClick={() => handleDelete('chapter', { dId: d.id, cId: c.id })} className="text-slate-600 hover:text-red-600 p-1"><Icons.Trash /></button>
                                                         </div>
                                                     </div>
@@ -120,7 +159,7 @@ const HierarchyPage = () => {
                                                                         <div className="flex justify-between items-center mb-2">
                                                                             <span className={`text-sm font-bold ${colors.text}`}>{u.name}</span>
                                                                             <div className="flex gap-1">
-                                                                                <button onClick={() => promptAdd('Tópico', (n) => addT(d.id, c.id, u.id, n))} className="text-slate-600 hover:text-brand-blue text-xs font-medium hover:underline px-2 py-1">+ Tópico</button>
+                                                                                <button onClick={() => handleOpenModal('topic', { dId: d.id, cId: c.id, uId: u.id })} className="text-slate-600 hover:text-brand-blue text-xs font-medium hover:underline px-2 py-1">+ Tópico</button>
                                                                                 <button onClick={() => handleDelete('unit', { dId: d.id, cId: c.id, uId: u.id })} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button>
                                                                             </div>
                                                                         </div>
@@ -152,6 +191,25 @@ const HierarchyPage = () => {
                     );
                 })}
             </div>
+
+            <Modal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                title={modalConfig.title}
+                footer={<Button onClick={handleSave}>Salvar</Button>}
+                maxWidth="max-w-md"
+            >
+                <div className="space-y-4">
+                    <Input 
+                        label="Nome" 
+                        value={newItemName} 
+                        onChange={e => setNewItemName(e.target.value)} 
+                        placeholder="Digite o nome..." 
+                        autoFocus
+                        onKeyDown={e => e.key === 'Enter' && handleSave()}
+                    />
+                </div>
+            </Modal>
         </div>
     );
 };
