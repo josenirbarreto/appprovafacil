@@ -332,6 +332,7 @@ const TutorialsPage = () => {
                 title={viewingTutorial?.title || ''}
                 maxWidth="max-w-4xl"
                 footer={<Button onClick={() => setViewingTutorial(null)} variant="ghost">Fechar</Button>}
+                compact={true}
             >
                 <div className="space-y-6">
                     {/* VIDEO PLAYER SECTION */}
