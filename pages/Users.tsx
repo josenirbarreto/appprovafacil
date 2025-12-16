@@ -11,7 +11,7 @@ const UsersPage = () => {
     const { user, refreshUser } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
     const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
-    const [hierarchy, setHierarchy] = useState<Discipline[]>([]); // Para Grants
+    const [hierarchy, setHierarchy] = useState<Discipline[]>([]); // Para Grants e Subjects
     const [loading, setLoading] = useState(true);
     
     // States for Manager adding/editing Teacher
@@ -35,7 +35,8 @@ const UsersPage = () => {
         email: '', 
         role: UserRole.TEACHER, 
         plan: '',
-        accessGrants: [] as string[] // NOVO
+        accessGrants: [] as string[],
+        subjects: [] as string[] // NOVO: Componentes Curriculares
     });
     const [password, setPassword] = useState('');
 
@@ -85,7 +86,7 @@ const UsersPage = () => {
             ? user.plan 
             : (availablePlans.length > 0 ? availablePlans[0].name : 'BASIC');
 
-        setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: initialPlan, accessGrants: [] });
+        setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: initialPlan, accessGrants: [], subjects: [] });
         setPassword('');
         setIsModalOpen(true);
     };
@@ -98,7 +99,8 @@ const UsersPage = () => {
             email: u.email,
             role: u.role,
             plan: u.plan,
-            accessGrants: u.accessGrants || []
+            accessGrants: u.accessGrants || [],
+            subjects: u.subjects || []
         });
         setPassword('');
         
@@ -121,6 +123,15 @@ const UsersPage = () => {
         }
     };
 
+    const toggleSubject = (disciplineId: string) => {
+        const current = userData.subjects || [];
+        if (current.includes(disciplineId)) {
+            setUserData({ ...userData, subjects: current.filter(id => id !== disciplineId) });
+        } else {
+            setUserData({ ...userData, subjects: [...current, disciplineId] });
+        }
+    };
+
     const handleSaveUser = async () => {
         if (!user) return;
         if (!userData.name || !userData.email) return alert("Preencha todos os campos.");
@@ -132,7 +143,8 @@ const UsersPage = () => {
                     email: userData.email,
                     role: userData.role,
                     plan: userData.plan,
-                    accessGrants: userData.accessGrants
+                    accessGrants: userData.accessGrants,
+                    subjects: userData.subjects
                 });
 
                 if (password.trim()) {
@@ -144,7 +156,8 @@ const UsersPage = () => {
                 const newUser = await FirebaseService.createSubUser(user, {
                     name: userData.name,
                     email: userData.email,
-                    role: userData.role
+                    role: userData.role,
+                    subjects: userData.subjects
                 });
                 
                 // Atualiza access grants após criação (se houver, e se admin)
@@ -160,7 +173,7 @@ const UsersPage = () => {
             }
             
             setIsModalOpen(false);
-            setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: '', accessGrants: [] });
+            setUserData({ name: '', email: '', role: UserRole.TEACHER, plan: '', accessGrants: [], subjects: [] });
             setPassword('');
             setEditingUserId(null);
             loadData();
@@ -278,6 +291,7 @@ const UsersPage = () => {
                         <tr>
                             <th className="p-4 font-semibold text-slate-600 text-sm">Usuário</th>
                             <th className="p-4 font-semibold text-slate-600 text-sm">Função</th>
+                            <th className="p-4 font-semibold text-slate-600 text-sm">Disciplinas</th>
                             <th className="p-4 font-semibold text-slate-600 text-sm">Status</th>
                             <th className="p-4 font-semibold text-slate-600 text-sm">Plano</th>
                             <th className="p-4 font-semibold text-slate-600 text-sm">Vencimento</th>
@@ -287,6 +301,7 @@ const UsersPage = () => {
                     <tbody className="divide-y divide-slate-100">
                         {users.map(u => {
                             const status = calculateStatus(u);
+                            const userSubjects = u.subjects?.map(sId => hierarchy.find(d => d.id === sId)?.name).filter(Boolean).join(', ') || '-';
                             return (
                                 <tr key={u.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="p-4">
@@ -304,6 +319,9 @@ const UsersPage = () => {
                                         <Badge color={u.role === UserRole.ADMIN ? 'purple' : u.role === UserRole.MANAGER ? 'orange' : 'blue'}>
                                             {u.role === UserRole.MANAGER ? 'Gestor' : u.role === UserRole.TEACHER ? 'Professor' : 'Admin'}
                                         </Badge>
+                                    </td>
+                                    <td className="p-4 text-sm text-slate-600 max-w-xs truncate" title={userSubjects}>
+                                        {userSubjects}
                                     </td>
                                     <td className="p-4"><Badge color={status.color}>{status.label}</Badge></td>
                                     <td className="p-4 text-sm text-slate-600">{u.plan}</td>
@@ -342,6 +360,30 @@ const UsersPage = () => {
                         <Input label="Nome Completo" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} placeholder="Ex: João da Silva" />
                         <Input label="Email Corporativo" type="email" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} placeholder="joao@escola.com" />
                         
+                        {(isManager || isAdmin) && (
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mt-4">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">Componentes Curriculares (Disciplinas)</label>
+                                <div className="max-h-40 overflow-y-auto custom-scrollbar border border-slate-300 rounded bg-white">
+                                    {hierarchy.length === 0 ? <p className="p-3 text-xs text-slate-400">Nenhuma disciplina cadastrada.</p> : (
+                                        <div className="divide-y divide-slate-100">
+                                            {hierarchy.map(d => (
+                                                <label key={d.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="rounded text-brand-blue focus:ring-brand-blue"
+                                                        checked={userData.subjects?.includes(d.id)}
+                                                        onChange={() => toggleSubject(d.id)}
+                                                    />
+                                                    <span className="text-sm text-slate-700">{d.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">Selecione as disciplinas que este professor leciona.</p>
+                            </div>
+                        )}
+
                         <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 mt-4 animate-fade-in">
                              <div className="flex items-center gap-2 mb-3">
                                  <div className="text-orange-500"><Icons.UsersGroup /></div>

@@ -18,6 +18,7 @@ export interface User {
   institutionId?: string; // Vinculo: Se for Professor, aponta para o Gestor/Escola
   ownerId?: string; // ID do Gestor que criou este usuário
   accessGrants?: string[]; // NOVO: IDs das Disciplinas que este usuário pode acessar no Banco Global
+  subjects?: string[]; // NOVO: IDs das Disciplinas que o professor leciona (Componente Curricular)
 }
 
 export interface Payment {

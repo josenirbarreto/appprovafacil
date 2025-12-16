@@ -114,7 +114,8 @@ export const FirebaseService = {
                 status: 'ACTIVE',
                 plan: 'BASIC',
                 subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-                accessGrants: [] 
+                accessGrants: [],
+                subjects: []
             };
 
             await setDoc(doc(db, COLLECTIONS.USERS, user.uid), userData);
@@ -129,7 +130,7 @@ export const FirebaseService = {
         }
     },
 
-    createSubUser: async (manager: User, data: { name: string, email: string, role: UserRole }) => {
+    createSubUser: async (manager: User, data: { name: string, email: string, role: UserRole, subjects?: string[] }) => {
         const fakeId = `user-${Date.now()}`;
         const newUser: any = {
             id: fakeId,
@@ -140,7 +141,8 @@ export const FirebaseService = {
             plan: manager.plan,
             subscriptionEnd: manager.subscriptionEnd,
             ownerId: manager.id,
-            accessGrants: []
+            accessGrants: [],
+            subjects: data.subjects || []
         };
         
         if (manager.institutionId) {
