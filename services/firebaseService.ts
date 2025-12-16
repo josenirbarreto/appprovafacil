@@ -19,9 +19,11 @@ import {
     signOut, 
     updateProfile, 
     deleteUser,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    getAuth
 } from "firebase/auth";
-import { db, auth } from "../firebaseConfig";
+import { initializeApp, deleteApp } from "firebase/app"; // Importações necessárias para instância secundária
+import { db, auth, firebaseConfig } from "../firebaseConfig";
 import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment } from '../types';
 
 const COLLECTIONS = {
@@ -130,27 +132,52 @@ export const FirebaseService = {
         }
     },
 
-    createSubUser: async (manager: User, data: { name: string, email: string, role: UserRole, subjects?: string[] }) => {
-        const fakeId = `user-${Date.now()}`;
-        const newUser: any = {
-            id: fakeId,
-            name: data.name,
-            email: data.email,
-            role: data.role,
-            status: 'ACTIVE',
-            plan: manager.plan,
-            subscriptionEnd: manager.subscriptionEnd,
-            ownerId: manager.id,
-            accessGrants: [],
-            subjects: data.subjects || []
-        };
-        
-        if (manager.institutionId) {
-            newUser.institutionId = manager.institutionId;
-        }
+    createSubUser: async (manager: User, data: { name: string, email: string, role: UserRole, subjects?: string[], password?: string }) => {
+        // TÉCNICA DE APP SECUNDÁRIO:
+        // Inicializa uma segunda instância do Firebase App para criar o usuário SEM deslogar o usuário atual (Manager).
+        const secondaryApp = initializeApp(firebaseConfig, "SecondaryAppCreation");
+        const secondaryAuth = getAuth(secondaryApp);
 
-        await setDoc(doc(db, COLLECTIONS.USERS, fakeId), newUser);
-        return newUser as User;
+        try {
+            // 1. Cria o usuário na autenticação real
+            const tempPassword = data.password || Math.random().toString(36).slice(-8); // Senha fornecida ou gerada
+            const userCred = await createUserWithEmailAndPassword(secondaryAuth, data.email, tempPassword);
+            const newUserAuth = userCred.user;
+
+            await updateProfile(newUserAuth, { displayName: data.name });
+
+            // 2. Salva no Firestore usando o UID real criado
+            const newUserDoc: any = {
+                id: newUserAuth.uid,
+                name: data.name,
+                email: data.email,
+                role: data.role,
+                status: 'ACTIVE',
+                plan: manager.plan,
+                subscriptionEnd: manager.subscriptionEnd,
+                ownerId: manager.id,
+                accessGrants: [],
+                subjects: data.subjects || []
+            };
+            
+            if (manager.institutionId) {
+                newUserDoc.institutionId = manager.institutionId;
+            }
+
+            await setDoc(doc(db, COLLECTIONS.USERS, newUserAuth.uid), newUserDoc);
+            
+            // 3. Faz logout da instância secundária para não interferir na sessão
+            await signOut(secondaryAuth);
+            
+            return newUserDoc as User;
+
+        } catch (error: any) {
+            console.error("Erro ao criar sub-usuário:", error);
+            throw error;
+        } finally {
+            // Limpa a instância secundária
+            await deleteApp(secondaryApp);
+        }
     },
 
     login: async (email: string, pass: string) => {
@@ -177,8 +204,12 @@ export const FirebaseService = {
     },
 
     adminSetManualPassword: async (uid: string, newPassword: string) => {
-        console.log(`[SIMULAÇÃO] Senha alterada para o usuário ${uid}: ${newPassword}`);
-        return true;
+        // NOTA: Em um ambiente Client-Side puro (sem Cloud Functions), não é possível alterar 
+        // a senha de OUTRO usuário existente. Esta função funcionava apenas como simulação.
+        // A criação de senha inicial agora é feita corretamente em `createSubUser`.
+        // Para alterar senhas de usuários JÁ criados, deve-se usar o resetPassword por email.
+        console.warn("Alteração de senha manual para usuário existente não suportada via Client SDK por segurança. Use o reset por email.");
+        return false;
     },
 
     getCurrentUserData: async () => {

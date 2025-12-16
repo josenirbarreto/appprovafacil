@@ -138,6 +138,7 @@ const UsersPage = () => {
 
         try {
             if (editingUserId) {
+                // EDIÇÃO DE USUÁRIO EXISTENTE
                 await FirebaseService.updateUser(editingUserId, {
                     name: userData.name,
                     email: userData.email,
@@ -148,28 +149,27 @@ const UsersPage = () => {
                 });
 
                 if (password.trim()) {
-                    await FirebaseService.adminSetManualPassword(editingUserId, password);
+                    // Explicação didática sobre a limitação de segurança e a solução
+                    alert("⚠️ Atenção sobre a Senha:\n\nPor regras de segurança do sistema, não é possível alterar a senha de um usuário já existente por aqui.\n\nSOLUÇÃO:\nSe o professor não recebeu o e-mail ou esqueceu a senha, exclua este usuário e cadastre-o novamente com a nova senha desejada.");
+                } else {
+                    alert("Dados do perfil atualizados com sucesso!");
                 }
-
-                alert("Dados atualizados com sucesso!");
             } else {
+                // CRIAÇÃO DE NOVO USUÁRIO
                 const newUser = await FirebaseService.createSubUser(user, {
                     name: userData.name,
                     email: userData.email,
                     role: userData.role,
-                    subjects: userData.subjects
+                    subjects: userData.subjects,
+                    password: password // Passa a senha para criar no Auth
                 });
                 
                 // Atualiza access grants após criação (se houver, e se admin)
                 if (isAdmin && userData.accessGrants.length > 0) {
                      await FirebaseService.updateUser(newUser.id, { accessGrants: userData.accessGrants });
                 }
-
-                if (password.trim()) {
-                    await FirebaseService.adminSetManualPassword(newUser.id, password);
-                }
                 
-                alert("Usuário cadastrado com sucesso! (Senha definida)");
+                alert("Usuário cadastrado com sucesso! Login habilitado.");
             }
             
             setIsModalOpen(false);
@@ -178,9 +178,13 @@ const UsersPage = () => {
             setEditingUserId(null);
             loadData();
             
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert("Erro ao salvar usuário.");
+            if (error.code === 'auth/email-already-in-use') {
+                alert("Este e-mail já está em uso por outro usuário. Se necessário, exclua o usuário anterior.");
+            } else {
+                alert("Erro ao salvar usuário. Verifique se o e-mail é válido.");
+            }
         }
     };
 
@@ -230,11 +234,12 @@ const UsersPage = () => {
     };
 
     const handleDeleteUser = async (uId: string) => {
-        if (!confirm("Tem certeza que deseja excluir este usuário?")) return;
+        if (!confirm("Tem certeza que deseja excluir este usuário? Isso permitirá recriá-lo com uma nova senha.")) return;
         try {
             await FirebaseService.deleteUserDocument(uId);
             alert("Usuário excluído com sucesso.");
             loadData();
+            if (isModalOpen) setIsModalOpen(false);
         } catch (error) {
             console.error(error);
             alert("Erro ao excluir usuário.");
@@ -390,12 +395,23 @@ const UsersPage = () => {
                                  <h4 className="text-sm font-bold text-orange-900 uppercase">Segurança e Acesso</h4>
                              </div>
                              <div className="space-y-4">
-                                 <Input label={editingUserId ? "Definir Nova Senha (Opcional)" : "Senha Inicial (Opcional)"} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={editingUserId ? "Deixe em branco para não alterar" : "Digite para definir uma senha manual"} />
-                                 {editingUserId && (
-                                     <div className="flex items-center justify-between text-xs text-slate-500 border-t border-orange-200 pt-3 mt-2">
-                                         <span>Alternativa recomendada:</span>
-                                         <button type="button" onClick={handleSendResetEmail} disabled={resetLoading} className="text-brand-blue hover:underline font-bold disabled:opacity-50">{resetLoading ? 'Simulando envio...' : 'Enviar E-mail de Redefinição para o Usuário'}</button>
+                                 <Input 
+                                    label={editingUserId ? "Definir Nova Senha" : "Senha Inicial"} 
+                                    type="password" 
+                                    value={password} 
+                                    onChange={e => setPassword(e.target.value)} 
+                                    placeholder={editingUserId ? "Digite apenas se desejar redefinir (requer recriação)" : "Digite a senha inicial para o usuário"} 
+                                 />
+                                 {editingUserId ? (
+                                     <div className="text-xs text-slate-600 bg-white p-3 rounded border border-orange-100">
+                                         <p className="font-bold mb-1">Nota importante:</p>
+                                         <p>Devido à criptografia do sistema, para alterar a senha de um usuário existente manualmente, <strong>será necessário excluir e recriar o usuário</strong> (Use o botão de excluir e depois salve novamente).</p>
+                                         <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100">
+                                             <button type="button" onClick={handleSendResetEmail} disabled={resetLoading} className="text-brand-blue hover:underline font-bold disabled:opacity-50">{resetLoading ? 'Simulando envio...' : 'Enviar Link de Redefinição (Recomendado)'}</button>
+                                         </div>
                                      </div>
+                                 ) : (
+                                     <p className="text-xs text-slate-500">Esta senha permitirá o primeiro acesso do professor.</p>
                                  )}
                              </div>
                         </div>

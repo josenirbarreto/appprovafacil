@@ -85,12 +85,19 @@ const Login = () => {
                 isManagedUser ? 'MANAGED' : 'REAL'
             );
             
+            // Verifica domínio para mensagem personalizada
+            const domain = cleanEmail.split('@')[1] || '';
+            const problematicDomains = ['yahoo', 'uol', 'bol', 'terra', 'hotmail', 'live', 'outlook', 'ig.com'];
+            const isProblematic = problematicDomains.some(d => domain.includes(d));
+            
             if (response && response.simulated) {
                 setSimulatedEmail(response.emailContent);
                 setSuccessMsg("E-mail gerado em Modo Simulação (veja a janela).");
             } else {
                 if (isManagedUser) {
-                     setSuccessMsg(`Atenção: Conta Gerenciada. Verifique as instruções enviadas para "${cleanEmail}".`);
+                     setSuccessMsg(`Conta Gerenciada: Instruções enviadas para "${cleanEmail}". Contate seu Gestor.`);
+                } else if (isProblematic) {
+                     setSuccessMsg(`ATENÇÃO: Provedores como Yahoo/Outlook bloqueiam links automáticos. Verifique o SPAM. Se não chegar, peça ao seu Gestor para redefinir manualmente.`);
                 } else {
                      setSuccessMsg(`Link enviado! Verifique a caixa de entrada e SPAM do e-mail "${cleanEmail}".`);
                 }
@@ -187,9 +194,9 @@ const Login = () => {
                     )}
 
                     {successMsg && (
-                        <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-lg mb-6 text-sm flex items-start gap-3 animate-fade-in">
+                        <div className={`border p-4 rounded-lg mb-6 text-sm flex items-start gap-3 animate-fade-in ${successMsg.includes('ATENÇÃO') ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-green-50 border-green-200 text-green-700'}`}>
                             <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                            <span>{successMsg}</span>
+                            <span className="font-medium">{successMsg}</span>
                         </div>
                     )}
 

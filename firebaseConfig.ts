@@ -4,7 +4,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Configuração do Web App do Firebase (app-provafacil)
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDn0tHQld81q-WxlIiGEyng-07HuK4J4cQ",
   authDomain: "app-provafacil.firebaseapp.com",
   projectId: "app-provafacil",

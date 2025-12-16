@@ -32,7 +32,7 @@ Isso significa que você NÃO possui redefinição automática por link.
 
 O QUE FAZER:
 1. Entre em contato com o Gestor da sua escola.
-2. Solicite que ele defina uma nova senha manualmente no painel.
+2. Solicite que ele defina uma nova senha manualmente no painel (Menu Usuários > Editar).
 
 Não é possível alterar sua senha por este e-mail.
             `;
@@ -40,15 +40,19 @@ Não é possível alterar sua senha por este e-mail.
             body = `
 Olá, ${name || 'Usuário'}.
 
-Enviamos um LINK OFICIAL DE REDEFINIÇÃO para este e-mail (${email}).
-O remetente oficial é "noreply@app-provafacil...".
+Tentamos enviar um LINK AUTOMÁTICO DE REDEFINIÇÃO do Firebase para: ${email}.
 
-IMPORTANTE:
-- Verifique sua caixa de SPAM ou LIXEIRA.
-- O e-mail do Google pode demorar alguns minutos.
-- Clique no link daquele e-mail para criar sua nova senha.
+⚠️ ATENÇÃO - LEIA COM CUIDADO:
 
-Este é apenas um aviso de confirmação.
+1. Se seu e-mail é GMAIL: O link deve chegar em instantes.
+2. Se seu e-mail é YAHOO, OUTLOOK, HOTMAIL ou UOL:
+   Esses provedores costumam bloquear e-mails automáticos.
+   
+   SE O LINK NÃO CHEGAR EM 2 MINUTOS:
+   Não se preocupe! Peça ao Gestor da sua escola ou Administrador do sistema.
+   Eles podem definir uma "Senha Manual" para você no Painel de Usuários imediatamente.
+
+Verifique também sua caixa de SPAM ou LIXEIRA.
             `;
         }
 
