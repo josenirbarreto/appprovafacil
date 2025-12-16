@@ -200,14 +200,14 @@ export const FirebaseService = {
                 );
             }
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Ticket));
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
         } catch (error) {
             safeLog("Erro ao buscar tickets:", error);
             // Fallback sem orderBy se índice não existir
             try {
                 const qFallback = query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
                 const snap = await getDocs(qFallback);
-                return snap.docs.map(d => ({ ...d.data(), id: d.id } as Ticket));
+                return snap.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
             } catch (e) {
                 return [];
             }
@@ -286,7 +286,7 @@ export const FirebaseService = {
                 orderBy("createdAt", "asc")
             );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as TicketMessage));
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as TicketMessage));
         } catch (error) {
             safeLog("Erro ao buscar mensagens:", error);
             return [];
@@ -316,7 +316,7 @@ export const FirebaseService = {
                 limit(100)
             );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as AuditLog));
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as AuditLog));
         } catch (error) {
             safeLog("Erro ao buscar logs:", error);
             return [];
@@ -595,7 +595,7 @@ export const FirebaseService = {
             where("userId", "==", userId)
         );
         const snapshot = await getDocs(q);
-        const payments = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Payment));
+        const payments = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Payment));
         return payments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
 
@@ -604,7 +604,7 @@ export const FirebaseService = {
         try {
             const q = query(collection(db, COLLECTIONS.PAYMENTS), orderBy("date", "desc"));
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Payment));
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Payment));
         } catch (error) {
             safeLog("Erro ao buscar todos pagamentos:", error);
             return [];
@@ -616,7 +616,7 @@ export const FirebaseService = {
         try {
             const q = query(collection(db, COLLECTIONS.CAMPAIGNS));
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Campaign))
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Campaign))
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         } catch (error) {
             safeLog("Erro ao buscar campanhas:", error);
@@ -650,7 +650,7 @@ export const FirebaseService = {
         if (!currentUser) return [];
         const snapshot = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
         return snapshot.docs
-            .map(d => ({ ...d.data(), id: d.id } as Institution))
+            .map(d => ({ ...(d.data() as any), id: d.id } as Institution))
             .filter(item => {
                 if (currentUser.institutionId && item.id === currentUser.institutionId) return true;
                 return isVisible(item, currentUser);
@@ -681,7 +681,7 @@ export const FirebaseService = {
     
     deleteInstitution: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.INSTITUTIONS, id)); },
     
-    getClasses: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.CLASSES)); return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SchoolClass)).filter(item => { if (currentUser.role === UserRole.TEACHER && currentUser.institutionId && item.institutionId === currentUser.institutionId) { return true; } return isVisible(item, currentUser); }); },
+    getClasses: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.CLASSES)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as SchoolClass)).filter(item => { if (currentUser.role === UserRole.TEACHER && currentUser.institutionId && item.institutionId === currentUser.institutionId) { return true; } return isVisible(item, currentUser); }); },
     
     addClass: async (data: SchoolClass) => { 
         const { id, ...rest } = data; 
