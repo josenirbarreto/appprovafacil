@@ -102,8 +102,8 @@ const ExamsPage = () => {
         setAllQuestions(q);
     };
 
-    // Helper: Shuffle Array
-    const shuffleArray = <T,>(array: T[]): T[] => {
+    // Helper: Shuffle Array (Fixed Generic Syntax for .tsx)
+    const shuffleArray = <T extends unknown>(array: T[]): T[] => {
         const newArr = [...array];
         for (let i = newArr.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -658,7 +658,7 @@ const ExamsPage = () => {
                                     <ul className="list-disc pl-4 mt-1 space-y-1">
                                         <li>Imprima em papel branco.</li>
                                         <li>Peça para os alunos preencherem as bolhas completamente.</li>
-                                        <li>Use o menu "Resultados > Escanear" no celular para corrigir.</li>
+                                        <li>Use o menu "Resultados &gt; Escanear" no celular para corrigir.</li>
                                     </ul>
                                 </div>
                             )}
