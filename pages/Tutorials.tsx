@@ -176,15 +176,17 @@ const TutorialsPage = () => {
                                                     {tutorial.contentUrl && getYoutubeId(tutorial.contentUrl) ? (
                                                         <img 
                                                             src={`https://img.youtube.com/vi/${getYoutubeId(tutorial.contentUrl)}/hqdefault.jpg`} 
-                                                            className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
+                                                            className="w-full h-full object-cover opacity-100 group-hover:scale-105 transition-transform duration-500"
                                                         />
                                                     ) : (
                                                         <div className="w-16 h-16 bg-blue-100 text-brand-blue rounded-full flex items-center justify-center">
                                                             <Icons.Video />
                                                         </div>
                                                     )}
-                                                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                                                        <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center text-brand-blue shadow-lg group-hover:scale-110 transition-transform">
+                                                    {/* Overlay transparente por padrão, escurece levemente no hover */}
+                                                    <div className="absolute inset-0 bg-transparent group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+                                                        {/* Botão com efeito vidro (backdrop-blur) e levemente transparente */}
+                                                        <div className="w-12 h-12 bg-white/70 backdrop-blur-sm rounded-full flex items-center justify-center text-brand-blue shadow-lg group-hover:scale-110 transition-transform group-hover:bg-white/90">
                                                             <Icons.Play />
                                                         </div>
                                                     </div>
