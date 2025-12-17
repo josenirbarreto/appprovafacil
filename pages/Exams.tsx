@@ -49,6 +49,19 @@ const ExamsPage = () => {
     const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([]);
     const [availableQuestions, setAvailableQuestions] = useState<Question[]>([]); // For manual selection
 
+    // Step 4: Advanced Printing State
+    const [activeVersion, setActiveVersion] = useState<'ORIGINAL' | 'A' | 'B' | 'C' | 'D'>('ORIGINAL');
+    const [examVersions, setExamVersions] = useState<Record<string, Question[]>>({});
+    const [printSettings, setPrintSettings] = useState({
+        fontSize: 'text-sm', // text-xs, text-sm, text-base
+        showName: true,
+        showDate: true,
+        showClass: true,
+        showScore: true,
+        showValue: true,
+        showAnswerKeyOnPrint: false // Controle local de gabarito para impressão
+    });
+
     // Visualizar Question State
     const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
 
@@ -63,6 +76,13 @@ const ExamsPage = () => {
         if (user) load(); 
     }, [user]);
     
+    // Effect to generate versions when entering step 4
+    useEffect(() => {
+        if (currentStep === 4 && generatedQuestions.length > 0) {
+            generateVersions();
+        }
+    }, [currentStep]);
+
     const load = async () => {
         // Passamos user para garantir filtro correto de instituições e turmas
         const [e, i, c, h, q] = await Promise.all([
@@ -77,6 +97,44 @@ const ExamsPage = () => {
         setClasses(c);
         setHierarchy(h);
         setAllQuestions(q);
+    };
+
+    // Helper: Shuffle Array
+    const shuffleArray = <T,>(array: T[]): T[] => {
+        const newArr = [...array];
+        for (let i = newArr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+        }
+        return newArr;
+    };
+
+    // Helper: Generate Versions A, B, C, D
+    const generateVersions = () => {
+        const versions: Record<string, Question[]> = {};
+        
+        // Original
+        versions['ORIGINAL'] = [...generatedQuestions];
+
+        // Generate A, B, C, D
+        ['A', 'B', 'C', 'D'].forEach(ver => {
+            // Shuffle Questions
+            let shuffledQs = shuffleArray(generatedQuestions).map(q => {
+                // Clone question to avoid reference issues
+                const newQ = Object.assign({}, q);
+                // Shuffle Options if MC
+                if (newQ.type === QuestionType.MULTIPLE_CHOICE && newQ.options) {
+                    newQ.options = shuffleArray(newQ.options);
+                }
+                return newQ;
+            });
+            versions[ver] = shuffledQs;
+        });
+
+        setExamVersions(versions);
+        setActiveVersion('ORIGINAL');
+        // Inicializa settings com valores padrão ou herdados
+        setPrintSettings(prev => ({ ...prev, showAnswerKeyOnPrint: editing.showAnswerKey || false }));
     };
 
     // Helper: Reset Wizard
@@ -329,7 +387,7 @@ const ExamsPage = () => {
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">Opções</label>
                                 <div className="border border-slate-200 rounded-lg p-3 flex items-center justify-between">
-                                    <span className="text-sm text-slate-600">Gabarito no final?</span>
+                                    <span className="text-sm text-slate-600">Gabarito Padrão no final?</span>
                                     <input type="checkbox" className="w-5 h-5 text-brand-blue rounded" checked={editing.showAnswerKey || false} onChange={e => setEditing({...editing, showAnswerKey: e.target.checked})} />
                                 </div>
                             </div>
@@ -456,13 +514,185 @@ const ExamsPage = () => {
                         )}
                     </div>
                 );
-            case 4: // VISUALIZAÇÃO
+            case 4: // VISUALIZAÇÃO AVANÇADA (ANTI-COLA)
+                const questionsToShow = examVersions[activeVersion] || generatedQuestions;
+                
                 return (
-                    <div className="flex flex-col h-full animate-fade-in relative">
-                        <div className="bg-white shadow-lg mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0">
-                            <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">{institutions.find(i => i.id === editing.institutionId)?.logoUrl && <img src={institutions.find(i => i.id === editing.institutionId)?.logoUrl} className="h-16 w-16 object-contain" />}<div className="flex-1"><h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'Nome da Instituição'}</h1><h2 className="text-lg font-bold">{editing.title}</h2><p className="text-sm">{editing.headerText}</p><div className="flex justify-between text-sm mt-2 pt-2 border-t border-gray-300"><span>Aluno(a): _______________________________________________________</span><span>Turma: {classes.find(c => c.id === editing.classId)?.name}</span><span>Data: ____/____/____</span></div></div></div>
-                            {editing.instructions && <div className="mb-6 text-sm border border-black p-2 bg-gray-50 print:bg-transparent"><strong>Instruções:</strong><div dangerouslySetInnerHTML={{__html: editing.instructions}} /></div>}
-                            <div className={`${editing.columns === 2 ? 'columns-2 gap-8' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}>{generatedQuestions.map((q, idx) => (<div key={q.id} className="mb-6 break-inside-avoid"><div className="flex gap-2"><span className="font-bold">{idx + 1}.</span><div className="flex-1"><div dangerouslySetInnerHTML={{__html: q.enunciado}} className="text-sm mb-2" />{q.type === QuestionType.MULTIPLE_CHOICE && (<div className="space-y-1 ml-1">{q.options?.map((opt, i) => (<div key={i} className="flex gap-2 text-sm items-start"><span className="font-bold text-xs border border-black rounded-full w-5 h-5 flex items-center justify-center shrink-0">{String.fromCharCode(65+i)}</span><span>{opt.text}</span></div>))}</div>)}{q.type === QuestionType.TRUE_FALSE && (<div className="space-y-1 ml-1 text-sm"><div className="flex gap-2"><span>( ) Verdadeiro</span></div><div className="flex gap-2"><span>( ) Falso</span></div></div>)}{(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && <div className="mt-8 border-b border-black w-full"></div>}</div></div></div>))}</div>
+                    <div className="flex h-full animate-fade-in relative bg-slate-100/50 rounded-xl overflow-hidden border border-slate-200">
+                        {/* PAINEL DE CONTROLE (Esquerda) - Oculto na Impressão */}
+                        <div className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col gap-6 print:hidden overflow-y-auto custom-scrollbar">
+                            <div>
+                                <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                                    <Icons.Printer /> Impressão Avançada
+                                </h4>
+                                <p className="text-xs text-slate-500 mb-4">Gere versões diferentes para evitar cola.</p>
+                                
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Versão da Prova</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['ORIGINAL', 'A', 'B', 'C', 'D'].map(ver => (
+                                        <button 
+                                            key={ver}
+                                            onClick={() => setActiveVersion(ver as any)}
+                                            className={`px-2 py-1.5 rounded text-xs font-bold transition-all border ${activeVersion === ver ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                        >
+                                            {ver === 'ORIGINAL' ? 'Original' : `Tipo ${ver}`}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-4">
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Cabeçalho</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={printSettings.showName} onChange={e => setPrintSettings({...printSettings, showName: e.target.checked})} className="rounded text-brand-blue" />
+                                        <span className="text-sm text-slate-700">Nome do Aluno</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={printSettings.showClass} onChange={e => setPrintSettings({...printSettings, showClass: e.target.checked})} className="rounded text-brand-blue" />
+                                        <span className="text-sm text-slate-700">Turma</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={printSettings.showDate} onChange={e => setPrintSettings({...printSettings, showDate: e.target.checked})} className="rounded text-brand-blue" />
+                                        <span className="text-sm text-slate-700">Data</span>
+                                    </label>
+                                    <div className="flex gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" checked={printSettings.showScore} onChange={e => setPrintSettings({...printSettings, showScore: e.target.checked})} className="rounded text-brand-blue" />
+                                            <span className="text-sm text-slate-700">Nota</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" checked={printSettings.showValue} onChange={e => setPrintSettings({...printSettings, showValue: e.target.checked})} className="rounded text-brand-blue" />
+                                            <span className="text-sm text-slate-700">Valor</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-4">
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Aparência</label>
+                                <div className="space-y-3">
+                                    <div>
+                                        <span className="text-xs text-slate-600 block mb-1">Tamanho da Fonte</span>
+                                        <div className="flex bg-slate-100 rounded p-1">
+                                            <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-xs'})} className={`flex-1 text-[10px] py-1 rounded ${printSettings.fontSize === 'text-xs' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Pequena</button>
+                                            <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-sm'})} className={`flex-1 text-xs py-1 rounded ${printSettings.fontSize === 'text-sm' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Média</button>
+                                            <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-base'})} className={`flex-1 text-sm py-1 rounded ${printSettings.fontSize === 'text-base' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Grande</button>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between bg-blue-50 p-2 rounded border border-blue-100">
+                                        <span className="text-sm font-bold text-blue-800">Mostrar Gabarito</span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only peer" checked={printSettings.showAnswerKeyOnPrint} onChange={e => setPrintSettings({...printSettings, showAnswerKeyOnPrint: e.target.checked})} />
+                                            <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 italic">O gabarito aparece no final da prova.</p>
+                                </div>
+                            </div>
+
+                            <Button onClick={() => window.print()} className="w-full mt-auto mb-4 justify-center shadow-lg">
+                                <Icons.Printer /> Imprimir Versão {activeVersion === 'ORIGINAL' ? '' : activeVersion}
+                            </Button>
+                        </div>
+
+                        {/* PAPEL DE VISUALIZAÇÃO (A4) */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible">
+                            <div className={`bg-white shadow-xl mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 ${printSettings.fontSize}`}>
+                                {/* CABEÇALHO */}
+                                <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
+                                    {institutions.find(i => i.id === editing.institutionId)?.logoUrl && 
+                                        <img src={institutions.find(i => i.id === editing.institutionId)?.logoUrl} className="h-16 w-16 object-contain" />
+                                    }
+                                    <div className="flex-1">
+                                        <h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'Nome da Instituição'}</h1>
+                                        <div className="flex justify-between items-baseline">
+                                            <h2 className="text-lg font-bold">{editing.title}</h2>
+                                            {activeVersion !== 'ORIGINAL' && <span className="font-bold border border-black px-2 rounded">PROVA TIPO {activeVersion}</span>}
+                                        </div>
+                                        <p className="text-sm">{editing.headerText}</p>
+                                        
+                                        {/* Campos Personalizáveis */}
+                                        <div className="flex flex-wrap gap-y-2 gap-x-4 text-sm mt-3 pt-2 border-t border-gray-300">
+                                            {printSettings.showName && <span className="w-full">Aluno(a): __________________________________________________________________</span>}
+                                            {printSettings.showClass && <span>Turma: {classes.find(c => c.id === editing.classId)?.name || '________'}</span>}
+                                            {printSettings.showDate && <span>Data: ____/____/____</span>}
+                                            {printSettings.showScore && <span>Nota: _______</span>}
+                                            {printSettings.showValue && <span>Valor: _______</span>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* INSTRUÇÕES */}
+                                {editing.instructions && (
+                                    <div className="mb-6 text-sm border border-black p-2 bg-gray-50 print:bg-transparent">
+                                        <strong>Instruções:</strong>
+                                        <div dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                    </div>
+                                )}
+
+                                {/* QUESTÕES */}
+                                <div className={`${editing.columns === 2 ? 'columns-2 gap-8' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}>
+                                    {questionsToShow.map((q, idx) => (
+                                        <div key={q.id} className="mb-6 break-inside-avoid">
+                                            <div className="flex gap-2">
+                                                <span className="font-bold">{idx + 1}.</span>
+                                                <div className="flex-1">
+                                                    <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="mb-2" />
+                                                    
+                                                    {/* Opções */}
+                                                    {q.type === QuestionType.MULTIPLE_CHOICE && (
+                                                        <div className="space-y-1 ml-1">
+                                                            {q.options?.map((opt, i) => (
+                                                                <div key={i} className="flex gap-2 items-start">
+                                                                    <span className="font-bold border border-black rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] leading-none pt-0.5">
+                                                                        {String.fromCharCode(65+i)}
+                                                                    </span>
+                                                                    <span>{opt.text}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {q.type === QuestionType.TRUE_FALSE && (
+                                                        <div className="space-y-1 ml-1 text-sm font-mono">
+                                                            <div className="flex gap-2"><span>( ) Verdadeiro</span></div>
+                                                            <div className="flex gap-2"><span>( ) Falso</span></div>
+                                                        </div>
+                                                    )}
+                                                    {(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && (
+                                                        <div className="mt-8 border-b border-black w-full opacity-50"></div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* GABARITO (Se ativado) */}
+                                {printSettings.showAnswerKeyOnPrint && (
+                                    <div className="mt-8 pt-4 border-t-2 border-black break-inside-avoid page-break-before-auto">
+                                        <h3 className="font-bold text-lg mb-2">Gabarito - Tipo {activeVersion === 'ORIGINAL' ? 'Único' : activeVersion}</h3>
+                                        <div className="grid grid-cols-5 gap-2 text-sm">
+                                            {questionsToShow.map((q, idx) => {
+                                                let answer = '';
+                                                if (q.type === QuestionType.MULTIPLE_CHOICE) {
+                                                    const correctIndex = q.options?.findIndex(o => o.isCorrect);
+                                                    answer = correctIndex !== undefined && correctIndex >= 0 ? String.fromCharCode(65 + correctIndex) : '?';
+                                                } else if (q.type === QuestionType.TRUE_FALSE) {
+                                                    answer = q.options?.find(o => o.isCorrect)?.text || '?';
+                                                } else {
+                                                    answer = 'Aberta';
+                                                }
+                                                return (
+                                                    <div key={q.id} className="border border-gray-300 p-1 px-2 rounded">
+                                                        <span className="font-bold">{idx + 1}.</span> {answer}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 );
@@ -683,3 +913,4 @@ const ExamsPage = () => {
 };
 
 export default ExamsPage;
+    
