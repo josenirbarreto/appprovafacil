@@ -219,5 +219,82 @@ export const GeminiService = {
             console.error("Similarity Check Error:", error);
             return { isDuplicate: false, score: 0 };
         }
+    },
+
+    // --- NOVA FUNÇÃO DE CORREÇÃO POR IMAGEM ---
+    gradeExamImage: async (imageBase64: string, totalQuestions: number): Promise<{ studentName: string, answers: Record<string, string> } | null> => {
+        try {
+            const ai = getClient();
+            
+            // Remove prefixo data:image/png;base64, se existir
+            const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
+
+            const prompt = `
+                Analise esta imagem de um Cartão-Resposta (Gabarito) de prova escolar.
+                
+                Tarefas:
+                1. Tente identificar o NOME do aluno se estiver escrito à mão no topo (campo "Aluno"). Se ilegível ou vazio, retorne string vazia.
+                2. Para cada questão de 1 a ${totalQuestions}, identifique qual bolha (A, B, C, D ou E) está preenchida.
+                
+                Regras:
+                - Se uma bolha estiver claramente pintada ou marcada com X, considere como resposta.
+                - Se houver rasura ou múltiplas marcas na mesma linha, considere como null.
+                - Se a linha estiver vazia, considere como null.
+                
+                Retorne APENAS um JSON no formato:
+                {
+                    "studentName": "Nome Detectado",
+                    "answers": {
+                        "1": "A",
+                        "2": "C",
+                        "3": null
+                        ... até ${totalQuestions}
+                    }
+                }
+            `;
+
+            const schema: Schema = {
+                type: Type.OBJECT,
+                properties: {
+                    studentName: { type: Type.STRING, nullable: true },
+                    answers: {
+                        type: Type.OBJECT,
+                        nullable: false,
+                        description: "Map of question index (string) to selected option (A, B, C, D, E or null)"
+                    }
+                },
+                required: ["answers"]
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [
+                    { 
+                        inlineData: { 
+                            mimeType: 'image/jpeg', 
+                            data: cleanBase64 
+                        } 
+                    },
+                    { text: prompt }
+                ],
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema,
+                    temperature: 0.1 // Baixa temperatura para ser preciso na leitura
+                }
+            });
+
+            // TRACK USAGE
+            FirebaseService.trackAiUsage();
+
+            if (response.text) {
+                return JSON.parse(response.text);
+            }
+            return null;
+
+        } catch (error) {
+            console.error("Gemini Vision Grading Error:", error);
+            return null;
+        }
     }
 };

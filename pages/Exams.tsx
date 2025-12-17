@@ -51,6 +51,9 @@ const ExamsPage = () => {
 
     // Step 4: Advanced Printing State
     const [activeVersion, setActiveVersion] = useState<'ORIGINAL' | 'A' | 'B' | 'C' | 'D'>('ORIGINAL');
+    // NOVO: Modo de visualização (Prova ou Gabarito Preenchível)
+    const [viewMode, setViewMode] = useState<'EXAM' | 'ANSWER_SHEET'>('EXAM');
+    
     const [examVersions, setExamVersions] = useState<Record<string, Question[]>>({});
     const [printSettings, setPrintSettings] = useState({
         fontSize: 'text-sm', // text-xs, text-sm, text-base
@@ -167,6 +170,7 @@ const ExamsPage = () => {
             setGenerationMode('AUTO');
         }
         setCurrentStep(1);
+        setViewMode('EXAM');
         setIsModalOpen(true);
     };
 
@@ -524,7 +528,7 @@ const ExamsPage = () => {
                         )}
                     </div>
                 );
-            case 4: // VISUALIZAÇÃO AVANÇADA (ANTI-COLA)
+            case 4: // VISUALIZAÇÃO AVANÇADA (ANTI-COLA & CARTÃO-RESPOSTA)
                 const questionsToShow = examVersions[activeVersion] || generatedQuestions;
                 
                 // Função auxiliar para renderizar o cabeçalho (usada no topo e no gabarito)
@@ -561,8 +565,23 @@ const ExamsPage = () => {
                                 <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
                                     <Icons.Printer /> Impressão Avançada
                                 </h4>
-                                <p className="text-xs text-slate-500 mb-4">Gere versões diferentes para evitar cola.</p>
                                 
+                                {/* Modo de Visualização */}
+                                <div className="flex bg-slate-100 p-1 rounded-lg mb-4">
+                                    <button 
+                                        onClick={() => setViewMode('EXAM')}
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'EXAM' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}
+                                    >
+                                        Prova
+                                    </button>
+                                    <button 
+                                        onClick={() => setViewMode('ANSWER_SHEET')}
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'ANSWER_SHEET' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}
+                                    >
+                                        Cartão-Resposta
+                                    </button>
+                                </div>
+
                                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Versão Anti-Cola</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {['ORIGINAL', 'A', 'B', 'C', 'D'].map(ver => (
@@ -577,137 +596,232 @@ const ExamsPage = () => {
                                 </div>
                             </div>
 
-                            <div className="border-t border-slate-100 pt-4">
-                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Cabeçalho</label>
-                                <div className="space-y-2">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" checked={printSettings.showName} onChange={e => setPrintSettings({...printSettings, showName: e.target.checked})} className="rounded text-brand-blue" />
-                                        <span className="text-sm text-slate-700">Nome do Aluno</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" checked={printSettings.showClass} onChange={e => setPrintSettings({...printSettings, showClass: e.target.checked})} className="rounded text-brand-blue" />
-                                        <span className="text-sm text-slate-700">Turma</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" checked={printSettings.showDate} onChange={e => setPrintSettings({...printSettings, showDate: e.target.checked})} className="rounded text-brand-blue" />
-                                        <span className="text-sm text-slate-700">Data</span>
-                                    </label>
-                                    <div className="flex gap-4">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={printSettings.showScore} onChange={e => setPrintSettings({...printSettings, showScore: e.target.checked})} className="rounded text-brand-blue" />
-                                            <span className="text-sm text-slate-700">Nota</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={printSettings.showValue} onChange={e => setPrintSettings({...printSettings, showValue: e.target.checked})} className="rounded text-brand-blue" />
-                                            <span className="text-sm text-slate-700">Valor</span>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="border-t border-slate-100 pt-4">
-                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Aparência</label>
-                                <div className="space-y-3">
-                                    <div>
-                                        <span className="text-xs text-slate-600 block mb-1">Tamanho da Fonte</span>
-                                        <div className="flex bg-slate-100 rounded p-1">
-                                            <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-xs'})} className={`flex-1 text-[10px] py-1 rounded ${printSettings.fontSize === 'text-xs' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Pequena</button>
-                                            <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-sm'})} className={`flex-1 text-xs py-1 rounded ${printSettings.fontSize === 'text-sm' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Média</button>
-                                            <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-base'})} className={`flex-1 text-sm py-1 rounded ${printSettings.fontSize === 'text-base' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Grande</button>
+                            {viewMode === 'EXAM' && (
+                                <>
+                                    <div className="border-t border-slate-100 pt-4">
+                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Cabeçalho</label>
+                                        <div className="space-y-2">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" checked={printSettings.showName} onChange={e => setPrintSettings({...printSettings, showName: e.target.checked})} className="rounded text-brand-blue" />
+                                                <span className="text-sm text-slate-700">Nome do Aluno</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" checked={printSettings.showClass} onChange={e => setPrintSettings({...printSettings, showClass: e.target.checked})} className="rounded text-brand-blue" />
+                                                <span className="text-sm text-slate-700">Turma</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" checked={printSettings.showDate} onChange={e => setPrintSettings({...printSettings, showDate: e.target.checked})} className="rounded text-brand-blue" />
+                                                <span className="text-sm text-slate-700">Data</span>
+                                            </label>
+                                            <div className="flex gap-4">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" checked={printSettings.showScore} onChange={e => setPrintSettings({...printSettings, showScore: e.target.checked})} className="rounded text-brand-blue" />
+                                                    <span className="text-sm text-slate-700">Nota</span>
+                                                </label>
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" checked={printSettings.showValue} onChange={e => setPrintSettings({...printSettings, showValue: e.target.checked})} className="rounded text-brand-blue" />
+                                                    <span className="text-sm text-slate-700">Valor</span>
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between bg-blue-50 p-2 rounded border border-blue-100">
-                                        <span className="text-sm font-bold text-blue-800">Mostrar Gabarito</span>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" className="sr-only peer" checked={printSettings.showAnswerKeyOnPrint} onChange={e => setPrintSettings({...printSettings, showAnswerKeyOnPrint: e.target.checked})} />
-                                            <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                                        </label>
+
+                                    <div className="border-t border-slate-100 pt-4">
+                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Aparência</label>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <span className="text-xs text-slate-600 block mb-1">Tamanho da Fonte</span>
+                                                <div className="flex bg-slate-100 rounded p-1">
+                                                    <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-xs'})} className={`flex-1 text-[10px] py-1 rounded ${printSettings.fontSize === 'text-xs' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Pequena</button>
+                                                    <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-sm'})} className={`flex-1 text-xs py-1 rounded ${printSettings.fontSize === 'text-sm' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Média</button>
+                                                    <button onClick={() => setPrintSettings({...printSettings, fontSize: 'text-base'})} className={`flex-1 text-sm py-1 rounded ${printSettings.fontSize === 'text-base' ? 'bg-white shadow text-brand-blue font-bold' : 'text-slate-500'}`}>Grande</button>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between bg-blue-50 p-2 rounded border border-blue-100">
+                                                <span className="text-sm font-bold text-blue-800">Mostrar Gabarito</span>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" className="sr-only peer" checked={printSettings.showAnswerKeyOnPrint} onChange={e => setPrintSettings({...printSettings, showAnswerKeyOnPrint: e.target.checked})} />
+                                                    <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                                </label>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 italic">O gabarito aparece no final da prova.</p>
+                                        </div>
                                     </div>
-                                    <p className="text-[10px] text-slate-400 italic">O gabarito aparece no final da prova.</p>
+                                </>
+                            )}
+
+                            {viewMode === 'ANSWER_SHEET' && (
+                                <div className="border-t border-slate-100 pt-4 bg-green-50 p-3 rounded-lg border border-green-100 text-xs text-green-900">
+                                    <p className="font-bold mb-2">Modo Scanner (IA)</p>
+                                    <p>Este cartão-resposta possui marcadores especiais que permitem a correção automática usando a câmera do celular.</p>
+                                    <p className="mt-2 font-bold">Instruções:</p>
+                                    <ul className="list-disc pl-4 mt-1 space-y-1">
+                                        <li>Imprima em papel branco.</li>
+                                        <li>Peça para os alunos preencherem as bolhas completamente.</li>
+                                        <li>Use o menu "Resultados > Escanear" no celular para corrigir.</li>
+                                    </ul>
                                 </div>
-                            </div>
+                            )}
 
                             <Button onClick={() => window.print()} className="w-full mt-auto mb-4 justify-center shadow-lg">
-                                <Icons.Printer /> Imprimir Versão {activeVersion === 'ORIGINAL' ? '' : activeVersion}
+                                <Icons.Printer /> Imprimir {viewMode === 'EXAM' ? 'Prova' : 'Cartão-Resposta'}
                             </Button>
                         </div>
 
                         {/* PAPEL DE VISUALIZAÇÃO (A4) */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible print:h-auto print:block">
-                            <div className={`bg-white shadow-xl mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 print:h-auto ${printSettings.fontSize}`}>
-                                {/* CABEÇALHO (Reutilizável) */}
-                                {renderExamHeader()}
+                            <div className={`bg-white shadow-xl mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 print:h-auto ${printSettings.fontSize} relative`}>
+                                
+                                {viewMode === 'EXAM' ? (
+                                    /* --- LAYOUT DA PROVA TRADICIONAL --- */
+                                    <>
+                                        {renderExamHeader()}
 
-                                {/* INSTRUÇÕES */}
-                                {editing.instructions && (
-                                    <div className="mb-6 text-sm border border-black p-2 bg-gray-50 print:bg-transparent">
-                                        <strong>Instruções:</strong>
-                                        <div dangerouslySetInnerHTML={{__html: editing.instructions}} />
-                                    </div>
-                                )}
+                                        {/* INSTRUÇÕES */}
+                                        {editing.instructions && (
+                                            <div className="mb-6 text-sm border border-black p-2 bg-gray-50 print:bg-transparent">
+                                                <strong>Instruções:</strong>
+                                                <div dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                            </div>
+                                        )}
 
-                                {/* QUESTÕES */}
-                                <div className={`${editing.columns === 2 ? 'columns-2 gap-6' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}>
-                                    {questionsToShow.map((q, idx) => (
-                                        <div key={q.id} className="mb-4 break-inside-avoid inline-block w-full">
-                                            <div className="flex gap-2">
-                                                <span className="font-bold">{idx + 1}.</span>
-                                                <div className="flex-1">
-                                                    <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="mb-2" />
-                                                    
-                                                    {/* Opções */}
-                                                    {q.type === QuestionType.MULTIPLE_CHOICE && (
-                                                        <div className="space-y-1 ml-1">
-                                                            {q.options?.map((opt, i) => (
-                                                                <div key={i} className="flex gap-2 items-start">
-                                                                    <span className="font-bold border border-black rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] leading-none pt-0.5">
-                                                                        {String.fromCharCode(65+i)}
-                                                                    </span>
-                                                                    <span>{opt.text}</span>
+                                        {/* QUESTÕES */}
+                                        <div className={`${editing.columns === 2 ? 'columns-2 gap-6' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}>
+                                            {questionsToShow.map((q, idx) => (
+                                                <div key={q.id} className="mb-4 break-inside-avoid inline-block w-full">
+                                                    <div className="flex gap-2">
+                                                        <span className="font-bold">{idx + 1}.</span>
+                                                        <div className="flex-1">
+                                                            <div dangerouslySetInnerHTML={{__html: q.enunciado}} className="mb-2" />
+                                                            
+                                                            {/* Opções */}
+                                                            {q.type === QuestionType.MULTIPLE_CHOICE && (
+                                                                <div className="space-y-1 ml-1">
+                                                                    {q.options?.map((opt, i) => (
+                                                                        <div key={i} className="flex gap-2 items-start">
+                                                                            <span className="font-bold border border-black rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] leading-none pt-0.5">
+                                                                                {String.fromCharCode(65+i)}
+                                                                            </span>
+                                                                            <span>{opt.text}</span>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
-                                                            ))}
+                                                            )}
+                                                            {q.type === QuestionType.TRUE_FALSE && (
+                                                                <div className="space-y-1 ml-1 text-sm font-mono">
+                                                                    <div className="flex gap-2"><span>( ) Verdadeiro</span></div>
+                                                                    <div className="flex gap-2"><span>( ) Falso</span></div>
+                                                                </div>
+                                                            )}
+                                                            {(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && (
+                                                                <div className="mt-8 border-b border-black w-full opacity-50"></div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                    {q.type === QuestionType.TRUE_FALSE && (
-                                                        <div className="space-y-1 ml-1 text-sm font-mono">
-                                                            <div className="flex gap-2"><span>( ) Verdadeiro</span></div>
-                                                            <div className="flex gap-2"><span>( ) Falso</span></div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* GABARITO (Se ativado) */}
+                                        {printSettings.showAnswerKeyOnPrint && (
+                                            <div className="break-before-page pt-4"> {/* FORÇA NOVA PÁGINA */}
+                                                {renderExamHeader()} {/* REPETE O CABEÇALHO */}
+                                                
+                                                <div className="mt-4 pt-4 border-t-2 border-black">
+                                                    <h3 className="font-bold text-lg mb-2">Gabarito - Tipo {activeVersion === 'ORIGINAL' ? 'Único' : activeVersion}</h3>
+                                                    <div className="grid grid-cols-5 gap-2 text-sm">
+                                                        {questionsToShow.map((q, idx) => {
+                                                            let answer = '';
+                                                            if (q.type === QuestionType.MULTIPLE_CHOICE) {
+                                                                const correctIndex = q.options?.findIndex(o => o.isCorrect);
+                                                                answer = correctIndex !== undefined && correctIndex >= 0 ? String.fromCharCode(65 + correctIndex) : '?';
+                                                            } else if (q.type === QuestionType.TRUE_FALSE) {
+                                                                answer = q.options?.find(o => o.isCorrect)?.text || '?';
+                                                            } else {
+                                                                answer = 'Aberta';
+                                                            }
+                                                            return (
+                                                                <div key={q.id} className="border border-gray-300 p-1 px-2 rounded">
+                                                                    <span className="font-bold">{idx + 1}.</span> {answer}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    /* --- LAYOUT DO CARTÃO-RESPOSTA SCANNEÁVEL --- */
+                                    <div className="relative h-full">
+                                        {/* Marcadores Fiduciais (Quadrados Pretos nos cantos) */}
+                                        <div className="absolute top-0 left-0 w-6 h-6 bg-black"></div>
+                                        <div className="absolute top-0 right-0 w-6 h-6 bg-black"></div>
+                                        <div className="absolute bottom-0 left-0 w-6 h-6 bg-black"></div>
+                                        <div className="absolute bottom-0 right-0 w-6 h-6 bg-black"></div>
+
+                                        {/* Cabeçalho Cartão */}
+                                        <div className="text-center mb-8 px-8 pt-4">
+                                            <h1 className="font-bold text-xl uppercase tracking-widest border-b-2 border-black pb-2 mb-2">Cartão-Resposta</h1>
+                                            <div className="flex justify-between items-start text-left">
+                                                <div className="flex-1 mr-4">
+                                                    <div className="mb-2">
+                                                        <span className="text-xs font-bold uppercase">Aluno(a):</span>
+                                                        <div className="border-b border-black h-6 w-full bg-gray-50"></div>
+                                                    </div>
+                                                    <div className="flex gap-4">
+                                                        <div className="flex-1">
+                                                            <span className="text-xs font-bold uppercase">Turma:</span>
+                                                            <div className="border-b border-black h-6 w-full"></div>
                                                         </div>
-                                                    )}
-                                                    {(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && (
-                                                        <div className="mt-8 border-b border-black w-full opacity-50"></div>
-                                                    )}
+                                                        <div className="w-24">
+                                                            <span className="text-xs font-bold uppercase">Data:</span>
+                                                            <div className="border-b border-black h-6 w-full"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* QR Code Placeholder (Generated via API) */}
+                                                <div className="border border-black p-1">
+                                                    <img 
+                                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=PF-EXAM-${editing.id}`} 
+                                                        alt="Exam QR" 
+                                                        className="w-24 h-24"
+                                                    />
+                                                    <div className="text-[8px] text-center font-mono mt-1">{editing.id?.slice(0,8)}</div>
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
 
-                                {/* GABARITO (Se ativado) */}
-                                {printSettings.showAnswerKeyOnPrint && (
-                                    <div className="break-before-page pt-4"> {/* FORÇA NOVA PÁGINA */}
-                                        {renderExamHeader()} {/* REPETE O CABEÇALHO */}
-                                        
-                                        <div className="mt-4 pt-4 border-t-2 border-black">
-                                            <h3 className="font-bold text-lg mb-2">Gabarito - Tipo {activeVersion === 'ORIGINAL' ? 'Único' : activeVersion}</h3>
-                                            <div className="grid grid-cols-5 gap-2 text-sm">
-                                                {questionsToShow.map((q, idx) => {
-                                                    let answer = '';
-                                                    if (q.type === QuestionType.MULTIPLE_CHOICE) {
-                                                        const correctIndex = q.options?.findIndex(o => o.isCorrect);
-                                                        answer = correctIndex !== undefined && correctIndex >= 0 ? String.fromCharCode(65 + correctIndex) : '?';
-                                                    } else if (q.type === QuestionType.TRUE_FALSE) {
-                                                        answer = q.options?.find(o => o.isCorrect)?.text || '?';
-                                                    } else {
-                                                        answer = 'Aberta';
-                                                    }
-                                                    return (
-                                                        <div key={q.id} className="border border-gray-300 p-1 px-2 rounded">
-                                                            <span className="font-bold">{idx + 1}.</span> {answer}
-                                                        </div>
-                                                    );
-                                                })}
+                                        {/* Instruções de Preenchimento */}
+                                        <div className="mx-8 mb-6 p-2 border border-black text-xs flex justify-between items-center bg-gray-50">
+                                            <span><strong>Instruções:</strong> Preencha completamente a bolha com caneta preta ou azul.</span>
+                                            <div className="flex gap-2">
+                                                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full border border-black"></div> Errado</span>
+                                                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full border border-black bg-black"></div> Certo</span>
                                             </div>
+                                        </div>
+
+                                        {/* Grade de Respostas */}
+                                        <div className="columns-2 gap-8 px-8" style={{ columnRule: '1px solid #ddd' }}>
+                                            {questionsToShow.map((q, idx) => (
+                                                <div key={q.id} className="flex items-center gap-4 mb-3 break-inside-avoid">
+                                                    <span className="font-bold text-sm w-6 text-right">{idx + 1}.</span>
+                                                    <div className="flex gap-3">
+                                                        {['A', 'B', 'C', 'D', 'E'].map(opt => (
+                                                            <div key={opt} className="flex flex-col items-center">
+                                                                <div className="w-5 h-5 rounded-full border border-black flex items-center justify-center text-[8px] font-bold text-slate-400 mb-0.5">
+                                                                    {opt}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Rodapé Tecnológico */}
+                                        <div className="absolute bottom-8 left-0 w-full text-center text-[10px] text-slate-400 font-mono uppercase tracking-widest">
+                                            Prova Fácil Scanner Compatible • Do not fold
                                         </div>
                                     </div>
                                 )}
