@@ -33,35 +33,46 @@
     <style>
       @media print {
         @page {
-          margin: 15mm;
+          margin: 10mm;
           size: auto;
         }
 
-        /* Reset básico para permitir paginação correta */
+        /* GLOBAL RESET FOR PRINTING SPA */
         html, body, #root {
           height: auto !important;
           min-height: 0 !important;
           overflow: visible !important;
+          position: static !important;
         }
 
-        /* 
-           Removido o 'div { display: block }' agressivo que quebrava o header.
-           Agora confiamos nas classes 'print:hidden' do Tailwind no App.tsx.
-        */
+        /* Reseta containers de layout para não cortar conteúdo */
+        #root > div, main {
+            height: auto !important;
+            overflow: visible !important;
+            display: block !important; 
+        }
 
-        .no-print { 
+        /* Remove scrolls internos na impressão */
+        .custom-scrollbar, div[class*="overflow-y-auto"], div[class*="overflow-hidden"] {
+            height: auto !important;
+            overflow: visible !important;
+        }
+
+        .no-print, .print\:hidden { 
           display: none !important; 
         }
         
-        /* Remove scrollbars visuais na impressão */
         ::-webkit-scrollbar {
           display: none;
         }
 
-        /* Garante que quebras de página não cortem elementos ao meio */
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
+        }
+        
+        body {
+            background-color: white !important;
         }
       }
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Exam, Institution, SchoolClass, Discipline, Question, ExamContentScope, QuestionType, PublicExamConfig } from '../types';
@@ -121,7 +120,7 @@ const ExamsPage = () => {
             // Shuffle Questions
             let shuffledQs = shuffleArray(generatedQuestions).map(q => {
                 // Clone question to avoid reference issues
-                const newQ = Object.assign({}, q);
+                const newQ: Question = { ...q };
                 // Shuffle Options if MC
                 if (newQ.type === QuestionType.MULTIPLE_CHOICE && newQ.options) {
                     newQ.options = shuffleArray(newQ.options);
@@ -518,7 +517,7 @@ const ExamsPage = () => {
                 const questionsToShow = examVersions[activeVersion] || generatedQuestions;
                 
                 return (
-                    <div className="flex h-full animate-fade-in relative bg-slate-100/50 rounded-xl overflow-hidden border border-slate-200">
+                    <div className="flex h-full animate-fade-in relative bg-slate-100/50 rounded-xl overflow-hidden border border-slate-200 print:overflow-visible print:h-auto print:block print:border-none print:bg-white">
                         {/* PAINEL DE CONTROLE (Esquerda) - Oculto na Impressão */}
                         <div className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col gap-6 print:hidden overflow-y-auto custom-scrollbar">
                             <div>
@@ -597,8 +596,8 @@ const ExamsPage = () => {
                         </div>
 
                         {/* PAPEL DE VISUALIZAÇÃO (A4) */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible">
-                            <div className={`bg-white shadow-xl mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 ${printSettings.fontSize}`}>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible print:h-auto print:block">
+                            <div className={`bg-white shadow-xl mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 print:h-auto ${printSettings.fontSize}`}>
                                 {/* CABEÇALHO */}
                                 <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
                                     {institutions.find(i => i.id === editing.institutionId)?.logoUrl && 
@@ -913,4 +912,3 @@ const ExamsPage = () => {
 };
 
 export default ExamsPage;
-    
