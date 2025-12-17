@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Exam, Institution, SchoolClass, Discipline, Question, ExamContentScope, QuestionType, PublicExamConfig } from '../types';
@@ -119,8 +120,18 @@ const ExamsPage = () => {
         ['A', 'B', 'C', 'D'].forEach(ver => {
             // Shuffle Questions
             let shuffledQs = shuffleArray(generatedQuestions).map(q => {
-                // Clone question to avoid reference issues
-                const newQ: Question = { ...q } as Question;
+                // Safe Deep Clone using structuredClone (modern browsers) or JSON hack fallback
+                // This breaks references to avoid modifying original questions when shuffling options
+                let newQ: Question;
+                try {
+                    newQ = typeof structuredClone === 'function' 
+                        ? structuredClone(q) 
+                        : JSON.parse(JSON.stringify(q));
+                } catch (e) {
+                    console.warn('Deep clone failed, falling back to shallow copy', e);
+                    newQ = { ...(q as any) };
+                }
+
                 // Shuffle Options if MC
                 if (newQ.type === QuestionType.MULTIPLE_CHOICE && newQ.options) {
                     newQ.options = shuffleArray(newQ.options);
@@ -526,7 +537,7 @@ const ExamsPage = () => {
                                 </h4>
                                 <p className="text-xs text-slate-500 mb-4">Gere versões diferentes para evitar cola.</p>
                                 
-                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Versão da Prova</label>
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Versão Anti-Cola</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {['ORIGINAL', 'A', 'B', 'C', 'D'].map(ver => (
                                         <button 
@@ -631,9 +642,9 @@ const ExamsPage = () => {
                                 )}
 
                                 {/* QUESTÕES */}
-                                <div className={`${editing.columns === 2 ? 'columns-2 gap-8' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}>
+                                <div className={`${editing.columns === 2 ? 'columns-2 gap-6' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #94a3b8' } : {}}>
                                     {questionsToShow.map((q, idx) => (
-                                        <div key={q.id} className="mb-6 break-inside-avoid">
+                                        <div key={q.id} className="mb-4 break-inside-avoid inline-block w-full">
                                             <div className="flex gap-2">
                                                 <span className="font-bold">{idx + 1}.</span>
                                                 <div className="flex-1">

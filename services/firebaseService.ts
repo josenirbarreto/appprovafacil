@@ -62,10 +62,21 @@ const cleanPayload = (data: any): any => {
     
     const process = (obj: any): any => {
         if (obj === null || typeof obj !== 'object') return obj;
+        
+        // Trata Datas
         if (obj instanceof Date) return obj.toISOString();
         
-        // Evita objetos complexos do DOM ou React que causam erro de ciclo
-        if (obj.constructor && (obj.constructor.name === 'SyntheticBaseEvent' || obj.nodeType)) {
+        // Trata Timestamps do Firestore (que possuem método toDate)
+        if (typeof obj.toDate === 'function') {
+            return obj.toDate().toISOString();
+        }
+        
+        // Evita objetos complexos do DOM, React ou internos do Firebase que causam erro de ciclo
+        if (obj.constructor && (
+            obj.constructor.name === 'SyntheticBaseEvent' || 
+            obj.constructor.name.startsWith('_') || // Internos minificados
+            obj.nodeType // DOM Node
+        )) {
             return null;
         }
 

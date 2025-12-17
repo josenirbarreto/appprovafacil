@@ -122,8 +122,12 @@ const PlansPage = () => {
             let hType = plan.highlightType || 'NONE';
             if (hType === 'NONE' && plan.isPopular) hType = 'POPULAR';
             
+            // Use spread for safe shallow copy, handle nested objects manually if needed
+            // This prevents "Converting circular structure to JSON" if plan has hidden non-serializable props
             setEditing({
-                ...JSON.parse(JSON.stringify(plan)),
+                ...plan,
+                features: [...(plan.features || [])],
+                limits: { ...plan.limits },
                 highlightType: hType
             });
         } else {
