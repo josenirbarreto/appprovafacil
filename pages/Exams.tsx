@@ -527,6 +527,32 @@ const ExamsPage = () => {
             case 4: // VISUALIZAÇÃO AVANÇADA (ANTI-COLA)
                 const questionsToShow = examVersions[activeVersion] || generatedQuestions;
                 
+                // Função auxiliar para renderizar o cabeçalho (usada no topo e no gabarito)
+                const renderExamHeader = () => (
+                    <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
+                        {institutions.find(i => i.id === editing.institutionId)?.logoUrl && 
+                            <img src={institutions.find(i => i.id === editing.institutionId)?.logoUrl} className="h-16 w-16 object-contain" />
+                        }
+                        <div className="flex-1">
+                            <h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'Nome da Instituição'}</h1>
+                            <div className="flex justify-between items-baseline">
+                                <h2 className="text-lg font-bold">{editing.title}</h2>
+                                {activeVersion !== 'ORIGINAL' && <span className="font-bold border border-black px-2 rounded">PROVA TIPO {activeVersion}</span>}
+                            </div>
+                            <p className="text-sm">{editing.headerText}</p>
+                            
+                            {/* Campos Personalizáveis */}
+                            <div className="flex flex-wrap gap-y-2 gap-x-4 text-sm mt-3 pt-2 border-t border-gray-300">
+                                {printSettings.showName && <span className="w-full">Aluno(a): __________________________________________________________________</span>}
+                                {printSettings.showClass && <span>Turma: {classes.find(c => c.id === editing.classId)?.name || '________'}</span>}
+                                {printSettings.showDate && <span>Data: ____/____/____</span>}
+                                {printSettings.showScore && <span>Nota: _______</span>}
+                                {printSettings.showValue && <span>Valor: _______</span>}
+                            </div>
+                        </div>
+                    </div>
+                );
+
                 return (
                     <div className="flex h-full animate-fade-in relative bg-slate-100/50 rounded-xl overflow-hidden border border-slate-200 print:overflow-visible print:h-auto print:block print:border-none print:bg-white">
                         {/* PAINEL DE CONTROLE (Esquerda) - Oculto na Impressão */}
@@ -609,29 +635,8 @@ const ExamsPage = () => {
                         {/* PAPEL DE VISUALIZAÇÃO (A4) */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible print:h-auto print:block">
                             <div className={`bg-white shadow-xl mx-auto p-[10mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:max-w-none print:p-0 print:m-0 print:h-auto ${printSettings.fontSize}`}>
-                                {/* CABEÇALHO */}
-                                <div className="border-b-2 border-black pb-4 mb-6 flex gap-4 items-center">
-                                    {institutions.find(i => i.id === editing.institutionId)?.logoUrl && 
-                                        <img src={institutions.find(i => i.id === editing.institutionId)?.logoUrl} className="h-16 w-16 object-contain" />
-                                    }
-                                    <div className="flex-1">
-                                        <h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'Nome da Instituição'}</h1>
-                                        <div className="flex justify-between items-baseline">
-                                            <h2 className="text-lg font-bold">{editing.title}</h2>
-                                            {activeVersion !== 'ORIGINAL' && <span className="font-bold border border-black px-2 rounded">PROVA TIPO {activeVersion}</span>}
-                                        </div>
-                                        <p className="text-sm">{editing.headerText}</p>
-                                        
-                                        {/* Campos Personalizáveis */}
-                                        <div className="flex flex-wrap gap-y-2 gap-x-4 text-sm mt-3 pt-2 border-t border-gray-300">
-                                            {printSettings.showName && <span className="w-full">Aluno(a): __________________________________________________________________</span>}
-                                            {printSettings.showClass && <span>Turma: {classes.find(c => c.id === editing.classId)?.name || '________'}</span>}
-                                            {printSettings.showDate && <span>Data: ____/____/____</span>}
-                                            {printSettings.showScore && <span>Nota: _______</span>}
-                                            {printSettings.showValue && <span>Valor: _______</span>}
-                                        </div>
-                                    </div>
-                                </div>
+                                {/* CABEÇALHO (Reutilizável) */}
+                                {renderExamHeader()}
 
                                 {/* INSTRUÇÕES */}
                                 {editing.instructions && (
@@ -680,25 +685,29 @@ const ExamsPage = () => {
 
                                 {/* GABARITO (Se ativado) */}
                                 {printSettings.showAnswerKeyOnPrint && (
-                                    <div className="mt-8 pt-4 border-t-2 border-black break-inside-avoid page-break-before-auto">
-                                        <h3 className="font-bold text-lg mb-2">Gabarito - Tipo {activeVersion === 'ORIGINAL' ? 'Único' : activeVersion}</h3>
-                                        <div className="grid grid-cols-5 gap-2 text-sm">
-                                            {questionsToShow.map((q, idx) => {
-                                                let answer = '';
-                                                if (q.type === QuestionType.MULTIPLE_CHOICE) {
-                                                    const correctIndex = q.options?.findIndex(o => o.isCorrect);
-                                                    answer = correctIndex !== undefined && correctIndex >= 0 ? String.fromCharCode(65 + correctIndex) : '?';
-                                                } else if (q.type === QuestionType.TRUE_FALSE) {
-                                                    answer = q.options?.find(o => o.isCorrect)?.text || '?';
-                                                } else {
-                                                    answer = 'Aberta';
-                                                }
-                                                return (
-                                                    <div key={q.id} className="border border-gray-300 p-1 px-2 rounded">
-                                                        <span className="font-bold">{idx + 1}.</span> {answer}
-                                                    </div>
-                                                );
-                                            })}
+                                    <div className="break-before-page pt-4"> {/* FORÇA NOVA PÁGINA */}
+                                        {renderExamHeader()} {/* REPETE O CABEÇALHO */}
+                                        
+                                        <div className="mt-4 pt-4 border-t-2 border-black">
+                                            <h3 className="font-bold text-lg mb-2">Gabarito - Tipo {activeVersion === 'ORIGINAL' ? 'Único' : activeVersion}</h3>
+                                            <div className="grid grid-cols-5 gap-2 text-sm">
+                                                {questionsToShow.map((q, idx) => {
+                                                    let answer = '';
+                                                    if (q.type === QuestionType.MULTIPLE_CHOICE) {
+                                                        const correctIndex = q.options?.findIndex(o => o.isCorrect);
+                                                        answer = correctIndex !== undefined && correctIndex >= 0 ? String.fromCharCode(65 + correctIndex) : '?';
+                                                    } else if (q.type === QuestionType.TRUE_FALSE) {
+                                                        answer = q.options?.find(o => o.isCorrect)?.text || '?';
+                                                    } else {
+                                                        answer = 'Aberta';
+                                                    }
+                                                    return (
+                                                        <div key={q.id} className="border border-gray-300 p-1 px-2 rounded">
+                                                            <span className="font-bold">{idx + 1}.</span> {answer}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
