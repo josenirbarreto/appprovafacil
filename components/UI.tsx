@@ -90,7 +90,7 @@ export const Badge: React.FC<{ children: React.ReactNode; color?: 'blue' | 'gree
   return <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${colors[color]}`}>{children}</span>;
 };
 
-// Novo Componente Modal (Z-INDEX 100 para evitar sobreposições)
+// Novo Componente Modal (CRÍTICO: position absolute na impressão para permitir paginação)
 export const Modal: React.FC<{ 
     isOpen: boolean; 
     onClose: () => void; 
@@ -107,8 +107,8 @@ export const Modal: React.FC<{
     const footerPadding = compact ? 'p-3' : 'p-5';
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in print:fixed print:inset-0 print:bg-white print:p-0 print:z-[100] print:block print:h-auto print:overflow-visible">
-            <div className={`bg-white rounded-2xl shadow-2xl w-full ${maxWidth} max-h-[90vh] flex flex-col overflow-hidden animate-scale-in print:shadow-none print:w-full print:max-w-none print:max-h-none print:rounded-none print:overflow-visible print:h-auto`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in print:absolute print:inset-0 print:bg-white print:p-0 print:z-[100] print:block print:h-auto print:overflow-visible">
+            <div className={`bg-white rounded-2xl shadow-2xl w-full ${maxWidth} max-h-[90vh] flex flex-col overflow-hidden animate-scale-in print:shadow-none print:w-full print:max-w-none print:max-h-none print:rounded-none print:overflow-visible print:h-auto print:block`}>
                 <div className={`flex justify-between items-center ${headerPadding} border-b border-slate-100 bg-slate-50/50 print:hidden`}>
                     <h3 className={`${compact ? 'text-lg' : 'text-xl'} font-display font-bold text-brand-dark`}>{title}</h3>
                     <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-slate-100">
@@ -116,7 +116,7 @@ export const Modal: React.FC<{
                     </button>
                 </div>
                 
-                <div className={`${bodyPadding} overflow-y-auto custom-scrollbar flex-1 print:p-0 print:overflow-visible print:h-auto`}>
+                <div className={`${bodyPadding} overflow-y-auto custom-scrollbar flex-1 print:p-0 print:overflow-visible print:h-auto print:block`}>
                     {children}
                 </div>
 

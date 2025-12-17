@@ -38,11 +38,23 @@
         }
 
         /* GLOBAL RESET FOR PRINTING SPA */
-        html, body, #root {
+        html, body {
           height: auto !important;
           min-height: 0 !important;
           overflow: visible !important;
           position: static !important;
+          background: white !important;
+        }
+
+        #root {
+          height: auto !important;
+          overflow: visible !important;
+          position: static !important;
+        }
+
+        /* Oculta tudo por padrão e mostra apenas o que for explicitly printable */
+        body > * {
+           /* Não use display:none no root se o modal estiver dentro dele */
         }
 
         /* Reseta containers de layout para não cortar conteúdo */
@@ -69,10 +81,6 @@
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
-        }
-        
-        body {
-            background-color: white !important;
         }
       }
 

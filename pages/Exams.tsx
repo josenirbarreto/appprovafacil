@@ -120,7 +120,7 @@ const ExamsPage = () => {
             // Shuffle Questions
             let shuffledQs = shuffleArray(generatedQuestions).map(q => {
                 // Clone question to avoid reference issues
-                const newQ: Question = { ...q };
+                const newQ: Question = { ...q } as Question;
                 // Shuffle Options if MC
                 if (newQ.type === QuestionType.MULTIPLE_CHOICE && newQ.options) {
                     newQ.options = shuffleArray(newQ.options);
