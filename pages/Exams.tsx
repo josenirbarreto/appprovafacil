@@ -1,11 +1,25 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Exam, Institution, SchoolClass, Discipline, Question, ExamContentScope, QuestionType, PublicExamConfig } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Select, Input, Badge, RichTextEditor } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
+
+const QuestionTypeLabels: Record<string, string> = {
+    [QuestionType.MULTIPLE_CHOICE]: 'Múltipla Escolha',
+    [QuestionType.TRUE_FALSE]: 'Verdadeiro/Falso',
+    [QuestionType.SHORT_ANSWER]: 'Dissertativa',
+    [QuestionType.NUMERIC]: 'Numérica',
+    [QuestionType.ASSOCIATION]: 'Associação'
+};
+
+const DifficultyLabels: Record<string, string> = {
+    'Easy': 'Fácil',
+    'Medium': 'Médio',
+    'Hard': 'Difícil'
+};
 
 const ExamsPage = () => {
     const { user } = useAuth();
@@ -24,22 +38,31 @@ const ExamsPage = () => {
     const [currentStep, setCurrentStep] = useState(1);
     const [saving, setSaving] = useState(false);
     
-    // Step State
+    // Step 2 State
     const [selectedDisc, setSelectedDisc] = useState('');
-    const [tempScopes, setTempScopes] = useState<ExamContentScope[]>([]);
+    const [selectedChap, setSelectedChap] = useState('');
+    const [selectedUnit, setSelectedUnit] = useState('');
+    const [selectedTopic, setSelectedTopic] = useState('');
     const [questionsCount, setQuestionsCount] = useState(1);
+    const [tempScopes, setTempScopes] = useState<ExamContentScope[]>([]);
+
+    // Step 3 State
     const [generationMode, setGenerationMode] = useState<'MANUAL' | 'AUTO'>('AUTO');
     const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([]);
-    
-    // Publish Modal State
-    const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
-    const [publishConfig, setPublishConfig] = useState<Partial<PublicExamConfig>>({});
-    const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
+    const [manualSelectedIds, setManualSelectedIds] = useState<Set<string>>(new Set());
+    const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
 
-    // Printing/Preview State
+    // Step 4 Printing State
     const [activeVersion, setActiveVersion] = useState<'ORIGINAL' | 'A' | 'B' | 'C' | 'D'>('ORIGINAL');
     const [viewMode, setViewMode] = useState<'EXAM' | 'ANSWER_SHEET'>('EXAM');
     const [examVersions, setExamVersions] = useState<Record<string, Question[]>>({});
+    const [printSettings, setPrintSettings] = useState({
+        fontSize: 'text-sm', 
+        showName: true,
+        showDate: true,
+        showClass: true,
+        showScore: true
+    });
 
     // Accordion States
     const [expandedInstitutions, setExpandedInstitutions] = useState<Record<string, boolean>>({});
@@ -49,7 +72,7 @@ const ExamsPage = () => {
     useEffect(() => { if (user) load(); }, [user]);
     
     useEffect(() => {
-        if (currentStep === 4 && generatedQuestions.length > 0) {
+        if (currentStep === 4 && (generatedQuestions.length > 0 || manualSelectedIds.size > 0)) {
             generateVersions();
         }
     }, [currentStep]);
@@ -69,6 +92,26 @@ const ExamsPage = () => {
         setAllQuestions(q);
     };
 
+    const availableForManual = useMemo(() => {
+        if (tempScopes.length === 0) return [];
+        const base = allQuestions.filter(q => {
+            return tempScopes.some(scope => {
+                const matchDisc = q.disciplineId === scope.disciplineId;
+                const matchChap = !scope.chapterId || q.chapterId === scope.chapterId;
+                const matchUnit = !scope.unitId || q.unitId === scope.unitId;
+                const matchTopic = !scope.topicId || q.topicId === scope.topicId;
+                return matchDisc && matchChap && matchUnit && matchTopic;
+            });
+        });
+
+        // Ordenar: Selecionadas no topo
+        return [...base].sort((a, b) => {
+            const aSel = manualSelectedIds.has(a.id) ? 1 : 0;
+            const bSel = manualSelectedIds.has(b.id) ? 1 : 0;
+            return bSel - aSel;
+        });
+    }, [allQuestions, tempScopes, manualSelectedIds]);
+
     const shuffleArray = <T extends unknown>(array: T[]): T[] => {
         const newArr = [...array];
         for (let i = newArr.length - 1; i > 0; i--) {
@@ -79,16 +122,15 @@ const ExamsPage = () => {
     };
 
     const generateVersions = () => {
+        const baseQuestions = generationMode === 'AUTO' 
+            ? generatedQuestions 
+            : allQuestions.filter(q => manualSelectedIds.has(q.id));
+
         const versions: Record<string, Question[]> = {};
-        versions['ORIGINAL'] = [...generatedQuestions];
+        versions['ORIGINAL'] = [...baseQuestions];
         ['A', 'B', 'C', 'D'].forEach(ver => {
-            let shuffledQs = shuffleArray(generatedQuestions).map(q => {
-                let newQ: Question;
-                try {
-                    newQ = typeof structuredClone === 'function' ? structuredClone(q) : JSON.parse(JSON.stringify(q));
-                } catch (e) {
-                    newQ = { ...(q as any) };
-                }
+            let shuffledQs = shuffleArray(baseQuestions).map(q => {
+                let newQ = JSON.parse(JSON.stringify(q));
                 if (newQ.type === QuestionType.MULTIPLE_CHOICE && newQ.options) {
                     newQ.options = shuffleArray(newQ.options);
                 }
@@ -105,11 +147,13 @@ const ExamsPage = () => {
             setEditing(exam);
             setTempScopes(exam.contentScopes || []);
             setGeneratedQuestions(exam.questions || []);
+            setManualSelectedIds(new Set(exam.questions.map(q => q.id)));
             setGenerationMode('MANUAL');
         } else {
             setEditing({ columns: 1, showAnswerKey: false, institutionId: user?.institutionId || '' });
             setTempScopes([]);
             setGeneratedQuestions([]);
+            setManualSelectedIds(new Set());
             setGenerationMode('AUTO');
         }
         setCurrentStep(1);
@@ -117,40 +161,65 @@ const ExamsPage = () => {
         setIsModalOpen(true);
     };
 
-    const openPublishModal = (exam: Exam) => {
-        setSelectedExamId(exam.id);
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 7);
-        setPublishConfig(exam.publicConfig || {
-            isPublished: true,
-            startDate: new Date().toISOString().slice(0, 16),
-            endDate: tomorrow.toISOString().slice(0, 16),
-            timeLimitMinutes: 60,
-            allowedAttempts: 1,
-            randomizeQuestions: false,
-            requireIdentifier: true,
-            showFeedback: true
-        });
-        setIsPublishModalOpen(true);
+    const handleAddScope = () => {
+        if (!selectedDisc) return;
+        const disc = hierarchy.find(d => d.id === selectedDisc);
+        const chap = disc?.chapters.find(c => c.id === selectedChap);
+        const unit = chap?.units.find(u => u.id === selectedUnit);
+        const topic = unit?.topics.find(t => t.id === selectedTopic);
+
+        const newScope: ExamContentScope = {
+            id: Date.now().toString(),
+            disciplineId: selectedDisc,
+            disciplineName: disc?.name || '',
+            chapterId: selectedChap || undefined,
+            chapterName: chap?.name,
+            unitId: selectedUnit || undefined,
+            unitName: unit?.name,
+            topicId: selectedTopic || undefined,
+            topicName: topic?.name,
+            questionCount: questionsCount
+        };
+        setTempScopes([...tempScopes, newScope]);
+        setQuestionsCount(1);
     };
 
     const handleAutoGenerate = () => {
         let finalQuestions: Question[] = [];
         tempScopes.forEach(scope => {
-            const scopeQs = allQuestions.filter(q => q.disciplineId === scope.disciplineId);
+            const scopeQs = allQuestions.filter(q => {
+                const matchDisc = q.disciplineId === scope.disciplineId;
+                const matchChap = !scope.chapterId || q.chapterId === scope.chapterId;
+                const matchUnit = !scope.unitId || q.unitId === scope.unitId;
+                const matchTopic = !scope.topicId || q.topicId === scope.topicId;
+                return matchDisc && matchChap && matchUnit && matchTopic;
+            });
             const shuffled = [...scopeQs].sort(() => 0.5 - Math.random());
             finalQuestions = [...finalQuestions, ...shuffled.slice(0, scope.questionCount)];
         });
-        setGeneratedQuestions(finalQuestions);
+        const uniqueQuestions = Array.from(new Set(finalQuestions.map(q => q.id)))
+            .map(id => finalQuestions.find(q => q.id === id)!);
+        setGeneratedQuestions(uniqueQuestions);
+    };
+
+    const toggleManualQuestion = (id: string) => {
+        const next = new Set(manualSelectedIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setManualSelectedIds(next);
     };
 
     const handleSave = async () => {
         if(!editing.title) return alert('Título obrigatório');
         setSaving(true);
+        const finalQs = generationMode === 'AUTO' 
+            ? generatedQuestions 
+            : allQuestions.filter(q => manualSelectedIds.has(q.id));
+
         try {
             await FirebaseService.saveExam({
                 ...editing,
-                questions: generatedQuestions,
+                questions: finalQs,
                 contentScopes: tempScopes,
                 createdAt: editing.createdAt || new Date().toISOString()
             } as Exam);
@@ -162,9 +231,7 @@ const ExamsPage = () => {
     };
 
     const handleDelete = (id: string) => {
-        if (confirm('Excluir prova?')) {
-            FirebaseService.deleteExam(id).then(load);
-        }
+        if (confirm('Excluir prova?')) FirebaseService.deleteExam(id).then(load);
     };
 
     const toggleInstitution = (id: string) => setExpandedInstitutions(prev => ({ ...prev, [id]: !prev[id] }));
@@ -192,24 +259,49 @@ const ExamsPage = () => {
                     </div>
                 );
             case 2:
+                const discObj = hierarchy.find(d => d.id === selectedDisc);
+                const chapObj = discObj?.chapters.find(c => c.id === selectedChap);
+                const unitObj = chapObj?.units.find(u => u.id === selectedUnit);
                 return (
                     <div className="space-y-6 animate-fade-in">
-                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                            <h4 className="text-sm font-bold text-slate-700 mb-3 uppercase">Definir Conteúdo</h4>
-                            <div className="flex gap-3 items-end">
-                                <Select label="Disciplina" value={selectedDisc} onChange={e => setSelectedDisc(e.target.value)}>
+                        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                            <h4 className="text-sm font-bold text-slate-700 mb-4 uppercase">Definir Conteúdo</h4>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <Select label="Disciplina" value={selectedDisc} onChange={e => { setSelectedDisc(e.target.value); setSelectedChap(''); setSelectedUnit(''); setSelectedTopic(''); }}>
                                     <option value="">Selecione...</option>
                                     {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                 </Select>
-                                <Input label="Qtd. Questões" type="number" min="1" value={questionsCount} onChange={e => setQuestionsCount(parseInt(e.target.value))} className="w-32" />
-                                <Button onClick={() => { if (!selectedDisc) return; setTempScopes([...tempScopes, { id: Date.now().toString(), disciplineId: selectedDisc, disciplineName: hierarchy.find(x => x.id === selectedDisc)?.name || '', questionCount: questionsCount }]); setQuestionsCount(1); }} disabled={!selectedDisc}>+ Adicionar</Button>
+                                <Select label="Capítulo" value={selectedChap} onChange={e => { setSelectedChap(e.target.value); setSelectedUnit(''); setSelectedTopic(''); }} disabled={!selectedDisc}>
+                                    <option value="">Todos os Capítulos</option>
+                                    {discObj?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <Select label="Unidade" value={selectedUnit} onChange={e => { setSelectedUnit(e.target.value); setSelectedTopic(''); }} disabled={!selectedChap}>
+                                    <option value="">Todas as Unidades</option>
+                                    {chapObj?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                </Select>
+                                <Select label="Tópico" value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)} disabled={!selectedUnit}>
+                                    <option value="">Todos os Tópicos</option>
+                                    {unitObj?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </Select>
+                            </div>
+                            <div className="flex gap-4 items-end mt-4">
+                                <Input label="Qtd. de Questões" type="number" min="1" value={questionsCount} onChange={e => setQuestionsCount(parseInt(e.target.value))} className="w-40" />
+                                <Button onClick={handleAddScope} disabled={!selectedDisc} className="flex-1">+ Adicionar Escopo</Button>
                             </div>
                         </div>
                         <div className="space-y-2">
                             {tempScopes.map(scope => (
-                                <div key={scope.id} className="flex justify-between items-center bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                    <span className="font-bold text-sm">{scope.disciplineName} ({scope.questionCount} questões)</span>
-                                    <button onClick={() => setTempScopes(tempScopes.filter(s => s.id !== scope.id))} className="text-red-400 hover:text-red-600"><Icons.Trash /></button>
+                                <div key={scope.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="flex-1">
+                                        <div className="font-bold text-slate-800">{scope.disciplineName} {scope.chapterName && `/ ${scope.chapterName}`}</div>
+                                        <div className="text-xs text-slate-500">{scope.unitName && `Unidade: ${scope.unitName}`} {scope.topicName && `• Tópico: ${scope.topicName}`}</div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <Badge color="blue">{scope.questionCount} qts</Badge>
+                                        <button onClick={() => setTempScopes(tempScopes.filter(s => s.id !== scope.id))} className="text-red-400 hover:text-red-600 transition-colors"><Icons.Trash /></button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -219,66 +311,166 @@ const ExamsPage = () => {
                 return (
                     <div className="space-y-6 animate-fade-in text-center">
                         <div className="flex justify-center gap-4 mb-6">
-                            <button onClick={() => setGenerationMode('AUTO')} className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'AUTO' ? 'border-brand-blue bg-blue-50 text-brand-blue' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}><Icons.Magic /><span className="font-bold text-sm">Automático</span></button>
-                            <button onClick={() => setGenerationMode('MANUAL')} className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'MANUAL' ? 'border-brand-blue bg-blue-50 text-brand-blue' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}><Icons.Check /><span className="font-bold text-sm">Manual</span></button>
+                            <button onClick={() => setGenerationMode('AUTO')} className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'AUTO' ? 'border-brand-blue bg-blue-50 text-brand-blue shadow-md' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}><Icons.Magic /><span className="font-bold text-sm">Automático</span></button>
+                            <button onClick={() => setGenerationMode('MANUAL')} className={`px-6 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all w-40 ${generationMode === 'MANUAL' ? 'border-brand-blue bg-blue-50 text-brand-blue shadow-md' : 'border-slate-200 hover:border-slate-300 text-slate-500'}`}><Icons.List /><span className="font-bold text-sm">Seleção Manual</span></button>
                         </div>
-                        {generationMode === 'AUTO' && (
+                        {generationMode === 'AUTO' ? (
                             <div>
-                                <Button onClick={handleAutoGenerate} className="mx-auto mb-6"><Icons.Refresh /> Gerar Prova Agora</Button>
-                                <div className="text-left space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                                <Button onClick={handleAutoGenerate} className="mx-auto mb-6"><Icons.Refresh /> Gerar Nova Seleção</Button>
+                                <div className="text-left space-y-3 max-h-96 overflow-y-auto custom-scrollbar pr-2">
                                     {generatedQuestions.map((q, i) => (
-                                        <div key={q.id} className="p-3 bg-white border rounded text-sm"><strong>{i+1}.</strong> <div className="inline" dangerouslySetInnerHTML={{__html: q.enunciado}} /></div>
+                                        <div key={q.id} className="p-4 bg-white border border-slate-200 rounded-xl text-sm shadow-sm flex gap-3 group">
+                                            <strong className="text-brand-blue shrink-0">{i+1}.</strong> 
+                                            <div className="flex-1">
+                                                <div className="inline line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                            </div>
+                                            <button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue transition-colors opacity-0 group-hover:opacity-100"><Icons.Eye /></button>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
+                        ) : (
+                            <div className="text-left space-y-4">
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                                    <span className="text-sm font-medium text-slate-600">Questões compatíveis: <strong>{availableForManual.length}</strong></span>
+                                    <Badge color="blue">{manualSelectedIds.size} selecionadas</Badge>
+                                </div>
+                                <div className="grid gap-3 max-h-[450px] overflow-y-auto custom-scrollbar pr-2">
+                                    {availableForManual.map((q) => (
+                                        <div key={q.id} className={`p-4 rounded-xl border transition-all flex gap-4 ${manualSelectedIds.has(q.id) ? 'border-brand-blue bg-blue-50 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                                            <input type="checkbox" checked={manualSelectedIds.has(q.id)} onChange={() => toggleManualQuestion(q.id)} className="w-5 h-5 text-brand-blue rounded focus:ring-brand-blue mt-1 shrink-0 cursor-pointer" />
+                                            <div className="flex-1 cursor-pointer" onClick={() => toggleManualQuestion(q.id)}>
+                                                <div className="text-sm font-medium text-slate-800 line-clamp-2 mb-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                <div className="flex gap-2">
+                                                    <Badge color="blue">{DifficultyLabels[q.difficulty] || q.difficulty}</Badge>
+                                                    <Badge color="purple">{QuestionTypeLabels[q.type] || q.type}</Badge>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue transition-colors self-start" title="Visualizar Questão"><Icons.Eye /></button>
+                                        </div>
+                                    ))}
+                                    {availableForManual.length === 0 && <p className="text-center py-10 text-slate-400 italic">Defina o escopo no Passo 2 para ver as questões.</p>}
+                                </div>
+                            </div>
                         )}
-                        {generationMode === 'MANUAL' && <p className="text-slate-400">Selecione as questões desejadas no banco.</p>}
                     </div>
                 );
             case 4:
-                const questionsToShow = examVersions[activeVersion] || generatedQuestions;
+                const questionsToShow = examVersions[activeVersion] || (generationMode === 'AUTO' ? generatedQuestions : allQuestions.filter(q => manualSelectedIds.has(q.id)));
                 return (
-                    <div className="flex h-full animate-fade-in relative bg-slate-100/50 rounded-xl overflow-hidden border border-slate-200 print:overflow-visible print:h-auto print:block print:border-none print:bg-white">
-                        <div className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col gap-6 print:hidden overflow-y-auto custom-scrollbar">
-                            <div>
-                                <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Icons.Printer /> Impressão</h4>
-                                <div className="flex bg-slate-100 p-1 rounded-lg mb-4">
-                                    <button onClick={() => setViewMode('EXAM')} className={`flex-1 py-1.5 text-xs font-bold rounded-md ${viewMode === 'EXAM' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}>Prova</button>
-                                    <button onClick={() => setViewMode('ANSWER_SHEET')} className={`flex-1 py-1.5 text-xs font-bold rounded-md ${viewMode === 'ANSWER_SHEET' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}>Cartão-Resposta</button>
-                                </div>
-                                {viewMode === 'EXAM' && (
-                                    <>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Versão Anti-Cola</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {['ORIGINAL', 'A', 'B', 'C', 'D'].map(v => (
-                                                <button key={v} onClick={() => setActiveVersion(v as any)} className={`px-2 py-1.5 rounded text-xs font-bold border ${activeVersion === v ? 'bg-brand-blue text-white' : 'bg-white text-slate-600'}`}>{v}</button>
-                                            ))}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <Button onClick={() => window.print()} className="w-full mt-auto justify-center shadow-lg shadow-blue-500/20"><Icons.Printer /> Imprimir</Button>
-                        </div>
+                    <div className="flex h-[70vh] animate-fade-in relative bg-slate-100 rounded-xl overflow-hidden border border-slate-200 print:h-auto print:block print:border-none print:bg-white">
+                        {/* PAINEL DE CONTROLE LATERAL */}
+                        <div className="w-80 bg-white border-r border-slate-200 flex flex-col h-full print:hidden">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                                <div>
+                                    <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Icons.Printer /> Impressão</h4>
+                                    <div className="flex bg-slate-100 p-1 rounded-lg mb-6">
+                                        <button onClick={() => setViewMode('EXAM')} className={`flex-1 py-1.5 text-xs font-bold rounded-md ${viewMode === 'EXAM' ? 'bg-white shadow text-brand-blue' : 'text-slate-50'}`}>Prova</button>
+                                        <button onClick={() => setViewMode('ANSWER_SHEET')} className={`flex-1 py-1.5 text-xs font-bold rounded-md ${viewMode === 'ANSWER_SHEET' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}>Gabarito</button>
+                                    </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible print:h-auto">
-                            <div className={`bg-white shadow-xl mx-auto p-[15mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:p-0 text-sm`}>
-                                {viewMode === 'EXAM' ? (
-                                    <>
-                                        <div className="border-b-2 border-black pb-4 mb-6">
-                                            <h1 className="text-xl font-bold uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'Instituição'}</h1>
-                                            <h2 className="text-lg font-bold">{editing.title}</h2>
-                                            <div className="mt-4 border-t border-gray-300 pt-2 text-sm">
-                                                Aluno: ________________________________________________ Turma: ________ Data: __/__/__
+                                    {viewMode === 'EXAM' ? (
+                                        <div className="space-y-6 animate-fade-in">
+                                            {/* TAMANHO DA FONTE */}
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block tracking-wider">Tamanho da Fonte</label>
+                                                <div className="flex bg-slate-100 p-1 rounded-lg">
+                                                    {[{id:'text-xs',l:'P'},{id:'text-sm',l:'M'},{id:'text-base',l:'G'}].map(s => (
+                                                        <button key={s.id} onClick={() => setPrintSettings({...printSettings, fontSize: s.id})} className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${printSettings.fontSize === s.id ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}>{s.l}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* VERSÕES ANTI-COLA */}
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block tracking-wider">Versão Anti-Cola</label>
+                                                <div className="grid grid-cols-5 gap-2">
+                                                    {['ORIGINAL','A','B','C','D'].map(v => (
+                                                        <button key={v} onClick={() => setActiveVersion(v as any)} className={`py-1.5 rounded text-[10px] font-bold border transition-all ${activeVersion === v ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white text-slate-600 border-slate-200'}`}>{v}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* CAMPOS CABEÇALHO */}
+                                            <div className="space-y-3 pt-4 border-t border-slate-100">
+                                                {[
+                                                    {id:'showName', l:'Nome do Aluno'},
+                                                    {id:'showDate', l:'Campo Data'},
+                                                    {id:'showClass', l:'Campo Turma'},
+                                                    {id:'showScore', l:'Campo Nota'}
+                                                ].map(t => (
+                                                    <label key={t.id} className="flex items-center justify-between cursor-pointer group">
+                                                        <span className="text-xs text-slate-600 font-medium group-hover:text-slate-900 transition-colors">{t.l}</span>
+                                                        <input type="checkbox" checked={(printSettings as any)[t.id]} onChange={e => setPrintSettings({...printSettings, [t.id]: e.target.checked})} className="w-4 h-4 text-brand-blue rounded border-slate-300 focus:ring-brand-blue" />
+                                                    </label>
+                                                ))}
                                             </div>
                                         </div>
-                                        <div className="space-y-6">
+                                    ) : (
+                                        <div className="space-y-6 animate-fade-in">
+                                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+                                                <h5 className="text-blue-800 font-bold text-sm mb-3 flex items-center gap-2">
+                                                    <Icons.Sparkles /> Guia do Scanner
+                                                </h5>
+                                                <div className="space-y-4">
+                                                    <div className="flex gap-3">
+                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">1</span>
+                                                        <p className="text-xs text-blue-700 leading-tight">Imprima este cartão em folha A4 branca sem margens cortadas.</p>
+                                                    </div>
+                                                    <div className="flex gap-3">
+                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">2</span>
+                                                        <p className="text-xs text-blue-700 leading-tight">Instrua os alunos a pintarem <strong>completamente</strong> a bolha com caneta preta ou azul.</p>
+                                                    </div>
+                                                    <div className="flex gap-3">
+                                                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">3</span>
+                                                        <p className="text-xs text-blue-700 leading-tight">Acesse <strong>Resultados</strong> nesta prova e use a câmera para correção instantânea.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 italic text-[10px] text-slate-500">
+                                                O tamanho da fonte é fixo para garantir que os marcadores de leitura (quadrados pretos) fiquem na posição correta para a IA.
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="p-4 border-t border-slate-200 bg-slate-50">
+                                <Button onClick={() => window.print()} className="w-full justify-center py-3 shadow-lg shadow-blue-500/20"><Icons.Printer /> Imprimir Agora</Button>
+                            </div>
+                        </div>
+
+                        {/* ÁREA DE VISUALIZAÇÃO A4 */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-10 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible">
+                            <div className={`bg-white shadow-2xl mx-auto p-[20mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:p-0 ${viewMode === 'EXAM' ? printSettings.fontSize : 'text-sm'}`}>
+                                {viewMode === 'EXAM' ? (
+                                    <>
+                                        <div className="border-b-2 border-black pb-4 mb-8">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h1 className="text-2xl font-bold uppercase leading-tight">{institutions.find(i => i.id === editing.institutionId)?.name || 'Instituição'}</h1>
+                                                    <h2 className="text-xl font-bold mt-1">{editing.title}</h2>
+                                                </div>
+                                                {activeVersion !== 'ORIGINAL' && <Badge color="blue">MODELO {activeVersion}</Badge>}
+                                            </div>
+                                            <div className="mt-6 border-t border-gray-400 pt-4 flex flex-wrap gap-x-8 gap-y-3 text-[0.9em]">
+                                                {printSettings.showName && <span className="w-full">Aluno(a): ____________________________________________________________________</span>}
+                                                {printSettings.showClass && <span>Turma: {classes.find(c => c.id === editing.classId)?.name || '________'}</span>}
+                                                {printSettings.showDate && <span>Data: ____/____/____</span>}
+                                                {printSettings.showScore && <span className="font-bold">Nota: ________</span>}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-8">
                                             {questionsToShow.map((q, i) => (
                                                 <div key={q.id} className="break-inside-avoid">
-                                                    <strong>{i + 1}. </strong><div className="inline" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                    <div className="flex gap-2">
+                                                        <strong className="shrink-0">{i + 1}.</strong>
+                                                        <div className="inline rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                    </div>
                                                     {q.type === QuestionType.MULTIPLE_CHOICE && (
-                                                        <div className="mt-2 ml-4 space-y-1">
+                                                        <div className="mt-3 ml-6 space-y-2">
                                                             {q.options?.map((opt, idx) => (
-                                                                <div key={idx} className="flex gap-2">
+                                                                <div key={idx} className="flex gap-3">
                                                                     <span className="font-bold border border-black rounded-full w-5 h-5 flex items-center justify-center text-[10px] shrink-0">{String.fromCharCode(65+idx)}</span>
                                                                     <span>{opt.text}</span>
                                                                 </div>
@@ -290,15 +482,49 @@ const ExamsPage = () => {
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="relative flex flex-col h-full p-4 border-[3mm] border-transparent">
-                                        {/* Layout de Cartão-Resposta Refinado */}
+                                    <div className="relative flex flex-col h-full min-h-[297mm] p-6 border-[3mm] border-transparent">
                                         <div className="absolute top-0 left-0 w-8 h-8 bg-black"></div>
                                         <div className="absolute top-0 right-0 w-8 h-8 bg-black"></div>
                                         <div className="absolute bottom-0 left-0 w-8 h-8 bg-black"></div>
                                         <div className="absolute bottom-0 right-0 w-8 h-8 bg-black"></div>
-                                        <div className="text-center mb-10 pt-4"><h1 className="font-bold text-2xl uppercase tracking-[4px] border-b-4 border-black pb-2 mb-4">Cartão-Resposta</h1><div className="flex justify-between px-4"><div className="flex-1 mr-8 text-left"><div className="mb-4"><span className="text-xs font-bold uppercase">Aluno(a):</span><div className="border-b-2 border-black h-8 w-full bg-slate-50"></div></div><div className="flex gap-8"><div className="flex-1"><span className="text-xs font-bold uppercase">Turma:</span><div className="border-b-2 border-black h-8 w-full"></div></div><div className="w-32"><span className="text-xs font-bold uppercase">Data:</span><div className="border-b-2 border-black h-8 w-full"></div></div></div></div><div className="border-4 border-black p-2 bg-white flex flex-col items-center shrink-0"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PF-EXAM-${editing.id || 'new'}`} alt="QR Code" className="w-28 h-28 block" crossOrigin="anonymous"/><span className="text-[10px] font-mono mt-1 font-bold">ID: {editing.id?.slice(0,8).toUpperCase() || 'TEMP'}</span></div></div></div>
-                                        <div className="flex-1"><div className="columns-2 gap-12 px-8" style={{ columnRule: '1px dashed #000' }}>{questionsToShow.map((q, idx) => (<div key={q.id} className="flex items-center gap-4 mb-5 break-inside-avoid"><span className="font-bold text-lg w-8 text-right">{idx + 1}.</span><div className="flex gap-3">{['A', 'B', 'C', 'D', 'E'].map(opt => (<div key={opt} className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center text-xs font-bold text-slate-300">{opt}</div>))}</div></div>))}</div></div>
-                                        <div className="text-center text-xs text-slate-500 font-mono uppercase tracking-[2px] pt-8 border-t border-slate-200 mt-auto">Prova Fácil Scanner Compatible • Do not fold or stain</div>
+
+                                        <div className="text-center mb-12 pt-4">
+                                            <h1 className="font-bold text-3xl uppercase tracking-[6px] border-b-4 border-black pb-3 mb-6">Cartão-Resposta</h1>
+                                            <div className="flex justify-between items-end px-4 gap-8">
+                                                <div className="flex-1 text-left space-y-6">
+                                                    <div><span className="text-[10px] font-bold uppercase">Aluno(a):</span><div className="border-b-2 border-black h-8 w-full"></div></div>
+                                                    <div className="flex gap-10">
+                                                        <div className="flex-1"><span className="text-[10px] font-bold uppercase">Turma:</span><div className="border-b-2 border-black h-8 w-full"></div></div>
+                                                        <div className="w-40"><span className="text-[10px] font-bold uppercase">Data:</span><div className="border-b-2 border-black h-8 w-full"></div></div>
+                                                    </div>
+                                                </div>
+                                                <div className="border-4 border-black p-3 bg-white flex flex-col items-center shrink-0 shadow-sm">
+                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-32 h-32 block" />
+                                                    <span className="text-[10px] font-mono mt-2 font-black">ID: {editing.id?.slice(0,8).toUpperCase() || 'PROVA-FACIL'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 px-8 py-4">
+                                            <div className="columns-2 gap-16" style={{ columnRule: '1px dashed #e2e8f0' }}>
+                                                {questionsToShow.map((q, idx) => (
+                                                    <div key={q.id} className="flex items-center gap-5 mb-6 break-inside-avoid">
+                                                        <span className="font-bold text-xl w-8 text-right">{idx + 1}.</span>
+                                                        <div className="flex gap-4">
+                                                            {['A', 'B', 'C', 'D', 'E'].map(opt => (
+                                                                <div key={opt} className="w-9 h-9 rounded-full border-2 border-black flex items-center justify-center text-sm font-black text-black/20">
+                                                                    {opt}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="text-center text-[10px] text-slate-500 font-mono uppercase tracking-[3px] mt-auto pt-10 border-t border-slate-100">
+                                            Prova Fácil Scanner Compatible • Digital Correction Enabled
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -319,24 +545,16 @@ const ExamsPage = () => {
                 <Button onClick={() => handleOpenModal()} className="shadow-lg shadow-blue-500/20"><Icons.Plus /> Nova Prova</Button>
             </div>
 
-            {/* LISTAGEM HIERÁRQUICA - ESTILO SCREENSHOT */}
             <div className="space-y-3">
-                {institutions.length === 0 && <div className="text-center py-20 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">Nenhuma instituição cadastrada.</div>}
-                
                 {institutions.map(inst => {
                     const instClasses = classes.filter(c => c.institutionId === inst.id);
                     const years = Array.from(new Set(instClasses.map(c => c.year))).sort((a: number, b: number) => b - a);
                     const isExpandedInst = expandedInstitutions[inst.id];
-                    const instExamsCount = exams.filter(e => e.institutionId === inst.id).length;
-
                     return (
                         <div key={inst.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            {/* NÍVEL 1: INSTITUIÇÃO */}
                             <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors select-none" onClick={() => toggleInstitution(inst.id)}>
                                 <div className="flex items-center gap-4">
-                                    <div className={`transform transition-transform duration-200 text-slate-400 ${isExpandedInst ? 'rotate-0' : '-rotate-90'}`}>
-                                        <Icons.ChevronDown />
-                                    </div>
+                                    <div className={`transform transition-transform duration-200 text-slate-400 ${isExpandedInst ? 'rotate-0' : '-rotate-90'}`}><Icons.ChevronDown /></div>
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 border border-slate-100 rounded-lg p-1 bg-white shadow-sm flex items-center justify-center overflow-hidden">
                                             {inst.logoUrl ? <img src={inst.logoUrl} className="max-w-full max-h-full object-contain" /> : <Icons.Building />}
@@ -344,54 +562,38 @@ const ExamsPage = () => {
                                         <span className="font-bold text-xl text-slate-800 font-display">{inst.name}</span>
                                     </div>
                                 </div>
-                                <Badge color="blue">{instExamsCount} provas</Badge>
+                                <Badge color="blue">{exams.filter(e => e.institutionId === inst.id).length} provas</Badge>
                             </div>
-
                             {isExpandedInst && (
                                 <div className="p-4 pt-0 space-y-3 animate-fade-in border-t border-slate-50">
                                     {years.map(year => {
                                         const yearId = `${inst.id}-${year}`;
                                         const isExpandedYear = expandedYears[yearId];
                                         const yearClasses = instClasses.filter(c => c.year === year);
-                                        const yearExamsCount = exams.filter(e => yearClasses.some(c => c.id === e.classId)).length;
-
                                         return (
                                             <div key={yearId} className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-3">
-                                                {/* NÍVEL 2: ANO LETIVO */}
                                                 <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors select-none" onClick={() => toggleYear(yearId)}>
                                                     <div className="flex items-center gap-4">
-                                                        <div className={`transform transition-transform duration-200 text-slate-400 ${isExpandedYear ? 'rotate-0' : '-rotate-90'}`}>
-                                                            <Icons.ChevronDown />
-                                                        </div>
+                                                        <div className={`transform transition-transform duration-200 text-slate-400 ${isExpandedYear ? 'rotate-0' : '-rotate-90'}`}><Icons.ChevronDown /></div>
                                                         <span className="font-bold text-lg text-slate-700">Ano Letivo {year}</span>
                                                     </div>
-                                                    <span className="text-sm text-slate-400 font-medium">{yearExamsCount} provas</span>
                                                 </div>
-
                                                 {isExpandedYear && (
                                                     <div className="p-4 pt-0 space-y-3">
                                                         {yearClasses.map(cls => {
                                                             const clsExams = exams.filter(e => e.classId === cls.id);
                                                             const isExpandedCls = expandedClasses[cls.id];
-
                                                             return (
                                                                 <div key={cls.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                                                                    {/* NÍVEL 3: TURMA */}
                                                                     <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors select-none" onClick={() => toggleClass(cls.id)}>
                                                                         <div className="flex items-center gap-4">
-                                                                            <div className={`transform transition-transform duration-200 text-slate-400 ${isExpandedCls ? 'rotate-0' : '-rotate-90'}`}>
-                                                                                <Icons.ChevronDown />
-                                                                            </div>
+                                                                            <div className={`transform transition-transform duration-200 text-slate-400 ${isExpandedCls ? 'rotate-0' : '-rotate-90'}`}><Icons.ChevronDown /></div>
                                                                             <span className="font-bold text-slate-800">{cls.name}</span>
                                                                         </div>
-                                                                        <span className="text-sm text-slate-400 font-medium">{clsExams.length} provas</span>
                                                                     </div>
-
                                                                     {isExpandedCls && (
                                                                         <div className="divide-y divide-slate-100 animate-fade-in border-t border-slate-100 bg-slate-50/20">
-                                                                            {clsExams.length === 0 && <div className="p-8 text-center text-slate-400 italic text-sm">Nenhuma prova nesta turma.</div>}
                                                                             {clsExams.map(exam => (
-                                                                                /* NÍVEL 4: PROVA - ITEM FINAL */
                                                                                 <div key={exam.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors group">
                                                                                     <div className="flex items-center gap-4">
                                                                                         <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>
@@ -409,25 +611,11 @@ const ExamsPage = () => {
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
-                                                                                    
                                                                                     <div className="flex items-center gap-3">
-                                                                                        <button 
-                                                                                            onClick={() => navigate('/exam-results', { state: { examId: exam.id } })}
-                                                                                            className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-400 transition-all shadow-sm"
-                                                                                        >
-                                                                                            Ver Resultados
-                                                                                        </button>
-                                                                                        
-                                                                                        <div className="flex items-center gap-1">
-                                                                                            <button onClick={() => openPublishModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Configurar Publicação Online">
-                                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                                                                                            </button>
-                                                                                            <button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Editar Prova">
-                                                                                                <Icons.Edit />
-                                                                                            </button>
-                                                                                            <button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir Prova">
-                                                                                                <Icons.Trash />
-                                                                                            </button>
+                                                                                        <button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm">Ver Resultados</button>
+                                                                                        <div className="flex gap-1">
+                                                                                            <button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Edit /></button>
+                                                                                            <button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Icons.Trash /></button>
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
@@ -449,14 +637,16 @@ const ExamsPage = () => {
                 })}
             </div>
 
-            {/* MODAL PRINCIPAL DO WIZARD */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Assistente de Prova" maxWidth="max-w-5xl" footer={
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Assistente de Prova" maxWidth="max-w-6xl" footer={
                 <div className="flex justify-between w-full">
                     {currentStep > 1 && <Button variant="ghost" onClick={() => setCurrentStep(s => s - 1)}>Voltar</Button>}
                     <div className="flex gap-2 ml-auto">
                         <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         {currentStep < 4 ? 
-                            <Button onClick={() => { if (currentStep === 2) handleAutoGenerate(); setCurrentStep(s => s + 1); }}>Próximo</Button> : 
+                            <Button onClick={() => { 
+                                if (currentStep === 2 && generationMode === 'AUTO') handleAutoGenerate(); 
+                                setCurrentStep(s => s + 1); 
+                            }}>Próximo</Button> : 
                             <Button onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Prova'}</Button>
                         }
                     </div>
@@ -474,35 +664,23 @@ const ExamsPage = () => {
                 {renderStepContent()}
             </Modal>
 
-            {/* MODAL DE CONFIGURAÇÃO ONLINE */}
-            <Modal isOpen={isPublishModalOpen} onClose={() => setIsPublishModalOpen(false)} title="Publicar Prova Online" footer={<Button onClick={async () => { const ex = exams.find(e => e.id === selectedExamId); if (ex) { await FirebaseService.saveExam({...ex, publicConfig: publishConfig as PublicExamConfig}); setIsPublishModalOpen(false); load(); } }}>Salvar Configuração</Button>}>
-                <div className="space-y-6">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
-                        Ao publicar, um link será gerado para que os alunos possam responder online.
-                        {selectedExamId && exams.find(e => e.id === selectedExamId)?.publicConfig?.isPublished && (
-                            <div className="mt-3 pt-3 border-t border-blue-200">
-                                <p className="text-xs font-bold uppercase text-blue-500 mb-1">Link para Alunos</p>
-                                <div className="flex gap-2">
-                                    <input type="text" readOnly value={`${window.location.origin}/#/p/${selectedExamId}`} className="flex-1 text-xs border border-blue-300 rounded px-2 py-1.5 bg-white text-slate-600" />
-                                    <Button variant="outline" className="h-8 text-xs" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/#/p/${selectedExamId}`); alert("Copiado!"); }}>Copiar</Button>
+            {/* PREVIEW QUESTION MODAL */}
+            {viewingQuestion && (
+                <Modal isOpen={true} onClose={() => setViewingQuestion(null)} title="Visualizar Questão" maxWidth="max-w-3xl" footer={<Button onClick={() => setViewingQuestion(null)}>Fechar</Button>}>
+                    <div className="space-y-6">
+                        <div className="prose prose-slate max-w-none p-6 bg-slate-50 rounded-xl border border-slate-200" dangerouslySetInnerHTML={{__html: viewingQuestion.enunciado}} />
+                        <div className="space-y-3">
+                            {viewingQuestion.options?.map((opt, i) => (
+                                <div key={i} className={`p-4 rounded-lg border flex gap-3 items-center ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
+                                    <span className="font-bold text-slate-400">{String.fromCharCode(65+i)})</span>
+                                    <span className="flex-1">{opt.text}</span>
+                                    {opt.isCorrect && <Badge color="green">Correta</Badge>}
                                 </div>
-                            </div>
-                        )}
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 mb-4">
-                        <input type="checkbox" id="pub" checked={publishConfig.isPublished || false} onChange={e => setPublishConfig({...publishConfig, isPublished: e.target.checked})} className="w-5 h-5 text-brand-blue rounded" />
-                        <label htmlFor="pub" className="font-bold text-slate-800">Prova Ativa (Aceitando respostas)</label>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Input label="Início" type="datetime-local" value={publishConfig.startDate || ''} onChange={e => setPublishConfig({...publishConfig, startDate: e.target.value})} />
-                        <Input label="Fim" type="datetime-local" value={publishConfig.endDate || ''} onChange={e => setPublishConfig({...publishConfig, endDate: e.target.value})} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Input label="Tempo Limite (minutos)" type="number" value={publishConfig.timeLimitMinutes || 0} onChange={e => setPublishConfig({...publishConfig, timeLimitMinutes: parseInt(e.target.value)})} />
-                        <Input label="Tentativas" type="number" min="1" value={publishConfig.allowedAttempts || 1} onChange={e => setPublishConfig({...publishConfig, allowedAttempts: parseInt(e.target.value)})} />
-                    </div>
-                </div>
-            </Modal>
+                </Modal>
+            )}
         </div>
     );
 };
