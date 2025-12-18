@@ -486,6 +486,9 @@ const ExamsPage = () => {
                 );
             case 4:
                 const questionsToShow = examVersions[activeVersion] || (generationMode === 'AUTO' ? generatedQuestions : allQuestions.filter(q => manualSelectedIds.has(q.id)));
+                const institution = institutions.find(i => i.id === editing.institutionId);
+                const classObj = classes.find(c => c.id === editing.classId);
+
                 return (
                     <div className="flex h-[70vh] animate-fade-in relative bg-slate-100 rounded-xl overflow-hidden border border-slate-200 print:h-auto print:block print:border-none print:bg-white">
                         {/* PAINEL DE CONTROLE LATERAL */}
@@ -627,17 +630,22 @@ const ExamsPage = () => {
                                         <div className="text-center mb-6 pt-8">
                                             <h1 className="font-black text-3xl uppercase tracking-[4px] border-b-4 border-black pb-2 mb-4">Cartão-Resposta</h1>
                                             
-                                            {/* EXAM DETAILS FOR TEACHER - REINFORCED */}
-                                            <div className="mb-6 text-left border-2 border-black p-4 bg-slate-50/50 flex justify-between items-start gap-4">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-black uppercase text-slate-600">Instituição:</p>
-                                                    <p className="text-base font-bold text-black uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'NÃO INFORMADA'}</p>
-                                                    <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Prova / Avaliação:</p>
-                                                    <p className="text-base font-bold text-black uppercase">{editing.title || 'AVALIAÇÃO SEM TÍTULO'}</p>
+                                            {/* EXAM DETAILS FOR TEACHER - REINFORCED WITH LOGO */}
+                                            <div className="mb-6 text-left border-2 border-black p-4 bg-slate-50/50 flex justify-between items-center gap-4">
+                                                <div className="flex items-center gap-4 flex-1">
+                                                    {institution?.logoUrl && (
+                                                        <img src={institution.logoUrl} className="w-16 h-16 object-contain shrink-0" alt="Inst Logo" />
+                                                    )}
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-black uppercase text-slate-600">Instituição:</p>
+                                                        <p className="text-base font-bold text-black uppercase">{institution?.name || 'NÃO INFORMADA'}</p>
+                                                        <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Prova / Avaliação:</p>
+                                                        <p className="text-base font-bold text-black uppercase">{editing.title || 'AVALIAÇÃO SEM TÍTULO'}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="text-right">
+                                                <div className="text-right shrink-0">
                                                     <p className="text-[10px] font-black uppercase text-slate-600">Turma:</p>
-                                                    <p className="text-base font-bold text-black uppercase">{classes.find(c => c.id === editing.classId)?.name || '________'}</p>
+                                                    <p className="text-base font-bold text-black uppercase">{classObj?.name || '________'}</p>
                                                     <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Versão / Modelo:</p>
                                                     <p className="text-base font-bold text-black uppercase">{activeVersion}</p>
                                                 </div>
@@ -667,22 +675,22 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
 
-                                        {/* BUBBLES GRID - OPTIMIZED FOR SCANNER AND SUBJECTIVE QUESTIONS */}
+                                        {/* BUBBLES GRID - REDUCED TO 2 COLUMNS TO PREVENT HORIZONTAL OVERLAP */}
                                         <div className="flex-1 px-4 py-4 mt-4 bg-white">
-                                            <div className="columns-3 gap-12 print:columns-3" style={{ columnRule: '1px dashed #ccc' }}>
+                                            <div className="grid grid-cols-2 gap-x-16 gap-y-6 print:grid-cols-2">
                                                 {questionsToShow.map((q, idx) => {
                                                     const isSubjective = q.type === QuestionType.SHORT_ANSWER;
                                                     return (
-                                                        <div key={q.id} className="flex items-center gap-3 mb-6 break-inside-avoid h-10">
-                                                            <span className="font-black text-lg w-7 text-right text-slate-800">{idx + 1}.</span>
-                                                            <div className="flex gap-2">
+                                                        <div key={q.id} className="flex items-center gap-4 break-inside-avoid h-10 border-b border-slate-50 pb-2">
+                                                            <span className="font-black text-xl w-8 text-right text-slate-800 shrink-0">{idx + 1}.</span>
+                                                            <div className="flex gap-3">
                                                                 {isSubjective ? (
-                                                                    <div className="h-9 flex items-center justify-center border-2 border-dashed border-slate-400 rounded px-3 bg-slate-50 w-[140px]">
-                                                                        <span className="text-[9px] font-black text-slate-500 tracking-tighter uppercase">[ DISSERTATIVA ]</span>
+                                                                    <div className="h-9 flex items-center justify-center border-2 border-dashed border-slate-400 rounded px-4 bg-slate-50 w-[180px]">
+                                                                        <span className="text-[10px] font-black text-slate-500 tracking-tighter uppercase">[ DISSERTATIVA ]</span>
                                                                     </div>
                                                                 ) : (
                                                                     ['A', 'B', 'C', 'D', 'E'].map(opt => (
-                                                                        <div key={opt} className="w-9 h-9 rounded-full border-2 border-black flex items-center justify-center text-sm font-black text-black/40">
+                                                                        <div key={opt} className="w-9 h-9 rounded-full border-2 border-black flex items-center justify-center text-sm font-black text-black/40 bg-white">
                                                                             {opt}
                                                                         </div>
                                                                     ))
