@@ -291,11 +291,33 @@ const ExamsPage = () => {
     const toggleYear = (id: string) => setExpandedYears(prev => ({ ...prev, [id]: !prev[id] }));
     const toggleClass = (id: string) => setExpandedClasses(prev => ({ ...prev, [id]: !prev[id] }));
 
+    const renderHeader = () => {
+        const inst = institutions.find(i => i.id === editing.institutionId);
+        const cls = classes.find(c => c.id === editing.classId);
+        return (
+            <div className="border-b-2 border-black pb-4 mb-8">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h1 className="text-2xl font-bold uppercase leading-tight">{inst?.name || 'Instituição'}</h1>
+                        <h2 className="text-xl font-bold mt-1">{editing.title}</h2>
+                    </div>
+                    {activeVersion !== 'ORIGINAL' && <Badge color="blue">MODELO {activeVersion}</Badge>}
+                </div>
+                <div className="mt-6 border-t border-gray-400 pt-4 flex flex-wrap gap-x-8 gap-y-3 text-[0.9em]">
+                    {printSettings.showName && <span className="w-full">Aluno(a): ____________________________________________________________________</span>}
+                    {printSettings.showClass && <span>Turma: {cls?.name || '________'}</span>}
+                    {printSettings.showDate && <span>Data: ____/____/____</span>}
+                    {printSettings.showScore && <span className="font-bold">Nota: ________</span>}
+                </div>
+            </div>
+        );
+    };
+
     const renderStepContent = () => {
         switch(currentStep) {
             case 1:
                 return (
-                    <div className="space-y-4 animate-fade-in">
+                    <div className="space-y-6 animate-fade-in">
                         <Input label="Título da Prova" value={editing.title || ''} onChange={e => setEditing({...editing, title: e.target.value})} placeholder="Ex: Avaliação de História" />
                         <div className="grid grid-cols-2 gap-4">
                             <Select label="Instituição" value={editing.institutionId || ''} onChange={e => setEditing({...editing, institutionId: e.target.value, classId: ''})}>
@@ -307,16 +329,55 @@ const ExamsPage = () => {
                                 {classes.filter(c => c.institutionId === editing.institutionId).map(c => <option key={c.id} value={c.id}>{c.name} ({c.year})</option>)}
                             </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Select label="Estilo de Prova" value={editing.columns || 1} onChange={e => setEditing({...editing, columns: Number(e.target.value) as 1 | 2})}>
-                                <option value={1}>1 Coluna (Padrão)</option>
-                                <option value={2}>2 Colunas (Economia)</option>
-                            </Select>
-                            <div className="flex items-center gap-2 mt-6">
-                                <input type="checkbox" id="showAnswerKey" checked={editing.showAnswerKey || false} onChange={e => setEditing({...editing, showAnswerKey: e.target.checked})} className="w-4 h-4 text-brand-blue rounded border-slate-300 focus:ring-brand-blue" />
-                                <label htmlFor="showAnswerKey" className="text-sm font-bold text-slate-700 cursor-pointer">Imprimir Gabarito ao Final</label>
+                        
+                        <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <label className="text-sm font-bold text-slate-700 mb-3 block">Estilo do Layout</label>
+                                <div className="flex gap-4">
+                                    <button 
+                                        onClick={() => setEditing({...editing, columns: 1})}
+                                        className={`flex-1 p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${editing.columns === 1 ? 'border-brand-blue bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                    >
+                                        <div className="w-12 h-16 bg-white border border-slate-300 rounded shadow-sm p-2 flex flex-col gap-1.5">
+                                            <div className="h-1 w-full bg-slate-200"></div>
+                                            <div className="h-1 w-full bg-slate-200"></div>
+                                            <div className="h-1 w-full bg-slate-200"></div>
+                                            <div className="h-1 w-full bg-slate-200"></div>
+                                        </div>
+                                        <span className={`text-xs font-bold ${editing.columns === 1 ? 'text-brand-blue' : 'text-slate-500'}`}>Padrão (1 Col)</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setEditing({...editing, columns: 2})}
+                                        className={`flex-1 p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${editing.columns === 2 ? 'border-brand-blue bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                    >
+                                        <div className="w-12 h-16 bg-white border border-slate-300 rounded shadow-sm p-2 flex gap-1">
+                                            <div className="flex flex-col gap-1 w-1/2">
+                                                <div className="h-1 w-full bg-slate-200"></div>
+                                                <div className="h-1 w-full bg-slate-200"></div>
+                                                <div className="h-1 w-full bg-slate-200"></div>
+                                            </div>
+                                            <div className="w-px bg-slate-100 h-full"></div>
+                                            <div className="flex flex-col gap-1 w-1/2">
+                                                <div className="h-1 w-full bg-slate-200"></div>
+                                                <div className="h-1 w-full bg-slate-200"></div>
+                                                <div className="h-1 w-full bg-slate-200"></div>
+                                            </div>
+                                        </div>
+                                        <span className={`text-xs font-bold ${editing.columns === 2 ? 'text-brand-blue' : 'text-slate-500'}`}>Economia (2 Col)</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex flex-col justify-center">
+                                <label className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                                    <input type="checkbox" checked={editing.showAnswerKey || false} onChange={e => setEditing({...editing, showAnswerKey: e.target.checked})} className="w-5 h-5 text-brand-blue rounded focus:ring-brand-blue" />
+                                    <div>
+                                        <span className="block text-sm font-bold text-slate-700">Imprimir Gabarito</span>
+                                        <span className="block text-xs text-slate-500">Gera uma página extra com as respostas.</span>
+                                    </div>
+                                </label>
                             </div>
                         </div>
+
                         <Input label="Cabeçalho (Subtítulo)" value={editing.headerText || ''} onChange={e => setEditing({...editing, headerText: e.target.value})} placeholder="Ex: Professor João Silva" />
                         <RichTextEditor label="Instruções" value={editing.instructions || ''} onChange={html => setEditing({...editing, instructions: html})} />
                     </div>
@@ -422,6 +483,7 @@ const ExamsPage = () => {
                 const questionsToShow = examVersions[activeVersion] || (generationMode === 'AUTO' ? generatedQuestions : allQuestions.filter(q => manualSelectedIds.has(q.id)));
                 return (
                     <div className="flex h-[70vh] animate-fade-in relative bg-slate-100 rounded-xl overflow-hidden border border-slate-200 print:h-auto print:block print:border-none print:bg-white">
+                        {/* PAINEL DE CONTROLE LATERAL */}
                         <div className="w-80 bg-white border-r border-slate-200 flex flex-col h-full print:hidden">
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
                                 <div>
@@ -499,26 +561,13 @@ const ExamsPage = () => {
                             </div>
                         </div>
 
+                        {/* ÁREA DE VISUALIZAÇÃO A4 */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-10 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible">
                             <div className={`bg-white shadow-2xl mx-auto p-[20mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:p-0 ${viewMode === 'EXAM' ? printSettings.fontSize : 'text-sm'}`}>
                                 {viewMode === 'EXAM' ? (
                                     <>
-                                        <div className="border-b-2 border-black pb-4 mb-8">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h1 className="text-2xl font-bold uppercase leading-tight">{institutions.find(i => i.id === editing.institutionId)?.name || 'Instituição'}</h1>
-                                                    <h2 className="text-xl font-bold mt-1">{editing.title}</h2>
-                                                </div>
-                                                {activeVersion !== 'ORIGINAL' && <Badge color="blue">MODELO {activeVersion}</Badge>}
-                                            </div>
-                                            <div className="mt-6 border-t border-gray-400 pt-4 flex flex-wrap gap-x-8 gap-y-3 text-[0.9em]">
-                                                {printSettings.showName && <span className="w-full">Aluno(a): ____________________________________________________________________</span>}
-                                                {printSettings.showClass && <span>Turma: {classes.find(c => c.id === editing.classId)?.name || '________'}</span>}
-                                                {printSettings.showDate && <span>Data: ____/____/____</span>}
-                                                {printSettings.showScore && <span className="font-bold">Nota: ________</span>}
-                                            </div>
-                                        </div>
-                                        <div className={`space-y-8 ${editing.columns === 2 ? 'columns-2 gap-8' : ''}`}>
+                                        {renderHeader()}
+                                        <div className={`space-y-8 ${editing.columns === 2 ? 'columns-2 gap-10' : ''}`} style={editing.columns === 2 ? { columnRule: '1px solid #000' } : {}}>
                                             {questionsToShow.map((q, i) => (
                                                 <div key={q.id} className="break-inside-avoid mb-6">
                                                     <div className="flex gap-2">
@@ -539,15 +588,22 @@ const ExamsPage = () => {
                                             ))}
                                         </div>
                                         {editing.showAnswerKey && (
-                                            <div className="mt-12 pt-8 border-t border-black break-before-page">
-                                                <h3 className="font-bold text-lg mb-4 uppercase">Gabarito Oficial</h3>
-                                                <div className="grid grid-cols-5 gap-4">
+                                            <div className="mt-12 pt-8 border-t border-black print:break-before-page">
+                                                {/* Header Repetido para o Gabarito */}
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h3 className="font-bold text-lg uppercase">Gabarito Oficial</h3>
+                                                        <p className="text-sm font-medium">{editing.title}</p>
+                                                    </div>
+                                                    <Badge color="green">CHAVE DE RESPOSTAS</Badge>
+                                                </div>
+                                                <div className="grid grid-cols-5 gap-6 border-t border-slate-100 pt-4">
                                                     {questionsToShow.map((q, i) => {
                                                         const correctIdx = q.options?.findIndex(o => o.isCorrect) ?? -1;
                                                         return (
-                                                            <div key={i} className="flex gap-2 text-sm">
-                                                                <span className="font-bold">{i+1}:</span>
-                                                                <span>{correctIdx >= 0 ? String.fromCharCode(65+correctIdx) : '-'}</span>
+                                                            <div key={i} className="flex flex-col border border-slate-200 p-2 rounded text-center">
+                                                                <span className="text-[10px] font-bold text-slate-500 uppercase">Questão {i+1}</span>
+                                                                <span className="text-xl font-black text-brand-blue">{correctIdx >= 0 ? String.fromCharCode(65+correctIdx) : '-'}</span>
                                                             </div>
                                                         );
                                                     })}
