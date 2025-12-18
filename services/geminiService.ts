@@ -89,7 +89,6 @@ export const GeminiService = {
         try {
             const ai = getClient();
             
-            // Schema para retornar uma lista de questões
             const schema: Schema = {
                 type: Type.ARRAY,
                 items: {
@@ -122,7 +121,6 @@ export const GeminiService = {
                 """
                 ${text.substring(0, 30000)} 
                 """
-                (O texto foi truncado se for muito longo).
             `;
 
             const response = await ai.models.generateContent({
@@ -136,7 +134,6 @@ export const GeminiService = {
                 }
             });
 
-            // TRACK USAGE
             FirebaseService.trackAiUsage();
 
             if (response.text) {
@@ -162,7 +159,6 @@ export const GeminiService = {
     checkSimilarity: async (newQuestionText: string, candidates: Question[]): Promise<{ isDuplicate: boolean, score: number, matchId?: string, reason?: string }> => {
         try {
             if (candidates.length === 0) return { isDuplicate: false, score: 0 };
-
             const ai = getClient();
             
             const candidatesJson = candidates.map(c => ({
@@ -178,10 +174,6 @@ export const GeminiService = {
                 CANDIDATAS:
                 ${JSON.stringify(candidatesJson)}
                 
-                Critérios:
-                - Se for a mesma pergunta com palavras levemente diferentes -> Duplicada.
-                - Se for sobre o mesmo assunto mas pergunta diferente -> Não duplicada.
-                
                 Responda APENAS o JSON.
             `;
 
@@ -190,8 +182,8 @@ export const GeminiService = {
                 properties: {
                     isDuplicate: { type: Type.BOOLEAN },
                     matchId: { type: Type.STRING, nullable: true },
-                    score: { type: Type.NUMBER, description: "Similarity score from 0 to 100" },
-                    reason: { type: Type.STRING, description: "Why it is considered duplicate" }
+                    score: { type: Type.NUMBER },
+                    reason: { type: Type.STRING }
                 },
                 required: ["isDuplicate", "score"]
             };
@@ -206,7 +198,6 @@ export const GeminiService = {
                 }
             });
 
-            // TRACK USAGE
             FirebaseService.trackAiUsage();
 
             if (response.text) {
@@ -226,29 +217,28 @@ export const GeminiService = {
             const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
 
             const prompt = `
-                AJA COMO UM SCANNER DE GABARITO DE ALTA PRECISÃO.
-                Esta imagem contém um Cartão-Resposta formatado com:
-                1. Quatro marcadores pretos sólidos nos cantos (âncoras de orientação).
-                2. Uma grade de bolhas organizada em 3 COLUNAS VERTICAIS.
+                VOCÊ É UM SCANNER DE GABARITOS DE ALTA PRECISÃO.
                 
-                SUA TAREFA:
-                1. Oriente a imagem usando os 4 quadrados pretos nos cantos.
-                2. Detecte o NOME do aluno escrito no campo superior esquerdo.
-                3. Examine cada linha de questão de 1 a ${totalQuestions}. 
-                4. Identifique qual letra (A, B, C, D ou E) está preenchida/pintada com caneta escura.
+                ESTRUTURA DA IMAGEM:
+                1. Quatro quadrados pretos nos cantos (âncoras). Use-os para alinhar a perspectiva.
+                2. Layout de questões em 3 COLUNAS VERTICAIS.
+                3. Algumas linhas de questão podem conter o texto '[ DISSERTATIVA ]' em vez de bolhas de marcação.
                 
-                REGRAS DE LEITURA:
-                - As questões estão dispostas em colunas: Coluna 1 (1-10), Coluna 2 (11-20), etc (dependendo do total).
-                - Considere marcada a bolha que tiver o maior preenchimento escuro.
-                - Se houver dúvida ou vazio, retorne null para aquela questão.
+                SUA MISSÃO:
+                1. Identificar o NOME do aluno escrito no campo superior.
+                2. Para cada questão de 1 até ${totalQuestions}:
+                   - Se houver bolhas (A, B, C, D, E), identifique qual está pintada.
+                   - Se a linha contiver '[ DISSERTATIVA ]', retorne null para essa resposta.
+                   - Ignore borrões e considere o preenchimento mais escuro e centralizado.
                 
                 Retorne APENAS um JSON:
                 {
-                    "studentName": "Nome do Aluno ou string vazia",
+                    "studentName": "Nome Extraído",
                     "answers": {
                         "1": "A",
-                        "2": "D",
-                        ... até ${totalQuestions}
+                        "2": null,
+                        "3": "C"
+                        ... (até ${totalQuestions})
                     }
                 }
             `;
@@ -256,11 +246,10 @@ export const GeminiService = {
             const schema: Schema = {
                 type: Type.OBJECT,
                 properties: {
-                    studentName: { type: Type.STRING, nullable: true },
+                    studentName: { type: Type.STRING },
                     answers: {
                         type: Type.OBJECT,
-                        nullable: false,
-                        description: "Dicionário onde a chave é o número da questão e o valor é a letra preenchida (A, B, C, D, E ou null)"
+                        description: "Chave é o número da questão, valor é a letra (A, B, C, D, E) ou null"
                     }
                 },
                 required: ["answers"]

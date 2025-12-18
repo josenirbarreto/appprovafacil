@@ -155,7 +155,7 @@ const ExamsPage = () => {
         setActiveVersion('ORIGINAL');
     };
 
-    const handleOpenModal = (exam?: Exam) => {
+    const handleOpenModal = (exam?: Exam, startAtStep: number = 1) => {
         if (exam) {
             setEditing(exam);
             setTempScopes(exam.contentScopes || []);
@@ -169,7 +169,7 @@ const ExamsPage = () => {
             setManualSelectedIds(new Set());
             setGenerationMode('AUTO');
         }
-        setCurrentStep(1);
+        setCurrentStep(startAtStep);
         setViewMode('EXAM');
         setIsModalOpen(true);
     };
@@ -297,9 +297,14 @@ const ExamsPage = () => {
         return (
             <div className="border-b-2 border-black pb-4 mb-8">
                 <div className="flex justify-between items-start">
-                    <div>
-                        <h1 className="text-2xl font-bold uppercase leading-tight">{inst?.name || 'Instituição'}</h1>
-                        <h2 className="text-xl font-bold mt-1">{editing.title}</h2>
+                    <div className="flex items-center gap-6">
+                        {inst?.logoUrl && (
+                            <img src={inst.logoUrl} alt="Logo" className="w-20 h-20 object-contain" />
+                        )}
+                        <div>
+                            <h1 className="text-2xl font-bold uppercase leading-tight">{inst?.name || 'Instituição'}</h1>
+                            <h2 className="text-xl font-bold mt-1">{editing.title}</h2>
+                        </div>
                     </div>
                     {activeVersion !== 'ORIGINAL' && <Badge color="blue">MODELO {activeVersion}</Badge>}
                 </div>
@@ -614,27 +619,27 @@ const ExamsPage = () => {
                                 ) : (
                                     <div className="relative flex flex-col h-[297mm] p-8 border-[1px] border-transparent print:p-8 overflow-hidden bg-white">
                                         {/* CORNER MARKERS - ENLARGED FOR BETTER AI DETECTION */}
-                                        <div className="absolute top-4 left-4 w-10 h-10 bg-black"></div>
-                                        <div className="absolute top-4 right-4 w-10 h-10 bg-black"></div>
-                                        <div className="absolute bottom-4 left-4 w-10 h-10 bg-black"></div>
-                                        <div className="absolute bottom-4 right-4 w-10 h-10 bg-black"></div>
+                                        <div className="absolute top-4 left-4 w-12 h-12 bg-black"></div>
+                                        <div className="absolute top-4 right-4 w-12 h-12 bg-black"></div>
+                                        <div className="absolute bottom-4 left-4 w-12 h-12 bg-black"></div>
+                                        <div className="absolute bottom-4 right-4 w-12 h-12 bg-black"></div>
 
-                                        <div className="text-center mb-6 pt-6">
+                                        <div className="text-center mb-6 pt-8">
                                             <h1 className="font-black text-3xl uppercase tracking-[4px] border-b-4 border-black pb-2 mb-4">Cartão-Resposta</h1>
                                             
-                                            {/* EXAM DETAILS FOR TEACHER */}
-                                            <div className="mb-4 text-left border border-black p-3 bg-slate-50/50 flex justify-between items-start gap-4">
+                                            {/* EXAM DETAILS FOR TEACHER - REINFORCED */}
+                                            <div className="mb-6 text-left border-2 border-black p-4 bg-slate-50/50 flex justify-between items-start gap-4">
                                                 <div className="space-y-1">
                                                     <p className="text-[10px] font-black uppercase text-slate-600">Instituição:</p>
-                                                    <p className="text-sm font-bold text-black uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'NÃO INFORMADA'}</p>
+                                                    <p className="text-base font-bold text-black uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'NÃO INFORMADA'}</p>
                                                     <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Prova / Avaliação:</p>
-                                                    <p className="text-sm font-bold text-black uppercase">{editing.title || 'AVALIAÇÃO SEM TÍTULO'}</p>
+                                                    <p className="text-base font-bold text-black uppercase">{editing.title || 'AVALIAÇÃO SEM TÍTULO'}</p>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-[10px] font-black uppercase text-slate-600">Turma:</p>
-                                                    <p className="text-sm font-bold text-black uppercase">{classes.find(c => c.id === editing.classId)?.name || '________'}</p>
-                                                    <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Versão:</p>
-                                                    <p className="text-sm font-bold text-black uppercase">{activeVersion}</p>
+                                                    <p className="text-base font-bold text-black uppercase">{classes.find(c => c.id === editing.classId)?.name || '________'}</p>
+                                                    <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Versão / Modelo:</p>
+                                                    <p className="text-base font-bold text-black uppercase">{activeVersion}</p>
                                                 </div>
                                             </div>
 
@@ -657,31 +662,40 @@ const ExamsPage = () => {
                                                 </div>
                                                 <div className="border-4 border-black p-2 bg-white flex flex-col items-center shrink-0 shadow-sm">
                                                     <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-20 h-20 block" />
-                                                    <span className="text-[9px] font-mono mt-1 font-black">EXAM-ID: {editing.id?.slice(0,8).toUpperCase() || 'PF-SYSTEM'}</span>
+                                                    <span className="text-[9px] font-mono mt-1 font-black">ID: {editing.id?.slice(0,8).toUpperCase() || 'PF-SYSTEM'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* BUBBLES GRID - OPTIMIZED FOR SCANNER */}
+                                        {/* BUBBLES GRID - OPTIMIZED FOR SCANNER AND SUBJECTIVE QUESTIONS */}
                                         <div className="flex-1 px-4 py-4 mt-4 bg-white">
                                             <div className="columns-3 gap-12 print:columns-3" style={{ columnRule: '1px dashed #ccc' }}>
-                                                {questionsToShow.map((q, idx) => (
-                                                    <div key={q.id} className="flex items-center gap-3 mb-5 break-inside-avoid">
-                                                        <span className="font-black text-lg w-7 text-right text-slate-800">{idx + 1}.</span>
-                                                        <div className="flex gap-2">
-                                                            {['A', 'B', 'C', 'D', 'E'].map(opt => (
-                                                                <div key={opt} className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center text-xs font-black text-black/40">
-                                                                    {opt}
-                                                                </div>
-                                                            ))}
+                                                {questionsToShow.map((q, idx) => {
+                                                    const isSubjective = q.type === QuestionType.SHORT_ANSWER;
+                                                    return (
+                                                        <div key={q.id} className="flex items-center gap-3 mb-6 break-inside-avoid h-10">
+                                                            <span className="font-black text-lg w-7 text-right text-slate-800">{idx + 1}.</span>
+                                                            <div className="flex gap-2">
+                                                                {isSubjective ? (
+                                                                    <div className="h-9 flex items-center justify-center border-2 border-dashed border-slate-400 rounded px-3 bg-slate-50 w-[140px]">
+                                                                        <span className="text-[9px] font-black text-slate-500 tracking-tighter uppercase">[ DISSERTATIVA ]</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    ['A', 'B', 'C', 'D', 'E'].map(opt => (
+                                                                        <div key={opt} className="w-9 h-9 rounded-full border-2 border-black flex items-center justify-center text-sm font-black text-black/40">
+                                                                            {opt}
+                                                                        </div>
+                                                                    ))
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
 
-                                        <div className="text-center text-[10px] text-slate-600 font-mono uppercase tracking-[3px] mt-auto pt-4 border-t-2 border-slate-200">
-                                            COMPATÍVEL COM SCANNER PROVA FÁCIL • CORREÇÃO DIGITAL HABILITADA
+                                        <div className="text-center text-[11px] text-slate-700 font-mono uppercase tracking-[3px] mt-auto pt-6 border-t-4 border-black">
+                                            SISTEMA PROVA FÁCIL • TECNOLOGIA DE CORREÇÃO DIGITAL
                                         </div>
                                     </div>
                                 )}
@@ -772,6 +786,7 @@ const ExamsPage = () => {
                                                                                     <div className="flex items-center gap-3">
                                                                                         <button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm">Ver Resultados</button>
                                                                                         <div className="flex gap-1">
+                                                                                            <button onClick={() => handleOpenModal(exam, 4)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Imprimir Prova"><Icons.Printer /></button>
                                                                                             <button onClick={() => openPublishModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Configurar Prova Online"><Icons.Share /></button>
                                                                                             <button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Edit /></button>
                                                                                             <button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Icons.Trash /></button>
