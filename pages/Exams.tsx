@@ -64,6 +64,20 @@ const ExamsPage = () => {
         showScore: true
     });
 
+    // States for the publishing modal
+    const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+    const [publishingExam, setPublishingExam] = useState<Exam | null>(null);
+    const [publishConfig, setPublishConfig] = useState<PublicExamConfig>({
+        isPublished: false,
+        startDate: '',
+        endDate: '',
+        timeLimitMinutes: 0,
+        allowedAttempts: 1,
+        randomizeQuestions: true,
+        requireIdentifier: false,
+        showFeedback: true
+    });
+
     // Accordion States
     const [expandedInstitutions, setExpandedInstitutions] = useState<Record<string, boolean>>({});
     const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
@@ -161,6 +175,46 @@ const ExamsPage = () => {
         setIsModalOpen(true);
     };
 
+    const openPublishModal = (exam: Exam) => {
+        setPublishingExam(exam);
+        const now = new Date();
+        const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        
+        if (exam.publicConfig) {
+            setPublishConfig(exam.publicConfig);
+        } else {
+            setPublishConfig({
+                isPublished: true,
+                startDate: now.toISOString().slice(0, 16),
+                endDate: nextWeek.toISOString().slice(0, 16),
+                timeLimitMinutes: 60,
+                allowedAttempts: 1,
+                randomizeQuestions: true,
+                requireIdentifier: false,
+                showFeedback: true
+            });
+        }
+        setIsPublishModalOpen(true);
+    };
+
+    const handleSavePublish = async () => {
+        if (!publishingExam) return;
+        setSaving(true);
+        try {
+            await FirebaseService.saveExam({
+                ...publishingExam,
+                publicConfig: publishConfig
+            });
+            setIsPublishModalOpen(false);
+            load();
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao publicar prova.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleAddScope = () => {
         if (!selectedDisc) return;
         const disc = hierarchy.find(d => d.id === selectedDisc);
@@ -253,6 +307,16 @@ const ExamsPage = () => {
                                 <option value="">Selecione...</option>
                                 {classes.filter(c => c.institutionId === editing.institutionId).map(c => <option key={c.id} value={c.id}>{c.name} ({c.year})</option>)}
                             </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Select label="Estilo de Prova" value={editing.columns || 1} onChange={e => setEditing({...editing, columns: Number(e.target.value) as 1 | 2})}>
+                                <option value={1}>1 Coluna (Padrão)</option>
+                                <option value={2}>2 Colunas (Economia)</option>
+                            </Select>
+                            <div className="flex items-center gap-2 mt-6">
+                                <input type="checkbox" id="showAnswerKey" checked={editing.showAnswerKey || false} onChange={e => setEditing({...editing, showAnswerKey: e.target.checked})} className="w-4 h-4 text-brand-blue rounded border-slate-300 focus:ring-brand-blue" />
+                                <label htmlFor="showAnswerKey" className="text-sm font-bold text-slate-700 cursor-pointer">Imprimir Gabarito ao Final</label>
+                            </div>
                         </div>
                         <Input label="Cabeçalho (Subtítulo)" value={editing.headerText || ''} onChange={e => setEditing({...editing, headerText: e.target.value})} placeholder="Ex: Professor João Silva" />
                         <RichTextEditor label="Instruções" value={editing.instructions || ''} onChange={html => setEditing({...editing, instructions: html})} />
@@ -365,8 +429,8 @@ const ExamsPage = () => {
                                 <div>
                                     <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Icons.Printer /> Impressão</h4>
                                     <div className="flex bg-slate-100 p-1 rounded-lg mb-6">
-                                        <button onClick={() => setViewMode('EXAM')} className={`flex-1 py-1.5 text-xs font-bold rounded-md ${viewMode === 'EXAM' ? 'bg-white shadow text-brand-blue' : 'text-slate-50'}`}>Prova</button>
-                                        <button onClick={() => setViewMode('ANSWER_SHEET')} className={`flex-1 py-1.5 text-xs font-bold rounded-md ${viewMode === 'ANSWER_SHEET' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}>Gabarito</button>
+                                        <button onClick={() => setViewMode('EXAM')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'EXAM' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}>Prova</button>
+                                        <button onClick={() => setViewMode('ANSWER_SHEET')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'ANSWER_SHEET' ? 'bg-white shadow text-brand-blue' : 'text-slate-500'}`}>Cartão-Resposta</button>
                                     </div>
 
                                     {viewMode === 'EXAM' ? (
@@ -460,9 +524,9 @@ const ExamsPage = () => {
                                                 {printSettings.showScore && <span className="font-bold">Nota: ________</span>}
                                             </div>
                                         </div>
-                                        <div className="space-y-8">
+                                        <div className={`space-y-8 ${editing.columns === 2 ? 'columns-2 gap-8' : ''}`}>
                                             {questionsToShow.map((q, i) => (
-                                                <div key={q.id} className="break-inside-avoid">
+                                                <div key={q.id} className="break-inside-avoid mb-6">
                                                     <div className="flex gap-2">
                                                         <strong className="shrink-0">{i + 1}.</strong>
                                                         <div className="inline rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
@@ -480,6 +544,22 @@ const ExamsPage = () => {
                                                 </div>
                                             ))}
                                         </div>
+                                        {editing.showAnswerKey && (
+                                            <div className="mt-12 pt-8 border-t border-black break-before-page">
+                                                <h3 className="font-bold text-lg mb-4 uppercase">Gabarito Oficial</h3>
+                                                <div className="grid grid-cols-5 gap-4">
+                                                    {questionsToShow.map((q, i) => {
+                                                        const correctIdx = q.options?.findIndex(o => o.isCorrect) ?? -1;
+                                                        return (
+                                                            <div key={i} className="flex gap-2 text-sm">
+                                                                <span className="font-bold">{i+1}:</span>
+                                                                <span>{correctIdx >= 0 ? String.fromCharCode(65+correctIdx) : '-'}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     <div className="relative flex flex-col h-full min-h-[297mm] p-6 border-[3mm] border-transparent">
@@ -614,6 +694,7 @@ const ExamsPage = () => {
                                                                                     <div className="flex items-center gap-3">
                                                                                         <button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm">Ver Resultados</button>
                                                                                         <div className="flex gap-1">
+                                                                                            <button onClick={() => openPublishModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Megaphone /></button>
                                                                                             <button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Edit /></button>
                                                                                             <button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Icons.Trash /></button>
                                                                                         </div>
@@ -662,6 +743,81 @@ const ExamsPage = () => {
                     ))}
                 </div>
                 {renderStepContent()}
+            </Modal>
+
+            {/* MODAL CONFIGURAÇÃO PROVA ONLINE */}
+            <Modal
+                isOpen={isPublishModalOpen}
+                onClose={() => setIsPublishModalOpen(false)}
+                title="Configurações da Prova Online"
+                maxWidth="max-w-2xl"
+                footer={<Button onClick={handleSavePublish} disabled={saving}>{saving ? 'Publicando...' : 'Salvar Configurações'}</Button>}
+            >
+                <div className="space-y-6">
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icons.Megaphone />
+                            <h4 className="font-bold text-blue-800">Prova Online: {publishingExam?.title}</h4>
+                        </div>
+                        <p className="text-sm text-blue-700">Configure como os alunos poderão acessar e realizar esta prova pela internet.</p>
+                    </div>
+
+                    <div className="flex items-center justify-between border p-4 rounded-lg bg-slate-50">
+                        <div>
+                            <h4 className="font-bold text-slate-800">Status de Publicação</h4>
+                            <p className="text-xs text-slate-500">Se ativo, a prova poderá ser acessada via link público.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold ${publishConfig.isPublished ? 'text-green-600' : 'text-slate-400'}`}>
+                                {publishConfig.isPublished ? 'PUBLICADO' : 'OCULTO'}
+                            </span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" className="sr-only peer" checked={publishConfig.isPublished} onChange={e => setPublishConfig({ ...publishConfig, isPublished: e.target.checked })} />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Data/Hora de Início" type="datetime-local" value={publishConfig.startDate} onChange={e => setPublishConfig({...publishConfig, startDate: e.target.value})} />
+                        <Input label="Data/Hora de Fim" type="datetime-local" value={publishConfig.endDate} onChange={e => setPublishConfig({...publishConfig, endDate: e.target.value})} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Tempo Limite (Minutos, 0 = Sem limite)" type="number" value={publishConfig.timeLimitMinutes} onChange={e => setPublishConfig({...publishConfig, timeLimitMinutes: Number(e.target.value)})} />
+                        <Input label="Máximo de Tentativas" type="number" min="1" value={publishConfig.allowedAttempts} onChange={e => setPublishConfig({...publishConfig, allowedAttempts: Number(e.target.value)})} />
+                    </div>
+
+                    <div className="space-y-3 bg-slate-50 p-4 rounded-xl">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" checked={publishConfig.randomizeQuestions} onChange={e => setPublishConfig({...publishConfig, randomizeQuestions: e.target.checked})} className="w-4 h-4 text-brand-blue rounded border-slate-300" />
+                            <span className="text-sm font-semibold text-slate-700">Embaralhar Questões e Alternativas (Anti-cola)</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" checked={publishConfig.requireIdentifier} onChange={e => setPublishConfig({...publishConfig, requireIdentifier: e.target.checked})} className="w-4 h-4 text-brand-blue rounded border-slate-300" />
+                            <span className="text-sm font-semibold text-slate-700">Exigir Matrícula/ID único do aluno</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" checked={publishConfig.showFeedback} onChange={e => setPublishConfig({...publishConfig, showFeedback: e.target.checked})} className="w-4 h-4 text-brand-blue rounded border-slate-300" />
+                            <span className="text-sm font-semibold text-slate-700">Mostrar Nota Preliminar ao finalizar</span>
+                        </label>
+                    </div>
+
+                    {publishConfig.isPublished && publishingExam?.id && (
+                        <div className="p-4 bg-white border border-brand-blue/20 rounded-xl shadow-sm">
+                            <h5 className="text-xs font-bold text-brand-blue uppercase mb-2">Link da Prova Online</h5>
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-slate-50 px-3 py-2 rounded border border-slate-200 text-xs font-mono text-slate-600 truncate">
+                                    {`${window.location.origin}/#/p/${publishingExam.id}`}
+                                </div>
+                                <Button variant="outline" className="text-xs h-8" onClick={() => {
+                                    navigator.clipboard.writeText(`${window.location.origin}/#/p/${publishingExam.id}`);
+                                    alert("Link copiado!");
+                                }}>Copiar Link</Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </Modal>
 
             {/* PREVIEW QUESTION MODAL */}
