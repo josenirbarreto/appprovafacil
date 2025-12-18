@@ -221,7 +221,7 @@ export const GeminiService = {
                 
                 ESTRUTURA DA IMAGEM:
                 1. Quatro quadrados pretos nos cantos (âncoras). Use-os para alinhar a perspectiva.
-                2. Layout de questões em 3 COLUNAS VERTICAIS.
+                2. Layout de questões em 2 COLUNAS VERTICAIS (Lado a Lado).
                 3. Algumas linhas de questão podem conter o texto '[ DISSERTATIVA ]' em vez de bolhas de marcação.
                 
                 SUA MISSÃO:

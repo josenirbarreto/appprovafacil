@@ -61,68 +61,84 @@ const ExamResults = () => {
     };
 
     // --- ITEM ANALYSIS CALCULATIONS ---
-    const itemAnalysis = useMemo(() => {
+    const analysisData = useMemo(() => {
         if (!exam || attempts.length === 0) return [];
 
-        return exam.questions.map((q, idx) => {
+        const questionsAnalysis = exam.questions.map((q, idx) => {
             const totalResponses = attempts.length;
             let correctCount = 0;
-            const distractorCounts: Record<string, number> = {};
+            const optionCounts: Record<string, number> = {};
 
-            // Initialize counts for all options
-            q.options?.forEach(opt => {
-                distractorCounts[opt.id] = 0;
-            });
+            // Inicializa contadores para opções de múltipla escolha
+            if (q.type === QuestionType.MULTIPLE_CHOICE && q.options) {
+                q.options.forEach(opt => {
+                    optionCounts[opt.id] = 0;
+                });
+            }
 
             attempts.forEach(attempt => {
                 const answer = attempt.answers[q.id];
                 if (!answer) return;
 
+                // Verifica acerto
                 const correctOpt = q.options?.find(o => o.isCorrect);
                 if (correctOpt && (answer === correctOpt.id || answer === correctOpt.text)) {
                     correctCount++;
                 }
 
-                // If multiple choice, track which specific options were picked
-                if (q.type === QuestionType.MULTIPLE_CHOICE) {
-                    // Try to find if answer matches an ID or Text
-                    const matchedOpt = q.options?.find(o => o.id === answer || o.text === answer);
+                // Conta marcações por opção (para distratores)
+                if (q.type === QuestionType.MULTIPLE_CHOICE && q.options) {
+                    const matchedOpt = q.options.find(o => o.id === answer || o.text === answer);
                     if (matchedOpt) {
-                        distractorCounts[matchedOpt.id] = (distractorCounts[matchedOpt.id] || 0) + 1;
+                        optionCounts[matchedOpt.id]++;
                     }
                 }
             });
 
             const successRate = (correctCount / totalResponses) * 100;
             
-            // Find most chosen WRONG option (Distrator)
-            let mainDistractorId = '';
+            // Identifica o principal distrator (pegadinha)
+            let mainDistractor = null;
             let maxDistractorVotes = 0;
-            q.options?.forEach(opt => {
-                if (!opt.isCorrect && distractorCounts[opt.id] > maxDistractorVotes) {
-                    maxDistractorVotes = distractorCounts[opt.id];
-                    mainDistractorId = opt.id;
-                }
-            });
+
+            if (q.options) {
+                q.options.forEach(opt => {
+                    if (!opt.isCorrect && optionCounts[opt.id] > maxDistractorVotes) {
+                        maxDistractorVotes = optionCounts[opt.id];
+                        mainDistractor = opt;
+                    }
+                });
+            }
 
             return {
                 question: q,
                 index: idx + 1,
-                totalResponses,
                 correctCount,
                 successRate,
-                distractorCounts,
-                mainDistractor: q.options?.find(o => o.id === mainDistractorId),
+                optionCounts,
+                mainDistractor,
                 distractorVotes: maxDistractorVotes
             };
-        }).sort((a, b) => a.successRate - b.successRate); // Most difficult first
+        });
+
+        return questionsAnalysis;
     }, [exam, attempts]);
+
+    const criticalQuestion = useMemo(() => {
+        if (analysisData.length === 0) return null;
+        return [...analysisData].sort((a, b) => a.successRate - b.successRate)[0];
+    }, [analysisData]);
+
+    const mainTrap = useMemo(() => {
+        if (analysisData.length === 0) return null;
+        return [...analysisData].sort((a, b) => b.distractorVotes - a.distractorVotes)[0];
+    }, [analysisData]);
 
     // --- CAMERA FUNCTIONS ---
     const startCamera = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment' } // Prefer back camera
+                video: { facingMode: 'environment' } 
             });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
@@ -179,7 +195,6 @@ const ExamResults = () => {
                     const detectedOption = result.answers[qIndex];
                     
                     if (detectedOption) {
-                        const correctOpt = q.options?.find(o => o.isCorrect);
                         const correctIndex = q.options?.findIndex(o => o.isCorrect);
                         const letterMap = ['A', 'B', 'C', 'D', 'E'];
                         const correctLetter = correctIndex !== undefined && correctIndex >= 0 ? letterMap[correctIndex] : null;
@@ -285,39 +300,29 @@ const ExamResults = () => {
                 </div>
             </div>
 
-            {/* Cabeçalho Exclusivo de Impressão */}
-            <div className="hidden print:block mb-6 border-b-2 border-black pb-4">
-                <h1 className="text-2xl font-bold uppercase text-black">{exam?.title}</h1>
-                <h2 className="text-lg text-black mt-1">Relatório Consolidado da Turma</h2>
-                <div className="flex justify-between mt-4 text-sm font-mono border-t border-gray-300 pt-2">
-                    <span>Data: {new Date().toLocaleDateString()}</span>
-                    <span>Total Alunos: {attempts.length} | Média: {averageScore}</span>
-                </div>
-            </div>
-
             {/* Dash de Resumo Pedagógico */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 print:hidden">
                 <Card className="flex flex-col items-center justify-center p-6 border-l-4 border-l-blue-500">
-                    <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Total Entregue</p>
+                    <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Total Alunos</p>
                     <p className="text-4xl font-black text-slate-800">{attempts.length}</p>
                 </Card>
                 <Card className="flex flex-col items-center justify-center p-6 border-l-4 border-l-emerald-500">
-                    <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Média Geral</p>
+                    <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Média Turma</p>
                     <p className="text-4xl font-black text-brand-blue">{averageScore}</p>
                 </Card>
                 <Card className="flex flex-col items-center justify-center p-6 border-l-4 border-l-orange-500">
                     <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Questão Crítica</p>
                     <p className="text-3xl font-black text-orange-600">
-                        {itemAnalysis.length > 0 ? `Q${itemAnalysis[0].index}` : '-'}
+                        {criticalQuestion ? `Q${criticalQuestion.index}` : '-'}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">MENOR TAXA DE ACERTO</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-1 text-center">MENOR TAXA DE ACERTO ({criticalQuestion?.successRate.toFixed(0)}%)</p>
                 </Card>
                 <Card className="flex flex-col items-center justify-center p-6 border-l-4 border-l-purple-500">
-                    <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Maior "Pegadinha"</p>
+                    <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Maior Pegadinha</p>
                     <p className="text-3xl font-black text-purple-600">
-                        {itemAnalysis.length > 0 && itemAnalysis[0].mainDistractor ? `Q${itemAnalysis[0].index}` : '-'}
+                        {mainTrap && mainTrap.distractorVotes > 0 ? `Q${mainTrap.index}` : '-'}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">DISTRAÇÃO MAIS MARCADA</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-1 text-center">MAIOR ERRO CONCENTRADO</p>
                 </Card>
             </div>
 
@@ -332,10 +337,10 @@ const ExamResults = () => {
                 </button>
                 <button 
                     onClick={() => setActiveTab('ANALYSIS')}
-                    className={`pb-3 px-2 text-sm font-bold transition-all relative ${activeTab === 'ANALYSIS' ? 'text-brand-blue' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`pb-3 px-2 text-sm font-bold transition-all relative flex items-center gap-2 ${activeTab === 'ANALYSIS' ? 'text-brand-blue' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                     Análise de Itens (Pedagógico)
-                    <Badge color="blue" className="ml-2">Novo</Badge>
+                    <span className="inline-flex"><Badge color="blue">Novo</Badge></span>
                     {activeTab === 'ANALYSIS' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-blue rounded-full"></div>}
                 </button>
             </div>
@@ -344,32 +349,31 @@ const ExamResults = () => {
             {activeTab === 'LIST' && (
                 <Card className="print:shadow-none print:border print:border-black print:rounded-none animate-fade-in">
                     <div className="overflow-x-auto print:overflow-visible">
-                        <table className="w-full text-left text-sm print:text-xs">
-                            <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs print:bg-gray-100 print:text-black print:border-black">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs">
                                 <tr>
-                                    <th className="p-4 print:p-2">Aluno</th>
-                                    <th className="p-4 print:p-2">Identificação</th>
-                                    <th className="p-4 print:p-2">Data Envio</th>
-                                    <th className="p-4 print:p-2">Nota</th>
-                                    <th className="p-4 print:p-2 print:hidden">Status</th>
+                                    <th className="p-4">Aluno</th>
+                                    <th className="p-4">Identificação</th>
+                                    <th className="p-4">Data Envio</th>
+                                    <th className="p-4">Nota</th>
+                                    <th className="p-4 print:hidden">Status</th>
                                     <th className="p-4 print:hidden text-right">Ações</th>
-                                    <th className="hidden print:table-cell p-2">Assinatura / Visto</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50 print:divide-gray-300">
+                            <tbody className="divide-y divide-slate-50">
                                 {attempts.length === 0 ? (
-                                    <tr><td colSpan={7} className="p-12 text-center text-slate-400">Nenhuma resposta recebida ainda.</td></tr>
+                                    <tr><td colSpan={6} className="p-12 text-center text-slate-400">Nenhuma resposta recebida ainda.</td></tr>
                                 ) : (
                                     attempts.map(attempt => (
-                                        <tr key={attempt.id} className="hover:bg-slate-50/80 transition-colors break-inside-avoid">
-                                            <td className="p-4 font-bold text-slate-800 print:text-black print:p-2">{attempt.studentName}</td>
-                                            <td className="p-4 text-slate-500 print:text-black print:p-2">{attempt.studentIdentifier || '-'}</td>
-                                            <td className="p-4 text-slate-500 print:text-black print:p-2">
+                                        <tr key={attempt.id} className="hover:bg-slate-50/80 transition-colors">
+                                            <td className="p-4 font-bold text-slate-800">{attempt.studentName}</td>
+                                            <td className="p-4 text-slate-500">{attempt.studentIdentifier || '-'}</td>
+                                            <td className="p-4 text-slate-500">
                                                 {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'Em andamento'}
                                             </td>
-                                            <td className="p-4 print:p-2">
-                                                <span className="font-black text-lg print:text-base">{attempt.score}</span> 
-                                                <span className="text-slate-400 print:text-black font-medium"> / {attempt.totalQuestions}</span>
+                                            <td className="p-4">
+                                                <span className="font-black text-lg">{attempt.score}</span> 
+                                                <span className="text-slate-400 font-medium"> / {attempt.totalQuestions}</span>
                                             </td>
                                             <td className="p-4 print:hidden">
                                                 {attempt.status === 'COMPLETED' 
@@ -379,13 +383,12 @@ const ExamResults = () => {
                                             <td className="p-4 print:hidden text-right">
                                                 <button 
                                                     onClick={() => handleOpenGrading(attempt)}
-                                                    className="text-brand-blue hover:bg-blue-50 p-2 rounded-lg transition-colors flex items-center justify-center ml-auto border border-transparent hover:border-blue-100"
+                                                    className="text-brand-blue hover:bg-blue-50 p-2 rounded-lg transition-colors ml-auto"
                                                     title="Visualizar e Corrigir"
                                                 >
                                                     <Icons.Eye />
                                                 </button>
                                             </td>
-                                            <td className="hidden print:table-cell p-2 border-b border-gray-100 w-48"></td>
                                         </tr>
                                     ))
                                 )}
@@ -398,78 +401,78 @@ const ExamResults = () => {
             {/* ABA: ANÁLISE DE ITENS */}
             {activeTab === 'ANALYSIS' && (
                 <div className="space-y-6 animate-fade-in print:block">
-                    {itemAnalysis.length === 0 && (
+                    {analysisData.length === 0 && (
                         <div className="text-center p-20 bg-white rounded-2xl border border-dashed border-slate-300 text-slate-400">
                             Aguarde o envio das primeiras provas para gerar estatísticas.
                         </div>
                     )}
                     
-                    {itemAnalysis.map((item, i) => {
-                        const isHardest = i === 0;
-                        const isEasiest = i === itemAnalysis.length - 1;
+                    {analysisData.map((item) => {
+                        const isCritical = criticalQuestion?.question.id === item.question.id;
+                        const isTrap = mainTrap?.question.id === item.question.id;
                         
                         return (
-                            <Card key={item.question.id} className={`overflow-hidden border-2 ${isHardest ? 'border-red-200' : 'border-white'}`}>
-                                <div className="flex flex-col md:flex-row gap-6">
-                                    {/* Sidebar da Questão */}
-                                    <div className="md:w-64 shrink-0 p-4 bg-slate-50 rounded-lg flex flex-col justify-between">
+                            <Card key={item.question.id} className={`overflow-hidden border-2 ${isCritical ? 'border-orange-200 bg-orange-50/10' : 'border-white'}`}>
+                                <div className="flex flex-col md:flex-row gap-8">
+                                    {/* Info Panel */}
+                                    <div className="md:w-64 shrink-0 p-4 bg-slate-50 rounded-lg flex flex-col justify-between h-full">
                                         <div>
-                                            <div className="flex items-center gap-2 mb-2">
+                                            <div className="flex items-center gap-3 mb-4">
                                                 <span className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-black text-xl">
                                                     {item.index}
                                                 </span>
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] font-black uppercase text-slate-400">Desempenho</span>
-                                                    <Badge color={item.successRate > 70 ? 'green' : item.successRate > 40 ? 'yellow' : 'red'}>
-                                                        {item.successRate > 70 ? 'Fácil' : item.successRate > 40 ? 'Média' : 'Difícil'}
-                                                    </Badge>
+                                                    <span className="text-[10px] font-black uppercase text-slate-400">Taxa de Acerto</span>
+                                                    <span className={`text-xl font-black ${item.successRate > 70 ? 'text-green-600' : item.successRate > 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                                                        {item.successRate.toFixed(1)}%
+                                                    </span>
                                                 </div>
                                             </div>
-                                            <div className="mt-4 space-y-2">
-                                                <div className="flex justify-between text-xs font-bold text-slate-500">
-                                                    <span>Taxa de Acerto:</span>
-                                                    <span className={item.successRate < 40 ? 'text-red-600' : 'text-slate-800'}>{item.successRate.toFixed(1)}%</span>
+                                            
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span className="text-slate-500 uppercase">Acertos:</span>
+                                                    <span className="text-slate-800">{item.correctCount} / {attempts.length}</span>
                                                 </div>
                                                 <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                                                    <div className={`h-full ${item.successRate > 70 ? 'bg-green-500' : item.successRate > 40 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${item.successRate}%` }}></div>
+                                                    <div className={`h-full ${item.successRate > 70 ? 'bg-green-500' : item.successRate > 40 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${item.successRate}%` }}></div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {isHardest && (
-                                            <div className="mt-4 p-2 bg-red-100 rounded text-[10px] text-red-700 font-bold flex items-center gap-1 border border-red-200">
-                                                <Icons.X /> ALERTA DE REVISÃO NECESSÁRIA
-                                            </div>
-                                        )}
+                                        <div className="mt-6 space-y-2">
+                                            {isCritical && <Badge color="orange">QUESTÃO CRÍTICA</Badge>}
+                                            {isTrap && <Badge color="purple">ALTA DISTRAÇÃO</Badge>}
+                                        </div>
                                     </div>
 
-                                    {/* Conteúdo e Gráfico de Opções */}
+                                    {/* Content and Options Chart */}
                                     <div className="flex-1">
-                                        <div className="prose prose-sm max-w-none mb-6 border-b border-slate-100 pb-4" dangerouslySetInnerHTML={{__html: item.question.enunciado}} />
+                                        <div className="prose prose-sm max-w-none mb-6 text-slate-800 font-medium" dangerouslySetInnerHTML={{__html: item.question.enunciado}} />
                                         
-                                        {item.question.type === QuestionType.MULTIPLE_CHOICE && (
+                                        {item.question.type === QuestionType.MULTIPLE_CHOICE && item.question.options ? (
                                             <div className="space-y-4">
-                                                <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Distribuição de Escolhas</p>
+                                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Distribuição de Alternativas</p>
                                                 <div className="grid gap-3">
-                                                    {item.question.options?.map((opt, idx) => {
-                                                        const votes = item.distractorCounts[opt.id] || 0;
-                                                        const percent = item.totalResponses > 0 ? (votes / item.totalResponses) * 100 : 0;
-                                                        const isTrap = item.mainDistractor?.id === opt.id && votes > 0;
+                                                    {item.question.options.map((opt, idx) => {
+                                                        const votes = item.optionCounts[opt.id] || 0;
+                                                        const percent = attempts.length > 0 ? (votes / attempts.length) * 100 : 0;
+                                                        const isMainDistractor = item.mainDistractor?.id === opt.id && !opt.isCorrect && votes > 0;
 
                                                         return (
                                                             <div key={opt.id} className="relative">
                                                                 <div className="flex justify-between items-center mb-1 text-xs">
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className={`font-black ${opt.isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{String.fromCharCode(65+idx)})</span>
+                                                                        <span className={`font-black w-5 ${opt.isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{String.fromCharCode(65+idx)}</span>
                                                                         <span className={`line-clamp-1 ${opt.isCorrect ? 'font-bold text-green-700' : 'text-slate-600'}`}>{opt.text}</span>
-                                                                        {opt.isCorrect && <Badge color="green">Gabarito</Badge>}
-                                                                        {isTrap && !opt.isCorrect && <Badge color="orange">Principal Distrator</Badge>}
+                                                                        {opt.isCorrect && <Badge color="green">Correta</Badge>}
+                                                                        {isMainDistractor && <Badge color="orange">Pegadinha</Badge>}
                                                                     </div>
-                                                                    <span className="font-mono font-bold text-slate-500">{votes} alunos ({percent.toFixed(0)}%)</span>
+                                                                    <span className="font-mono font-bold text-slate-500">{votes} ({percent.toFixed(0)}%)</span>
                                                                 </div>
                                                                 <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
                                                                     <div 
-                                                                        className={`h-full transition-all duration-500 ${opt.isCorrect ? 'bg-green-500' : isTrap ? 'bg-orange-400' : 'bg-slate-300'}`} 
+                                                                        className={`h-full transition-all duration-500 ${opt.isCorrect ? 'bg-green-500' : isMainDistractor ? 'bg-orange-400' : 'bg-slate-300'}`} 
                                                                         style={{ width: `${percent}%` }}
                                                                     ></div>
                                                                 </div>
@@ -478,11 +481,9 @@ const ExamResults = () => {
                                                     })}
                                                 </div>
                                             </div>
-                                        )}
-                                        
-                                        {item.question.type === QuestionType.SHORT_ANSWER && (
-                                            <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800 italic">
-                                                Questão Dissertativa: Estatística baseada na pontuação manual atribuída pelo professor.
+                                        ) : (
+                                            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-500 italic">
+                                                Análise de alternativas disponível apenas para questões de múltipla escolha.
                                             </div>
                                         )}
                                     </div>
@@ -493,7 +494,7 @@ const ExamResults = () => {
                 </div>
             )}
 
-            {/* MODAL DE CORREÇÃO MANUAL (Mantido igual) */}
+            {/* MODAL DE CORREÇÃO MANUAL */}
             <Modal 
                 isOpen={isGradingModalOpen} 
                 onClose={() => setIsGradingModalOpen(false)} 
@@ -535,7 +536,7 @@ const ExamResults = () => {
                             if (selectedOpt) displayAnswer = selectedOpt.text;
                         } else if (q.type === QuestionType.NUMERIC) {
                             const correctVal = q.options?.[0]?.text;
-                            isAutoCorrect = parseFloat(studentAnswer) === parseFloat(correctVal || '0');
+                            isAutoCorrect = parseFloat(studentAnswer!) === parseFloat(correctVal || '0');
                             correctText = correctVal || '';
                             var displayAnswer = studentAnswer;
                         } else {
@@ -581,7 +582,7 @@ const ExamResults = () => {
                 </div>
             </Modal>
 
-            {/* SCANNER MODAL (Mantido igual) */}
+            {/* SCANNER MODAL */}
             {isScannerOpen && (
                 <div className="fixed inset-0 z-[100] bg-black flex flex-col">
                     <div className="p-4 flex justify-between items-center text-white bg-black/50 z-10">
