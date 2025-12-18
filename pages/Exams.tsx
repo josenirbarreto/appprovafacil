@@ -118,7 +118,6 @@ const ExamsPage = () => {
             });
         });
 
-        // Ordenar: Selecionadas no topo
         return [...base].sort((a, b) => {
             const aSel = manualSelectedIds.has(a.id) ? 1 : 0;
             const bSel = manualSelectedIds.has(b.id) ? 1 : 0;
@@ -423,7 +422,6 @@ const ExamsPage = () => {
                 const questionsToShow = examVersions[activeVersion] || (generationMode === 'AUTO' ? generatedQuestions : allQuestions.filter(q => manualSelectedIds.has(q.id)));
                 return (
                     <div className="flex h-[70vh] animate-fade-in relative bg-slate-100 rounded-xl overflow-hidden border border-slate-200 print:h-auto print:block print:border-none print:bg-white">
-                        {/* PAINEL DE CONTROLE LATERAL */}
                         <div className="w-80 bg-white border-r border-slate-200 flex flex-col h-full print:hidden">
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
                                 <div>
@@ -435,7 +433,6 @@ const ExamsPage = () => {
 
                                     {viewMode === 'EXAM' ? (
                                         <div className="space-y-6 animate-fade-in">
-                                            {/* TAMANHO DA FONTE */}
                                             <div>
                                                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block tracking-wider">Tamanho da Fonte</label>
                                                 <div className="flex bg-slate-100 p-1 rounded-lg">
@@ -445,7 +442,6 @@ const ExamsPage = () => {
                                                 </div>
                                             </div>
 
-                                            {/* VERSÕES ANTI-COLA */}
                                             <div>
                                                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block tracking-wider">Versão Anti-Cola</label>
                                                 <div className="grid grid-cols-5 gap-2">
@@ -455,7 +451,6 @@ const ExamsPage = () => {
                                                 </div>
                                             </div>
 
-                                            {/* CAMPOS CABEÇALHO */}
                                             <div className="space-y-3 pt-4 border-t border-slate-100">
                                                 {[
                                                     {id:'showName', l:'Nome do Aluno'},
@@ -504,7 +499,6 @@ const ExamsPage = () => {
                             </div>
                         </div>
 
-                        {/* ÁREA DE VISUALIZAÇÃO A4 */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-10 bg-slate-200/50 print:p-0 print:bg-white print:overflow-visible">
                             <div className={`bg-white shadow-2xl mx-auto p-[20mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:p-0 ${viewMode === 'EXAM' ? printSettings.fontSize : 'text-sm'}`}>
                                 {viewMode === 'EXAM' ? (
@@ -562,39 +556,37 @@ const ExamsPage = () => {
                                         )}
                                     </>
                                 ) : (
-                                    <div className="relative flex flex-col h-full min-h-[297mm] p-10 border-[3mm] border-transparent print:p-6">
-                                        {/* CORNER MARKERS - ESSENTIAL FOR SCANNER */}
-                                        <div className="absolute top-0 left-0 w-8 h-8 bg-black"></div>
-                                        <div className="absolute top-0 right-0 w-8 h-8 bg-black"></div>
-                                        <div className="absolute bottom-0 left-0 w-8 h-8 bg-black"></div>
-                                        <div className="absolute bottom-0 right-0 w-8 h-8 bg-black"></div>
+                                    <div className="relative flex flex-col h-[297mm] p-6 border-[3mm] border-transparent print:p-6 overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-6 h-6 bg-black"></div>
+                                        <div className="absolute top-0 right-0 w-6 h-6 bg-black"></div>
+                                        <div className="absolute bottom-0 left-0 w-6 h-6 bg-black"></div>
+                                        <div className="absolute bottom-0 right-0 w-6 h-6 bg-black"></div>
 
-                                        <div className="text-center mb-8 pt-4">
-                                            <h1 className="font-bold text-3xl uppercase tracking-[6px] border-b-4 border-black pb-3 mb-6">Cartão-Resposta</h1>
-                                            <div className="flex justify-between items-end px-4 gap-8">
-                                                <div className="flex-1 text-left space-y-4">
-                                                    <div><span className="text-[10px] font-bold uppercase">Aluno(a):</span><div className="border-b-2 border-black h-8 w-full"></div></div>
-                                                    <div className="flex gap-10">
-                                                        <div className="flex-1"><span className="text-[10px] font-bold uppercase">Turma:</span><div className="border-b-2 border-black h-8 w-full"></div></div>
-                                                        <div className="w-40"><span className="text-[10px] font-bold uppercase">Data:</span><div className="border-b-2 border-black h-8 w-full"></div></div>
+                                        <div className="text-center mb-6 pt-2">
+                                            <h1 className="font-bold text-2xl uppercase tracking-[4px] border-b-2 border-black pb-2 mb-4">Cartão-Resposta</h1>
+                                            <div className="flex justify-between items-end px-2 gap-6">
+                                                <div className="flex-1 text-left space-y-3">
+                                                    <div><span className="text-[9px] font-bold uppercase">Aluno(a):</span><div className="border-b border-black h-6 w-full"></div></div>
+                                                    <div className="flex gap-6">
+                                                        <div className="flex-1"><span className="text-[9px] font-bold uppercase">Turma:</span><div className="border-b border-black h-6 w-full"></div></div>
+                                                        <div className="w-32"><span className="text-[9px] font-bold uppercase">Data:</span><div className="border-b border-black h-6 w-full"></div></div>
                                                     </div>
                                                 </div>
-                                                <div className="border-4 border-black p-2 bg-white flex flex-col items-center shrink-0 shadow-sm">
-                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-24 h-24 block" />
-                                                    <span className="text-[9px] font-mono mt-1 font-black">ID: {editing.id?.slice(0,8).toUpperCase() || 'PROVA-FACIL'}</span>
+                                                <div className="border-2 border-black p-1.5 bg-white flex flex-col items-center shrink-0 shadow-sm">
+                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-16 h-16 block" />
+                                                    <span className="text-[8px] font-mono mt-1 font-black">ID: {editing.id?.slice(0,8).toUpperCase() || 'PF-SYS'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* BUBBLES GRID - OPTIMIZED FOR SINGLE PAGE */}
-                                        <div className="flex-1 px-4 py-2 mt-4">
-                                            <div className="columns-3 gap-10 print:columns-3" style={{ columnRule: '1px dashed #e2e8f0' }}>
+                                        <div className="flex-1 px-2 py-1 mt-2">
+                                            <div className="columns-3 gap-6 print:columns-3" style={{ columnRule: '1px dashed #ccc' }}>
                                                 {questionsToShow.map((q, idx) => (
-                                                    <div key={q.id} className="flex items-center gap-3 mb-4 break-inside-avoid">
-                                                        <span className="font-bold text-base w-6 text-right">{idx + 1}.</span>
-                                                        <div className="flex gap-2">
+                                                    <div key={q.id} className="flex items-center gap-2 mb-3 break-inside-avoid">
+                                                        <span className="font-bold text-sm w-5 text-right">{idx + 1}.</span>
+                                                        <div className="flex gap-1.5">
                                                             {['A', 'B', 'C', 'D', 'E'].map(opt => (
-                                                                <div key={opt} className="w-7 h-7 rounded-full border-2 border-black flex items-center justify-center text-[10px] font-black text-black/30">
+                                                                <div key={opt} className="w-6 h-6 rounded-full border border-black flex items-center justify-center text-[9px] font-black text-black/20">
                                                                     {opt}
                                                                 </div>
                                                             ))}
@@ -604,8 +596,8 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
 
-                                        <div className="text-center text-[9px] text-slate-500 font-mono uppercase tracking-[3px] mt-auto pt-4 border-t border-slate-100">
-                                            Prova Fácil Scanner Compatible • Digital Correction Enabled
+                                        <div className="text-center text-[8px] text-slate-500 font-mono uppercase tracking-[2px] mt-auto pt-2 border-t border-slate-100">
+                                            Compatível com Scanner Prova Fácil • Correção Digital Habilitada
                                         </div>
                                     </div>
                                 )}
@@ -696,7 +688,7 @@ const ExamsPage = () => {
                                                                                     <div className="flex items-center gap-3">
                                                                                         <button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm">Ver Resultados</button>
                                                                                         <div className="flex gap-1">
-                                                                                            <button onClick={() => openPublishModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Megaphone /></button>
+                                                                                            <button onClick={() => openPublishModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Configurar Prova Online"><Icons.Share /></button>
                                                                                             <button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Edit /></button>
                                                                                             <button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Icons.Trash /></button>
                                                                                         </div>
@@ -747,7 +739,6 @@ const ExamsPage = () => {
                 {renderStepContent()}
             </Modal>
 
-            {/* MODAL CONFIGURAÇÃO PROVA ONLINE */}
             <Modal
                 isOpen={isPublishModalOpen}
                 onClose={() => setIsPublishModalOpen(false)}
@@ -758,7 +749,7 @@ const ExamsPage = () => {
                 <div className="space-y-6">
                     <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <Icons.Megaphone />
+                            <Icons.Share />
                             <h4 className="font-bold text-blue-800">Prova Online: {publishingExam?.title}</h4>
                         </div>
                         <p className="text-sm text-blue-700">Configure como os alunos poderão acessar e realizar esta prova pela internet.</p>
@@ -822,7 +813,6 @@ const ExamsPage = () => {
                 </div>
             </Modal>
 
-            {/* PREVIEW QUESTION MODAL */}
             {viewingQuestion && (
                 <Modal isOpen={true} onClose={() => setViewingQuestion(null)} title="Visualizar Questão" maxWidth="max-w-3xl" footer={<Button onClick={() => setViewingQuestion(null)}>Fechar</Button>}>
                     <div className="space-y-6">
