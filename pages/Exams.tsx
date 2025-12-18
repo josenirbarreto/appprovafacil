@@ -38,6 +38,20 @@ const ExamsPage = () => {
     const [currentStep, setCurrentStep] = useState(1);
     const [saving, setSaving] = useState(false);
     
+    // Publishing Modal states
+    const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+    const [publishingExam, setPublishingExam] = useState<Exam | null>(null);
+    const [publishConfig, setPublishConfig] = useState<PublicExamConfig>({
+        isPublished: false,
+        startDate: '',
+        endDate: '',
+        timeLimitMinutes: 0,
+        allowedAttempts: 1,
+        randomizeQuestions: true,
+        requireIdentifier: false,
+        showFeedback: true
+    });
+
     // Step 2 State
     const [selectedDisc, setSelectedDisc] = useState('');
     const [selectedChap, setSelectedChap] = useState('');
@@ -62,20 +76,6 @@ const ExamsPage = () => {
         showDate: true,
         showClass: true,
         showScore: true
-    });
-
-    // States for the publishing modal
-    const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
-    const [publishingExam, setPublishingExam] = useState<Exam | null>(null);
-    const [publishConfig, setPublishConfig] = useState<PublicExamConfig>({
-        isPublished: false,
-        startDate: '',
-        endDate: '',
-        timeLimitMinutes: 0,
-        allowedAttempts: 1,
-        randomizeQuestions: true,
-        requireIdentifier: false,
-        showFeedback: true
     });
 
     // Accordion States
@@ -388,7 +388,7 @@ const ExamsPage = () => {
                                             <div className="flex-1">
                                                 <div className="inline line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                             </div>
-                                            <button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue transition-colors opacity-0 group-hover:opacity-100"><Icons.Eye /></button>
+                                            <button onClick={() => setViewingQuestion(q)} className="p-2 text-slate-400 hover:text-brand-blue transition-colors opacity-0 group-hover:opacity-100" title="Visualizar Questão"><Icons.Eye /></button>
                                         </div>
                                     ))}
                                 </div>
@@ -491,7 +491,7 @@ const ExamsPage = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 italic text-[10px] text-slate-500">
+                                            <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 italic text-[10px] text-slate-500 leading-tight">
                                                 O tamanho da fonte é fixo para garantir que os marcadores de leitura (quadrados pretos) fiquem na posição correta para a IA.
                                             </div>
                                         </div>
@@ -562,37 +562,39 @@ const ExamsPage = () => {
                                         )}
                                     </>
                                 ) : (
-                                    <div className="relative flex flex-col h-full min-h-[297mm] p-6 border-[3mm] border-transparent">
+                                    <div className="relative flex flex-col h-full min-h-[297mm] p-10 border-[3mm] border-transparent print:p-6">
+                                        {/* CORNER MARKERS - ESSENTIAL FOR SCANNER */}
                                         <div className="absolute top-0 left-0 w-8 h-8 bg-black"></div>
                                         <div className="absolute top-0 right-0 w-8 h-8 bg-black"></div>
                                         <div className="absolute bottom-0 left-0 w-8 h-8 bg-black"></div>
                                         <div className="absolute bottom-0 right-0 w-8 h-8 bg-black"></div>
 
-                                        <div className="text-center mb-12 pt-4">
+                                        <div className="text-center mb-8 pt-4">
                                             <h1 className="font-bold text-3xl uppercase tracking-[6px] border-b-4 border-black pb-3 mb-6">Cartão-Resposta</h1>
                                             <div className="flex justify-between items-end px-4 gap-8">
-                                                <div className="flex-1 text-left space-y-6">
+                                                <div className="flex-1 text-left space-y-4">
                                                     <div><span className="text-[10px] font-bold uppercase">Aluno(a):</span><div className="border-b-2 border-black h-8 w-full"></div></div>
                                                     <div className="flex gap-10">
                                                         <div className="flex-1"><span className="text-[10px] font-bold uppercase">Turma:</span><div className="border-b-2 border-black h-8 w-full"></div></div>
                                                         <div className="w-40"><span className="text-[10px] font-bold uppercase">Data:</span><div className="border-b-2 border-black h-8 w-full"></div></div>
                                                     </div>
                                                 </div>
-                                                <div className="border-4 border-black p-3 bg-white flex flex-col items-center shrink-0 shadow-sm">
-                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-32 h-32 block" />
-                                                    <span className="text-[10px] font-mono mt-2 font-black">ID: {editing.id?.slice(0,8).toUpperCase() || 'PROVA-FACIL'}</span>
+                                                <div className="border-4 border-black p-2 bg-white flex flex-col items-center shrink-0 shadow-sm">
+                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-24 h-24 block" />
+                                                    <span className="text-[9px] font-mono mt-1 font-black">ID: {editing.id?.slice(0,8).toUpperCase() || 'PROVA-FACIL'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="flex-1 px-8 py-4">
-                                            <div className="columns-2 gap-16" style={{ columnRule: '1px dashed #e2e8f0' }}>
+                                        {/* BUBBLES GRID - OPTIMIZED FOR SINGLE PAGE */}
+                                        <div className="flex-1 px-4 py-2 mt-4">
+                                            <div className="columns-3 gap-10 print:columns-3" style={{ columnRule: '1px dashed #e2e8f0' }}>
                                                 {questionsToShow.map((q, idx) => (
-                                                    <div key={q.id} className="flex items-center gap-5 mb-6 break-inside-avoid">
-                                                        <span className="font-bold text-xl w-8 text-right">{idx + 1}.</span>
-                                                        <div className="flex gap-4">
+                                                    <div key={q.id} className="flex items-center gap-3 mb-4 break-inside-avoid">
+                                                        <span className="font-bold text-base w-6 text-right">{idx + 1}.</span>
+                                                        <div className="flex gap-2">
                                                             {['A', 'B', 'C', 'D', 'E'].map(opt => (
-                                                                <div key={opt} className="w-9 h-9 rounded-full border-2 border-black flex items-center justify-center text-sm font-black text-black/20">
+                                                                <div key={opt} className="w-7 h-7 rounded-full border-2 border-black flex items-center justify-center text-[10px] font-black text-black/30">
                                                                     {opt}
                                                                 </div>
                                                             ))}
@@ -602,7 +604,7 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
 
-                                        <div className="text-center text-[10px] text-slate-500 font-mono uppercase tracking-[3px] mt-auto pt-10 border-t border-slate-100">
+                                        <div className="text-center text-[9px] text-slate-500 font-mono uppercase tracking-[3px] mt-auto pt-4 border-t border-slate-100">
                                             Prova Fácil Scanner Compatible • Digital Correction Enabled
                                         </div>
                                     </div>
