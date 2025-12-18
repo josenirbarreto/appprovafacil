@@ -612,37 +612,65 @@ const ExamsPage = () => {
                                         )}
                                     </>
                                 ) : (
-                                    <div className="relative flex flex-col h-[297mm] p-6 border-[3mm] border-transparent print:p-6 overflow-hidden">
-                                        <div className="absolute top-0 left-0 w-6 h-6 bg-black"></div>
-                                        <div className="absolute top-0 right-0 w-6 h-6 bg-black"></div>
-                                        <div className="absolute bottom-0 left-0 w-6 h-6 bg-black"></div>
-                                        <div className="absolute bottom-0 right-0 w-6 h-6 bg-black"></div>
+                                    <div className="relative flex flex-col h-[297mm] p-8 border-[1px] border-transparent print:p-8 overflow-hidden bg-white">
+                                        {/* CORNER MARKERS - ENLARGED FOR BETTER AI DETECTION */}
+                                        <div className="absolute top-4 left-4 w-10 h-10 bg-black"></div>
+                                        <div className="absolute top-4 right-4 w-10 h-10 bg-black"></div>
+                                        <div className="absolute bottom-4 left-4 w-10 h-10 bg-black"></div>
+                                        <div className="absolute bottom-4 right-4 w-10 h-10 bg-black"></div>
 
-                                        <div className="text-center mb-6 pt-2">
-                                            <h1 className="font-bold text-2xl uppercase tracking-[4px] border-b-2 border-black pb-2 mb-4">Cartão-Resposta</h1>
-                                            <div className="flex justify-between items-end px-2 gap-6">
-                                                <div className="flex-1 text-left space-y-3">
-                                                    <div><span className="text-[9px] font-bold uppercase">Aluno(a):</span><div className="border-b border-black h-6 w-full"></div></div>
-                                                    <div className="flex gap-6">
-                                                        <div className="flex-1"><span className="text-[9px] font-bold uppercase">Turma:</span><div className="border-b border-black h-6 w-full"></div></div>
-                                                        <div className="w-32"><span className="text-[9px] font-bold uppercase">Data:</span><div className="border-b border-black h-6 w-full"></div></div>
+                                        <div className="text-center mb-6 pt-6">
+                                            <h1 className="font-black text-3xl uppercase tracking-[4px] border-b-4 border-black pb-2 mb-4">Cartão-Resposta</h1>
+                                            
+                                            {/* EXAM DETAILS FOR TEACHER */}
+                                            <div className="mb-4 text-left border border-black p-3 bg-slate-50/50 flex justify-between items-start gap-4">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase text-slate-600">Instituição:</p>
+                                                    <p className="text-sm font-bold text-black uppercase">{institutions.find(i => i.id === editing.institutionId)?.name || 'NÃO INFORMADA'}</p>
+                                                    <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Prova / Avaliação:</p>
+                                                    <p className="text-sm font-bold text-black uppercase">{editing.title || 'AVALIAÇÃO SEM TÍTULO'}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-black uppercase text-slate-600">Turma:</p>
+                                                    <p className="text-sm font-bold text-black uppercase">{classes.find(c => c.id === editing.classId)?.name || '________'}</p>
+                                                    <p className="text-[10px] font-black uppercase text-slate-600 mt-2">Versão:</p>
+                                                    <p className="text-sm font-bold text-black uppercase">{activeVersion}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex justify-between items-end px-2 gap-8 mt-6">
+                                                <div className="flex-1 text-left space-y-4">
+                                                    <div>
+                                                        <span className="text-[10px] font-black uppercase text-slate-700">Aluno(a):</span>
+                                                        <div className="border-b-2 border-black h-8 w-full mt-1"></div>
+                                                    </div>
+                                                    <div className="flex gap-10">
+                                                        <div className="flex-1">
+                                                            <span className="text-[10px] font-black uppercase text-slate-700">Matrícula/ID (Opcional):</span>
+                                                            <div className="border-b-2 border-black h-8 w-full mt-1"></div>
+                                                        </div>
+                                                        <div className="w-40">
+                                                            <span className="text-[10px] font-black uppercase text-slate-700">Data:</span>
+                                                            <div className="border-b-2 border-black h-8 w-full mt-1"></div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="border-2 border-black p-1.5 bg-white flex flex-col items-center shrink-0 shadow-sm">
-                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-16 h-16 block" />
-                                                    <span className="text-[8px] font-mono mt-1 font-black">ID: {editing.id?.slice(0,8).toUpperCase() || 'PF-SYS'}</span>
+                                                <div className="border-4 border-black p-2 bg-white flex flex-col items-center shrink-0 shadow-sm">
+                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=PF-EXAM-${editing.id || 'new'}`} alt="QR" className="w-20 h-20 block" />
+                                                    <span className="text-[9px] font-mono mt-1 font-black">EXAM-ID: {editing.id?.slice(0,8).toUpperCase() || 'PF-SYSTEM'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="flex-1 px-2 py-1 mt-2">
-                                            <div className="columns-3 gap-6 print:columns-3" style={{ columnRule: '1px dashed #ccc' }}>
+                                        {/* BUBBLES GRID - OPTIMIZED FOR SCANNER */}
+                                        <div className="flex-1 px-4 py-4 mt-4 bg-white">
+                                            <div className="columns-3 gap-12 print:columns-3" style={{ columnRule: '1px dashed #ccc' }}>
                                                 {questionsToShow.map((q, idx) => (
-                                                    <div key={q.id} className="flex items-center gap-2 mb-3 break-inside-avoid">
-                                                        <span className="font-bold text-sm w-5 text-right">{idx + 1}.</span>
-                                                        <div className="flex gap-1.5">
+                                                    <div key={q.id} className="flex items-center gap-3 mb-5 break-inside-avoid">
+                                                        <span className="font-black text-lg w-7 text-right text-slate-800">{idx + 1}.</span>
+                                                        <div className="flex gap-2">
                                                             {['A', 'B', 'C', 'D', 'E'].map(opt => (
-                                                                <div key={opt} className="w-6 h-6 rounded-full border border-black flex items-center justify-center text-[9px] font-black text-black/20">
+                                                                <div key={opt} className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center text-xs font-black text-black/40">
                                                                     {opt}
                                                                 </div>
                                                             ))}
@@ -652,8 +680,8 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
 
-                                        <div className="text-center text-[8px] text-slate-500 font-mono uppercase tracking-[2px] mt-auto pt-2 border-t border-slate-100">
-                                            Compatível com Scanner Prova Fácil • Correção Digital Habilitada
+                                        <div className="text-center text-[10px] text-slate-600 font-mono uppercase tracking-[3px] mt-auto pt-4 border-t-2 border-slate-200">
+                                            COMPATÍVEL COM SCANNER PROVA FÁCIL • CORREÇÃO DIGITAL HABILITADA
                                         </div>
                                     </div>
                                 )}

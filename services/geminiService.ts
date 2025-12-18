@@ -132,7 +132,7 @@ export const GeminiService = {
                     responseMimeType: "application/json",
                     responseSchema: schema,
                     systemInstruction: "Você é um especialista em estruturar dados de provas escolares. Extraia as questões com precisão.",
-                    temperature: 0.4 // Temperatura baixa para ser mais fiel ao texto
+                    temperature: 0.4 
                 }
             });
 
@@ -141,10 +141,9 @@ export const GeminiService = {
 
             if (response.text) {
                 const data = JSON.parse(response.text);
-                // Adiciona IDs temporários
                 return data.map((q: any) => ({
                     ...q,
-                    difficulty: 'Medium', // Padrão
+                    difficulty: 'Medium', 
                     options: q.options?.map((opt: any, idx: number) => ({
                         id: `imp-${Date.now()}-${Math.random()}-${idx}`,
                         text: opt.text,
@@ -168,7 +167,7 @@ export const GeminiService = {
             
             const candidatesJson = candidates.map(c => ({
                 id: c.id,
-                text: c.enunciado.replace(/<[^>]*>?/gm, '').substring(0, 300) // Strip HTML e trunca
+                text: c.enunciado.replace(/<[^>]*>?/gm, '').substring(0, 300) 
             }));
 
             const prompt = `
@@ -203,7 +202,7 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    temperature: 0.1 // Baixa criatividade para ser analítico
+                    temperature: 0.1 
                 }
             });
 
@@ -221,33 +220,34 @@ export const GeminiService = {
         }
     },
 
-    // --- NOVA FUNÇÃO DE CORREÇÃO POR IMAGEM ---
     gradeExamImage: async (imageBase64: string, totalQuestions: number): Promise<{ studentName: string, answers: Record<string, string> } | null> => {
         try {
             const ai = getClient();
-            
-            // Remove prefixo data:image/png;base64, se existir
             const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
 
             const prompt = `
-                Analise esta imagem de um Cartão-Resposta (Gabarito) de prova escolar.
+                AJA COMO UM SCANNER DE GABARITO DE ALTA PRECISÃO.
+                Esta imagem contém um Cartão-Resposta formatado com:
+                1. Quatro marcadores pretos sólidos nos cantos (âncoras de orientação).
+                2. Uma grade de bolhas organizada em 3 COLUNAS VERTICAIS.
                 
-                Tarefas:
-                1. Tente identificar o NOME do aluno se estiver escrito à mão no topo (campo "Aluno"). Se ilegível ou vazio, retorne string vazia.
-                2. Para cada questão de 1 a ${totalQuestions}, identifique qual bolha (A, B, C, D ou E) está preenchida.
+                SUA TAREFA:
+                1. Oriente a imagem usando os 4 quadrados pretos nos cantos.
+                2. Detecte o NOME do aluno escrito no campo superior esquerdo.
+                3. Examine cada linha de questão de 1 a ${totalQuestions}. 
+                4. Identifique qual letra (A, B, C, D ou E) está preenchida/pintada com caneta escura.
                 
-                Regras:
-                - Se uma bolha estiver claramente pintada ou marcada com X, considere como resposta.
-                - Se houver rasura ou múltiplas marcas na mesma linha, considere como null.
-                - Se a linha estiver vazia, considere como null.
+                REGRAS DE LEITURA:
+                - As questões estão dispostas em colunas: Coluna 1 (1-10), Coluna 2 (11-20), etc (dependendo do total).
+                - Considere marcada a bolha que tiver o maior preenchimento escuro.
+                - Se houver dúvida ou vazio, retorne null para aquela questão.
                 
-                Retorne APENAS um JSON no formato:
+                Retorne APENAS um JSON:
                 {
-                    "studentName": "Nome Detectado",
+                    "studentName": "Nome do Aluno ou string vazia",
                     "answers": {
                         "1": "A",
-                        "2": "C",
-                        "3": null
+                        "2": "D",
                         ... até ${totalQuestions}
                     }
                 }
@@ -260,7 +260,7 @@ export const GeminiService = {
                     answers: {
                         type: Type.OBJECT,
                         nullable: false,
-                        description: "Map of question index (string) to selected option (A, B, C, D, E or null)"
+                        description: "Dicionário onde a chave é o número da questão e o valor é a letra preenchida (A, B, C, D, E ou null)"
                     }
                 },
                 required: ["answers"]
@@ -269,22 +269,16 @@ export const GeminiService = {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: [
-                    { 
-                        inlineData: { 
-                            mimeType: 'image/jpeg', 
-                            data: cleanBase64 
-                        } 
-                    },
+                    { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
                     { text: prompt }
                 ],
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    temperature: 0.1 // Baixa temperatura para ser preciso na leitura
+                    temperature: 0.1
                 }
             });
 
-            // TRACK USAGE
             FirebaseService.trackAiUsage();
 
             if (response.text) {
