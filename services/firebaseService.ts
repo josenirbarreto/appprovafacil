@@ -156,21 +156,49 @@ export const FirebaseService = {
     // --- CONTRATOS ---
     getContractTemplates: async (): Promise<ContractTemplate[]> => {
         const snap = await getDocs(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
-        return snap.docs.map(d => ({ ...d.data(), id: d.id } as ContractTemplate));
+        return snap.docs.map(d => ({ ...d.data(), id: d.id } as ContractTemplate))
+            .sort((a, b) => b.version - a.version);
     },
 
-    saveContractTemplate: async (data: Partial<ContractTemplate>) => {
-        const payload = {
+    /**
+     * Salva ou cria uma nova versão de contrato.
+     * @param data Dados do contrato
+     * @param forceResign Se verdadeiro, cria um NOVO documento (novo ID), forçando a reassinatura
+     */
+    saveContractTemplate: async (data: Partial<ContractTemplate>, forceResign: boolean = false) => {
+        const planId = data.planId || 'ALL';
+        
+        // Se for forçar reassinatura ou for um contrato novo, criamos um novo documento
+        const isNewDoc = !data.id || forceResign;
+        
+        if (data.isActive) {
+            // Desativa outros contratos ativos para este mesmo plano
+            const q = query(
+                collection(db, COLLECTIONS.CONTRACT_TEMPLATES), 
+                where("planId", "==", planId),
+                where("isActive", "==", true)
+            );
+            const activeSnap = await getDocs(q);
+            const batch = writeBatch(db);
+            activeSnap.forEach(d => {
+                if (d.id !== data.id) batch.update(d.ref, { isActive: false });
+            });
+            await batch.commit();
+        }
+
+        const payload: any = {
             ...data,
             updatedAt: new Date().toISOString()
         };
-        if (data.id) {
-            await updateDoc(doc(db, COLLECTIONS.CONTRACT_TEMPLATES, data.id), cleanPayload(payload));
-            await logAuditAction('UPDATE', 'CONTRACT', `Contrato atualizado: ${data.title}`, data.id);
-        } else {
+
+        if (isNewDoc) {
             payload.createdAt = new Date().toISOString();
+            if (forceResign) delete payload.id; // Remove ID antigo para gerar novo
             const docRef = await addDoc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), cleanPayload(payload));
-            await logAuditAction('CREATE', 'CONTRACT', `Novo contrato criado: ${data.title}`, docRef.id);
+            await logAuditAction('CREATE', 'CONTRACT', `Contrato publicado (V${payload.version}): ${payload.title}`, docRef.id);
+        } else {
+            await updateDoc(doc(db, COLLECTIONS.CONTRACT_TEMPLATES, data.id!), cleanPayload(payload));
+            await logAuditAction('UPDATE', 'CONTRACT', `Contrato atualizado (V${payload.version}): ${payload.title}`, data.id);
         }
     },
 
@@ -204,7 +232,6 @@ export const FirebaseService = {
             }));
         }
 
-        // Adiciona um global
         const globalRef = doc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
         batch.set(globalRef, cleanPayload({
             title: `Termos de Uso Gerais (Todos os Planos)`,
@@ -258,8 +285,7 @@ export const FirebaseService = {
         });
         await logAuditAction('SECURITY', 'CONTRACT', `Contrato assinado eletronicamente pelo usuário`, user.id, { templateId: template.id });
     },
-
-    // --- COMERCIALIZAÇÃO (TOKENS) ---
+    // ... restante dos métodos mantidos
     generateCommercialToken: async (disciplineId: string, includeQuestions: boolean) => {
         const code = Math.random().toString(36).substring(2, 10).toUpperCase();
         const tokenData = {

@@ -12,6 +12,7 @@ const ContractTemplatesPage = () => {
     const [seeding, setSeeding] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<Partial<ContractTemplate>>({});
+    const [forceResign, setForceResign] = useState(false);
 
     useEffect(() => { loadData(); }, []);
 
@@ -28,10 +29,14 @@ const ContractTemplatesPage = () => {
 
     const handleSave = async () => {
         if (!editing.title || !editing.content) return alert("Título e Conteúdo são obrigatórios.");
-        await FirebaseService.saveContractTemplate({
+        
+        // Se for forçar, incrementamos a versão e avisamos o service para criar novo doc
+        const payload = {
             ...editing,
-            version: (editing.version || 0) + 1
-        });
+            version: forceResign ? (editing.version || 0) + 1 : (editing.version || 1)
+        };
+
+        await FirebaseService.saveContractTemplate(payload, forceResign);
         setIsModalOpen(false);
         loadData();
     };
@@ -58,6 +63,7 @@ const ContractTemplatesPage = () => {
             isActive: true, 
             version: 0 
         });
+        setForceResign(false);
         setIsModalOpen(true);
     };
 
@@ -84,12 +90,6 @@ const ContractTemplatesPage = () => {
                     <Button onClick={() => openModal()}><Icons.Plus /> Nova Minuta</Button>
                 </div>
             </div>
-
-            {seeding && (
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3 animate-pulse">
-                    <Icons.Refresh /> <span className="text-blue-800 text-sm font-bold">Processando geração automática de contratos...</span>
-                </div>
-            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {templates.length === 0 && !seeding && (
@@ -123,7 +123,7 @@ const ContractTemplatesPage = () => {
                 onClose={() => setIsModalOpen(false)} 
                 title={editing.id ? "Editar Minuta" : "Nova Minuta Jurídica"}
                 maxWidth="max-w-5xl"
-                footer={<Button onClick={handleSave}>Salvar e Gerar Nova Versão</Button>}
+                footer={<Button onClick={handleSave}>{editing.id ? (forceResign ? "Publicar e Forçar Reassinatura" : "Salvar Alterações") : "Publicar Contrato"}</Button>}
             >
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -133,6 +133,20 @@ const ContractTemplatesPage = () => {
                             {plans.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                         </Select>
                     </div>
+
+                    {editing.id && (
+                        <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex items-center justify-between">
+                            <div>
+                                <h4 className="text-sm font-bold text-orange-800">Forçar Reassinatura?</h4>
+                                <p className="text-xs text-orange-600">Se ativado, todos os usuários do plano serão bloqueados até assinarem esta nova versão.</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" className="sr-only peer" checked={forceResign} onChange={e => setForceResign(e.target.checked)} />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-orange"></div>
+                            </label>
+                        </div>
+                    )}
+
                     <RichTextEditor 
                         label="Conteúdo do Contrato (Termos e Condições)" 
                         value={editing.content || ''} 
