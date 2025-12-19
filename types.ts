@@ -224,6 +224,7 @@ export interface Question {
   imageUrl?: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   createdAt: string;
+  tags?: string[]; // NOVO: Organização pessoal
 }
 
 // Exam Configuration Scope
@@ -288,6 +289,7 @@ export interface Exam {
   
   // Configuração Online
   publicConfig?: PublicExamConfig;
+  tags?: string[]; // NOVO: Organização pessoal
 }
 
 // Plans
