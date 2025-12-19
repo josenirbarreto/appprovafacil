@@ -26,7 +26,9 @@ const ClassesPage = () => {
     const [activeClass, setActiveClass] = useState<SchoolClass | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
     const [isImportMode, setIsImportMode] = useState(false);
+    const [importMethod, setImportMethod] = useState<'PASTE' | 'FILE'>('PASTE');
     const [importText, setImportText] = useState('');
+    const [importFile, setImportFile] = useState<File | null>(null);
     const [newStudent, setNewStudent] = useState({ name: '', registration: '' });
     const [loadingStudents, setLoadingStudents] = useState(false);
 
@@ -76,6 +78,9 @@ const ClassesPage = () => {
         setLoadingStudents(true);
         setIsStudentsModalOpen(true);
         setIsImportMode(false); // Reseta para manual ao abrir
+        setImportMethod('PASTE');
+        setImportFile(null);
+        setImportText('');
         const data = await FirebaseService.getStudents(cls.id);
         setStudents(data);
         setLoadingStudents(false);
@@ -95,22 +100,41 @@ const ClassesPage = () => {
         setStudents(data);
     };
 
-    const handleImportStudents = async () => {
-        if (!importText.trim() || !activeClass) return;
-        const lines = importText.split('\n');
-        const toImport = lines.map(line => {
-            const parts = line.split(/[;,]/); // Aceita ponto e vírgula ou vírgula
+    const processImportList = (text: string) => {
+        const lines = text.split('\n');
+        return lines.map(line => {
+            const parts = line.split(/[;,\t]/); // Aceita ponto e vírgula, vírgula ou tab
             return {
                 name: parts[0]?.trim() || '',
                 registration: parts[1]?.trim() || `MAT-${Math.random().toString(36).slice(-6).toUpperCase()}`
             };
         }).filter(s => s.name.length > 2);
+    }
 
-        if (toImport.length === 0) return alert("Nenhum dado válido encontrado.");
+    const handleImportStudents = async () => {
+        if (!activeClass) return;
+        
+        let toImport: { name: string, registration: string }[] = [];
+
+        if (importMethod === 'PASTE') {
+            if (!importText.trim()) return alert("Cole a lista de alunos primeiro.");
+            toImport = processImportList(importText);
+        } else {
+            if (!importFile) return alert("Selecione um arquivo CSV primeiro.");
+            try {
+                const text = await importFile.text();
+                toImport = processImportList(text);
+            } catch (e) {
+                return alert("Erro ao ler o arquivo.");
+            }
+        }
+
+        if (toImport.length === 0) return alert("Nenhum dado válido encontrado. Verifique o formato.");
         
         setLoadingStudents(true);
         await FirebaseService.importStudents(activeClass.id, activeClass.institutionId, toImport);
         setImportText('');
+        setImportFile(null);
         setIsImportMode(false);
         const data = await FirebaseService.getStudents(activeClass.id);
         setStudents(data);
@@ -178,18 +202,61 @@ const ClassesPage = () => {
                     </div>
 
                     {isImportMode ? (
-                        <div className="space-y-3 animate-fade-in">
-                            <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 text-xs text-emerald-800">
-                                <div className="flex items-center gap-2 mb-1 font-bold"><Icons.Sparkles /> DICA DE IMPORTAÇÃO RÁPIDA:</div>
-                                <p>Cole os nomes abaixo (um por linha). Se quiser incluir a matrícula, use o formato: <code>Nome do Aluno, Matrícula</code></p>
+                        <div className="space-y-4 animate-fade-in">
+                            <div className="flex bg-slate-100 p-1 rounded-xl w-fit mx-auto mb-2">
+                                <button 
+                                    onClick={() => setImportMethod('PASTE')}
+                                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${importMethod === 'PASTE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Colar Lista
+                                </button>
+                                <button 
+                                    onClick={() => setImportMethod('FILE')}
+                                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${importMethod === 'FILE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Carregar Arquivo (.csv)
+                                </button>
                             </div>
-                            <textarea 
-                                className="w-full h-48 border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-blue outline-none bg-white font-medium"
-                                placeholder="João Silva, 1001&#10;Maria Oliveira, 1002&#10;..."
-                                value={importText}
-                                onChange={e => setImportText(e.target.value)}
-                            />
-                            <Button onClick={handleImportStudents} disabled={loadingStudents} className="w-full justify-center bg-emerald-600 hover:bg-emerald-700 border-emerald-600 font-bold py-3">Confirmar Importação de Lista</Button>
+
+                            <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 text-xs text-emerald-800">
+                                <div className="flex items-center gap-2 mb-1 font-bold"><Icons.Sparkles /> FORMATO RECOMENDADO:</div>
+                                <p>Um aluno por linha no formato: <code>Nome do Aluno, Matrícula</code> (a matrícula é opcional).</p>
+                            </div>
+
+                            {importMethod === 'PASTE' ? (
+                                <textarea 
+                                    className="w-full h-48 border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-blue outline-none bg-white font-medium"
+                                    placeholder="João Silva, 1001&#10;Maria Oliveira, 1002&#10;..."
+                                    value={importText}
+                                    onChange={e => setImportText(e.target.value)}
+                                />
+                            ) : (
+                                <div className="border-2 border-dashed border-emerald-200 bg-emerald-50/30 rounded-2xl p-10 text-center relative hover:bg-emerald-50 transition-colors group">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <Icons.FileText />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-emerald-900">{importFile ? importFile.name : 'Selecionar arquivo CSV'}</p>
+                                            <p className="text-xs text-emerald-600 mt-1">{importFile ? 'Clique para trocar de arquivo' : 'Arraste ou clique para buscar'}</p>
+                                        </div>
+                                    </div>
+                                    <input 
+                                        type="file" 
+                                        accept=".csv,.txt" 
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                        onChange={e => setImportFile(e.target.files?.[0] || null)}
+                                    />
+                                </div>
+                            )}
+
+                            <Button 
+                                onClick={handleImportStudents} 
+                                disabled={loadingStudents || (importMethod === 'PASTE' ? !importText.trim() : !importFile)} 
+                                className="w-full justify-center bg-emerald-600 hover:bg-emerald-700 border-emerald-600 font-bold py-3 shadow-lg shadow-emerald-100"
+                            >
+                                {loadingStudents ? 'Processando...' : `Importar ${importMethod === 'PASTE' ? 'da Caixa de Texto' : 'do Arquivo'}`}
+                            </Button>
                         </div>
                     ) : (
                         <div className="space-y-4 animate-fade-in">
