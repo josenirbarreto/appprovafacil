@@ -141,12 +141,15 @@ const HierarchyPage = () => {
                     <h2 className="text-3xl font-display font-bold text-slate-800 flex items-center gap-2">
                         <Icons.BookOpen /> Gestão de Conteúdos
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Organize disciplinas e defina pacotes de compartilhamento comercial.</p>
+                    <p className="text-slate-500 text-sm mt-1">Organize disciplinas e defina pacotes de licenciamento.</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="secondary" onClick={() => setIsRedeemModalOpen(true)} className="shadow-md">
-                        <Icons.Download /> Resgatar Conteúdo
-                    </Button>
+                    {/* Botão Resgatar oculto para Admin */}
+                    {user?.role !== UserRole.ADMIN && (
+                        <Button variant="secondary" onClick={() => setIsRedeemModalOpen(true)} className="shadow-md">
+                            <Icons.Download /> Resgatar Conteúdo
+                        </Button>
+                    )}
                     {user?.role === UserRole.ADMIN && (
                         <Button onClick={() => handleOpenModal('discipline')} className="shadow-lg"><Icons.Plus /> Nova Disciplina</Button>
                     )}
@@ -184,7 +187,7 @@ const HierarchyPage = () => {
                                         <button 
                                             onClick={() => handleOpenShare(d)}
                                             className="bg-white/20 hover:bg-white text-white hover:text-brand-blue p-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold shadow-inner"
-                                            title="Configurar Venda/Compartilhamento"
+                                            title="Gerar Token de Licenciamento"
                                         >
                                             <Icons.Bank /> Comercializar
                                         </button>
@@ -263,15 +266,15 @@ const HierarchyPage = () => {
             <Modal
                 isOpen={isShareModalOpen}
                 onClose={() => setIsShareModalOpen(false)}
-                title={`Comercializar Disciplina: ${sharingDiscipline?.name}`}
+                title={`Licenciar Disciplina: ${sharingDiscipline?.name}`}
                 maxWidth="max-w-3xl"
             >
                 {sharingDiscipline && (
                     <div className="space-y-6">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
                             <div>
-                                <h4 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-1">Visão do Ativo</h4>
-                                <p className="text-sm text-slate-500">Analise os componentes antes de gerar o pacote de venda.</p>
+                                <h4 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-1">Status do Ativo</h4>
+                                <p className="text-sm text-slate-500">Escolha o nível de acesso para o token de uso único.</p>
                             </div>
                             <div className="flex gap-4">
                                 <div className="text-center"><p className="text-lg font-black text-brand-blue leading-none">{getDisciplineStats(sharingDiscipline).topics}</p><p className="text-[10px] text-slate-400 uppercase font-bold">Tópicos</p></div>
@@ -281,12 +284,15 @@ const HierarchyPage = () => {
 
                         {generatedToken ? (
                             <div className="bg-emerald-50 border-2 border-emerald-200 p-8 rounded-2xl text-center animate-scale-in">
-                                <p className="text-emerald-800 font-bold mb-4 uppercase text-xs tracking-widest">Token Gerado com Sucesso!</p>
+                                <p className="text-emerald-800 font-bold mb-4 uppercase text-xs tracking-widest">Token de Uso Único Gerado!</p>
                                 <div className="bg-white border-2 border-emerald-500 text-emerald-600 font-mono text-4xl font-black py-4 rounded-xl mb-4 shadow-inner">
                                     {generatedToken}
                                 </div>
-                                <p className="text-sm text-emerald-600 mb-6">Envie este código para a escola compradora. <br/>Eles devem usá-lo no botão <strong>"Resgatar Conteúdo"</strong>.</p>
-                                <Button onClick={() => setGeneratedToken(null)} variant="outline" className="border-emerald-500 text-emerald-600">Gerar outro para esta disciplina</Button>
+                                <div className="bg-white/50 p-3 rounded-lg border border-emerald-200 mb-6 flex items-start gap-3 text-left">
+                                    <Icons.Shield />
+                                    <p className="text-xs text-emerald-700">Este código será invalidado assim que o primeiro cliente o resgatar. Mantenha em sigilo até a venda.</p>
+                                </div>
+                                <Button onClick={() => setGeneratedToken(null)} variant="outline" className="border-emerald-500 text-emerald-600">Gerar Novo Token</Button>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,10 +305,9 @@ const HierarchyPage = () => {
                                         <Badge color="blue">NÍVEL 1</Badge>
                                     </div>
                                     <h5 className="font-bold text-lg text-slate-800">Estrutura Curricular</h5>
-                                    <p className="text-sm text-slate-500 mb-6 flex-1">Compartilha apenas o esqueleto da disciplina (Capítulos, Unidades e Tópicos). Ideal para licenciamento de metodologia.</p>
+                                    <p className="text-sm text-slate-500 mb-6 flex-1">Compartilha o esqueleto pedagógico. Ideal para novos professores ou licenciamento básico.</p>
                                     <div className="pt-4 border-t border-slate-100 mt-auto">
-                                        <p className="text-xs font-black text-slate-400 uppercase mb-2">Valor sugerido: <span className="text-slate-800">BAIXO</span></p>
-                                        <Button variant="outline" className="w-full justify-center" onClick={() => handleGenerateToken(false)}>Gerar Token de Estrutura</Button>
+                                        <Button variant="outline" className="w-full justify-center" onClick={() => handleGenerateToken(false)}>Gerar Token (Uso Único)</Button>
                                     </div>
                                 </div>
 
@@ -316,18 +321,13 @@ const HierarchyPage = () => {
                                         <Badge color="green">NÍVEL 2</Badge>
                                     </div>
                                     <h5 className="font-bold text-lg text-slate-800">Pacote Premium</h5>
-                                    <p className="text-sm text-slate-500 mb-6 flex-1">Acesso total à estrutura + todas as questões oficiais vinculadas. O ativo intelectual completo para escolas parceiras.</p>
+                                    <p className="text-sm text-slate-500 mb-6 flex-1">Acesso total à estrutura + todas as questões oficiais. O ativo intelectual completo para escolas parceiras.</p>
                                     <div className="pt-4 border-t border-slate-200 mt-auto">
-                                        <p className="text-xs font-black text-blue-400 uppercase mb-2">Valor sugerido: <span className="text-brand-blue">ALTO</span></p>
-                                        <Button className="w-full justify-center shadow-lg shadow-blue-200" onClick={() => handleGenerateToken(true)}>Gerar Token Master</Button>
+                                        <Button className="w-full justify-center shadow-lg shadow-blue-200" onClick={() => handleGenerateToken(true)}>Gerar Token (Uso Único)</Button>
                                     </div>
                                 </div>
                             </div>
                         )}
-
-                        <p className="text-[10px] text-slate-400 text-center uppercase font-bold tracking-tighter">
-                            * Os tokens gerados podem ser vinculados a contratos ou planos específicos no módulo financeiro.
-                        </p>
                     </div>
                 )}
             </Modal>
@@ -336,14 +336,14 @@ const HierarchyPage = () => {
             <Modal
                 isOpen={isRedeemModalOpen}
                 onClose={() => setIsRedeemModalOpen(false)}
-                title="Resgatar Conteúdo via Token"
+                title="Resgatar Conteúdo Licenciado"
                 maxWidth="max-w-md"
                 footer={<Button onClick={handleRedeem} disabled={redeemLoading}>{redeemLoading ? 'Validando...' : 'Resgatar Agora'}</Button>}
             >
                 <div className="space-y-4">
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-800 text-sm">
-                        <p className="font-bold mb-1 flex items-center gap-2"><Icons.Sparkles /> Licenciamento Premium</p>
-                        <p>Insira o código enviado pela administração ou pela escola parceira para desbloquear novas disciplinas e questões.</p>
+                        <p className="font-bold mb-1 flex items-center gap-2"><Icons.Sparkles /> Ativação de Licença</p>
+                        <p>Insira o código de uso único para desbloquear os conteúdos exclusivos da disciplina.</p>
                     </div>
                     <Input 
                         label="Código do Token" 
@@ -352,29 +352,12 @@ const HierarchyPage = () => {
                         placeholder="EX: 4X9J2B7K" 
                         autoFocus
                         className="text-center font-mono text-2xl tracking-widest font-black text-brand-blue border-2"
-                        onKeyDown={e => e.key === 'Enter' && handleRedeem()}
                     />
-                    <p className="text-[10px] text-slate-400 text-center uppercase">Certifique-se de que o token ainda está dentro do prazo de validade.</p>
                 </div>
             </Modal>
 
-            <Modal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                title={modalConfig.title}
-                footer={<Button onClick={handleSave}>Salvar</Button>}
-                maxWidth="max-w-md"
-            >
-                <div className="space-y-4">
-                    <Input 
-                        label="Nome" 
-                        value={newItemName} 
-                        onChange={e => setNewItemName(e.target.value)} 
-                        placeholder="Digite o nome..." 
-                        autoFocus
-                        onKeyDown={e => e.key === 'Enter' && handleSave()}
-                    />
-                </div>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalConfig.title} footer={<Button onClick={handleSave}>Salvar</Button>} maxWidth="max-w-md">
+                <div className="space-y-4"><Input label="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Digite o nome..." autoFocus onKeyDown={e => e.key === 'Enter' && handleSave()}/></div>
             </Modal>
         </div>
     );

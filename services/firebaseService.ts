@@ -50,7 +50,7 @@ const COLLECTIONS = {
     TICKET_MESSAGES: 'ticket_messages',
     SETTINGS: 'settings',
     TUTORIALS: 'tutorials',
-    TOKENS: 'commercial_tokens' // Coleção para tokens de venda de disciplina
+    TOKENS: 'commercial_tokens' 
 };
 
 const safeLog = (message: string, error: any) => {
@@ -151,10 +151,11 @@ export const FirebaseService = {
             includeQuestions,
             createdAt: new Date().toISOString(),
             status: 'ACTIVE',
-            usedBy: []
+            usedBy: null, // Alterado para null para reforçar uso único
+            usedAt: null
         };
         await setDoc(doc(db, COLLECTIONS.TOKENS, code), tokenData);
-        await logAuditAction('CREATE', 'MARKETING', `Token comercial gerado para disciplina ${disciplineId}`, code);
+        await logAuditAction('CREATE', 'MARKETING', `Token comercial de USO ÚNICO gerado para disciplina ${disciplineId}`, code);
         return code;
     },
 
@@ -165,19 +166,18 @@ export const FirebaseService = {
         if (!tokenSnap.exists()) throw new Error("Token inválido ou inexistente.");
         const tokenData = tokenSnap.data();
         
-        if (tokenData.status !== 'ACTIVE') throw new Error("Este token não está mais ativo.");
+        // Verificação de Uso Único
+        if (tokenData.status !== 'ACTIVE' || tokenData.usedBy) {
+            throw new Error("Este token já foi utilizado ou está expirado. Tokens de licenciamento são de uso único.");
+        }
 
-        // Busca a disciplina original
         const discRef = doc(db, COLLECTIONS.DISCIPLINES, tokenData.disciplineId);
         const discSnap = await getDoc(discRef);
-        if (!discSnap.exists()) throw new Error("Disciplina de origem não encontrada.");
+        if (!discSnap.exists()) throw new Error("Disciplina de origem não encontrada no acervo master.");
         
         const originalDisc = discSnap.data() as Discipline;
 
-        // Lógica de Importação: Para simplificar o MVP, marcamos que o usuário agora "possui" essa disciplina
-        // Em um sistema real, faríamos o clone de toda a árvore (Chapters, Units, Topics, Questions)
-        // Aqui, vamos adicionar o ID da disciplina aos 'subjects' e 'accessGrants' do usuário/instituição
-        
+        // Atribui acesso ao usuário/instituição
         const updates: any = {
             subjects: Array.from(new Set([...(user.subjects || []), tokenData.disciplineId])),
             accessGrants: Array.from(new Set([...(user.accessGrants || []), tokenData.disciplineId]))
@@ -185,16 +185,18 @@ export const FirebaseService = {
 
         await updateDoc(doc(db, COLLECTIONS.USERS, user.id), updates);
         
-        // Registra uso do token
+        // INVALIDA O TOKEN IMEDIATAMENTE (Uso Único)
         await updateDoc(tokenRef, {
-            usedBy: Array.from(new Set([...(tokenData.usedBy || []), user.id]))
+            status: 'USED',
+            usedBy: user.id,
+            usedAt: new Date().toISOString()
         });
 
-        await logAuditAction('UPDATE', 'USER', `Usuário resgatou conteúdo via Token: ${code}`, user.id);
+        await logAuditAction('UPDATE', 'USER', `Resgate de conteúdo via Token Único: ${code}`, user.id);
         return originalDisc.name;
     },
 
-    // --- STUDENTS ---
+    // --- RESTANTE DOS MÉTODOS MANTIDOS ---
     getStudents: async (classId: string): Promise<Student[]> => {
         try {
             const q = query(collection(db, COLLECTIONS.STUDENTS), where("classId", "==", classId));
