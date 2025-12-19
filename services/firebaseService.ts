@@ -27,7 +27,7 @@ import {
 } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app"; 
 import { db, auth, firebaseConfig } from "../firebaseConfig";
-import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage, Coupon, SystemSettings, Tutorial, Student } from '../types';
+import { User, UserRole, Discipline, Question, Exam, Institution, SchoolClass, Chapter, Unit, Topic, ExamAttempt, Plan, Payment, Campaign, AuditLog, Ticket, TicketMessage, Coupon, SystemSettings, Tutorial, Student, ContractTemplate, SignatureLog } from '../types';
 
 const COLLECTIONS = {
     USERS: 'users',
@@ -50,7 +50,9 @@ const COLLECTIONS = {
     TICKET_MESSAGES: 'ticket_messages',
     SETTINGS: 'settings',
     TUTORIALS: 'tutorials',
-    TOKENS: 'commercial_tokens' 
+    TOKENS: 'commercial_tokens',
+    CONTRACT_TEMPLATES: 'contract_templates',
+    SIGNATURES: 'signatures_log'
 };
 
 const safeLog = (message: string, error: any) => {
@@ -141,7 +143,122 @@ const logAuditAction = async (action: AuditLog['action'], resource: string, deta
     }
 };
 
+// Helper for digital signature hash
+async function generateSHA256(message: string) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+}
+
 export const FirebaseService = {
+    // --- CONTRATOS ---
+    getContractTemplates: async (): Promise<ContractTemplate[]> => {
+        const snap = await getDocs(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
+        return snap.docs.map(d => ({ ...d.data(), id: d.id } as ContractTemplate));
+    },
+
+    saveContractTemplate: async (data: Partial<ContractTemplate>) => {
+        const payload = {
+            ...data,
+            updatedAt: new Date().toISOString()
+        };
+        if (data.id) {
+            await updateDoc(doc(db, COLLECTIONS.CONTRACT_TEMPLATES, data.id), cleanPayload(payload));
+            await logAuditAction('UPDATE', 'CONTRACT', `Contrato atualizado: ${data.title}`, data.id);
+        } else {
+            payload.createdAt = new Date().toISOString();
+            const docRef = await addDoc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), cleanPayload(payload));
+            await logAuditAction('CREATE', 'CONTRACT', `Novo contrato criado: ${data.title}`, docRef.id);
+        }
+    },
+
+    seedDefaultContracts: async () => {
+        const plans = (await getDocs(collection(db, COLLECTIONS.PLANS))).docs.map(d => d.data() as Plan);
+        const batch = writeBatch(db);
+        
+        const generateContent = (planName: string) => `
+            <div style="font-family: serif; max-width: 800px; margin: auto;">
+                <h1 style="text-align: center; border-bottom: 2px solid black; padding-bottom: 10px;">CONTRATO DE LICENCIAMENTO DE SOFTWARE - PLANO ${planName.toUpperCase()}</h1>
+                <p><strong>1. OBJETO:</strong> O presente contrato tem por objeto o licenciamento de uso da Plataforma Prova Fácil para o plano <strong>${planName}</strong>.</p>
+                <p><strong>2. USO DE DADOS:</strong> O usuário concorda com a coleta de logs de auditoria e processamento de dados pedagógicos para fins de geração de relatórios de desempenho.</p>
+                <p><strong>3. PROPRIEDADE INTELECTUAL:</strong> Todo o conteúdo gerado via Inteligência Artificial é de propriedade intelectual compartilhada, sendo vedada a comercialização direta das questões fora da plataforma sem autorização prévia.</p>
+                <p><strong>4. RESPONSABILIDADE:</strong> A plataforma não se responsabiliza por erros pedagógicos em questões geradas automaticamente, cabendo ao professor a revisão final.</p>
+                <p><strong>5. ASSINATURA:</strong> Ao clicar no botão de aceite, o usuário firma este compromisso eletrônico com validade jurídica plena sob a égide da MP 2.200-2/2001.</p>
+                <br/>
+                <p style="text-align: center;"><em>Assinado Eletronicamente via Prova Fácil SaaS</em></p>
+            </div>
+        `;
+
+        for (const plan of plans) {
+            const docRef = doc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
+            batch.set(docRef, cleanPayload({
+                title: `Contrato Padrão - ${plan.name}`,
+                planId: plan.name,
+                content: generateContent(plan.name),
+                version: 1,
+                isActive: true,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }));
+        }
+
+        // Adiciona um global
+        const globalRef = doc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
+        batch.set(globalRef, cleanPayload({
+            title: `Termos de Uso Gerais (Todos os Planos)`,
+            planId: 'ALL',
+            content: generateContent('GERAL'),
+            version: 1,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }));
+
+        await batch.commit();
+        await logAuditAction('CREATE', 'CONTRACT', 'Seed de contratos padrão executado com sucesso');
+    },
+
+    deleteContractTemplate: async (id: string) => {
+        await deleteDoc(doc(db, COLLECTIONS.CONTRACT_TEMPLATES, id));
+        await logAuditAction('DELETE', 'CONTRACT', `Contrato removido`, id);
+    },
+
+    getActiveContractForPlan: async (planName: string): Promise<ContractTemplate | null> => {
+        const q = query(
+            collection(db, COLLECTIONS.CONTRACT_TEMPLATES),
+            where("isActive", "==", true),
+            where("planId", "in", [planName, "ALL"])
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) return null;
+        const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as ContractTemplate));
+        const specific = list.find(l => l.planId === planName);
+        return specific || list[0];
+    },
+
+    signContract: async (user: User, template: ContractTemplate, typedName: string) => {
+        const contentHash = await generateSHA256(template.content);
+        const ipAddress = "Detectado via conexão segura"; 
+        const signature: Omit<SignatureLog, 'id'> = {
+            userId: user.id,
+            userName: user.name,
+            templateId: template.id,
+            version: template.version,
+            timestamp: new Date().toISOString(),
+            ipAddress,
+            userAgent: navigator.userAgent,
+            contentHash,
+            typedName
+        };
+        await addDoc(collection(db, COLLECTIONS.SIGNATURES), cleanPayload(signature));
+        await updateDoc(doc(db, COLLECTIONS.USERS, user.id), { 
+            lastSignedContractId: template.id 
+        });
+        await logAuditAction('SECURITY', 'CONTRACT', `Contrato assinado eletronicamente pelo usuário`, user.id, { templateId: template.id });
+    },
+
     // --- COMERCIALIZAÇÃO (TOKENS) ---
     generateCommercialToken: async (disciplineId: string, includeQuestions: boolean) => {
         const code = Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -151,7 +268,7 @@ export const FirebaseService = {
             includeQuestions,
             createdAt: new Date().toISOString(),
             status: 'ACTIVE',
-            usedBy: null, // Alterado para null para reforçar uso único
+            usedBy: null, 
             usedAt: null
         };
         await setDoc(doc(db, COLLECTIONS.TOKENS, code), tokenData);
@@ -162,41 +279,28 @@ export const FirebaseService = {
     redeemCommercialToken: async (code: string, user: User) => {
         const tokenRef = doc(db, COLLECTIONS.TOKENS, code.toUpperCase());
         const tokenSnap = await getDoc(tokenRef);
-        
         if (!tokenSnap.exists()) throw new Error("Token inválido ou inexistente.");
         const tokenData = tokenSnap.data();
-        
-        // Verificação de Uso Único
         if (tokenData.status !== 'ACTIVE' || tokenData.usedBy) {
-            throw new Error("Este token já foi utilizado ou está expirado. Tokens de licenciamento são de uso único.");
+            throw new Error("Este token já foi utilizado ou está expirado.");
         }
-
         const discRef = doc(db, COLLECTIONS.DISCIPLINES, tokenData.disciplineId);
         const discSnap = await getDoc(discRef);
-        if (!discSnap.exists()) throw new Error("Disciplina de origem não encontrada no acervo master.");
-        
-        const originalDisc = discSnap.data() as Discipline;
-
-        // Atribui acesso ao usuário/instituição
+        if (!discSnap.exists()) throw new Error("Disciplina de origem não encontrada.");
         const updates: any = {
             subjects: Array.from(new Set([...(user.subjects || []), tokenData.disciplineId])),
             accessGrants: Array.from(new Set([...(user.accessGrants || []), tokenData.disciplineId]))
         };
-
         await updateDoc(doc(db, COLLECTIONS.USERS, user.id), updates);
-        
-        // INVALIDA O TOKEN IMEDIATAMENTE (Uso Único)
         await updateDoc(tokenRef, {
             status: 'USED',
             usedBy: user.id,
             usedAt: new Date().toISOString()
         });
-
-        await logAuditAction('UPDATE', 'USER', `Resgate de conteúdo via Token Único: ${code}`, user.id);
-        return originalDisc.name;
+        await logAuditAction('UPDATE', 'USER', `Resgate via Token: ${code}`, user.id);
+        return discSnap.data().name;
     },
 
-    // --- RESTANTE DOS MÉTODOS MANTIDOS ---
     getStudents: async (classId: string): Promise<Student[]> => {
         try {
             const q = query(collection(db, COLLECTIONS.STUDENTS), where("classId", "==", classId));

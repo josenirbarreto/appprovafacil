@@ -1,7 +1,7 @@
 
 export enum UserRole {
   ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER', // Gestor da Escola
+  MANAGER = 'MANAGER', 
   TEACHER = 'TEACHER'
 }
 
@@ -20,13 +20,38 @@ export interface User {
   accessGrants?: string[]; 
   subjects?: string[]; 
   requiresPasswordChange?: boolean; 
+  lastSignedContractId?: string; // ID do último contrato assinado
 }
 
-// Alunos vinculados a uma turma
+export interface ContractTemplate {
+  id: string;
+  planId: string; // "ALL" ou nome do plano específico
+  title: string;
+  content: string; // HTML do contrato
+  version: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SignatureLog {
+  id: string;
+  userId: string;
+  userName: string;
+  templateId: string;
+  version: number;
+  timestamp: string;
+  ipAddress: string;
+  userAgent: string;
+  contentHash: string; // Hash SHA-256 do conteúdo do contrato no momento da assinatura
+  typedName: string; // Nome digitado pelo usuário como confirmação
+}
+
+// ... (restante das interfaces mantidas)
 export interface Student {
   id: string;
   name: string;
-  registration: string; // Matrícula
+  registration: string; 
   classId: string;
   institutionId: string;
   email?: string;
@@ -211,8 +236,8 @@ export interface Question {
   visibility?: 'PRIVATE' | 'INSTITUTION' | 'PUBLIC'; 
   reviewStatus?: ReviewStatus; 
   rejectionReason?: string;
-  isInstitutional?: boolean; // Se a escola aprovou como oficial dela
-  institutionalApprovedById?: string; // Quem aprovou na escola
+  isInstitutional?: boolean; 
+  institutionalApprovedById?: string; 
   enunciado: string; 
   type: QuestionType;
   disciplineId: string;
@@ -254,7 +279,7 @@ export interface PublicExamConfig {
 export interface ExamAttempt {
   id: string;
   examId: string;
-  studentId?: string; // Vínculo opcional para alunos cadastrados
+  studentId?: string; 
   studentName: string;
   studentIdentifier?: string; 
   startedAt: string;

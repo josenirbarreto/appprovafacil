@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { User, UserRole, SystemSettings } from './types';
+import { User, UserRole, SystemSettings, ContractTemplate } from './types';
 import { FirebaseService } from './services/firebaseService';
 import { Icons } from './components/Icons';
 import { AuthContext, useAuth } from './contexts/AuthContext';
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Modal, Input, Button } from './components/UI';
+import { ContractOverlay } from './components/ContractOverlay';
 
 // Pages Imports
 import Login from './pages/Login';
@@ -30,6 +31,7 @@ import SupportPage from './pages/Support';
 import ModerationPage from './pages/Moderation';
 import SystemSettingsPage from './pages/SystemSettings';
 import TutorialsPage from './pages/Tutorials';
+import ContractTemplatesPage from './pages/ContractTemplates';
 
 const ForcePasswordChangeModal = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [newPassword, setNewPassword] = useState('');
@@ -85,20 +87,16 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     const [openTicketsCount, setOpenTicketsCount] = useState(0);
     const [pendingQuestionsCount, setPendingQuestionsCount] = useState(0);
     
-    // Global Settings State
     const [globalSettings, setGlobalSettings] = useState<SystemSettings | null>(null);
     
     useEffect(() => { setSidebarOpen(false); }, [location]);
 
-    // Load Global Settings & Notifications
     useEffect(() => {
         const fetchGlobals = async () => {
             try {
-                // Fetch Settings (Banner, WhiteLabel)
                 const settings = await FirebaseService.getSystemSettings();
                 setGlobalSettings(settings);
 
-                // Fetch Admin Notifications
                 if (user?.role === UserRole.ADMIN) {
                     const tCount = await FirebaseService.getAdminOpenTicketsCount();
                     const qCount = (await FirebaseService.getPendingQuestions()).length; 
@@ -110,13 +108,10 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
             }
         };
         fetchGlobals();
-        
-        // Poll for updates every 60s
         const interval = setInterval(fetchGlobals, 60000);
         return () => clearInterval(interval);
     }, [user]);
 
-    // Apply Favicon Dinâmico
     useEffect(() => {
         if (globalSettings?.whiteLabel?.logoUrl) {
             let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
@@ -153,6 +148,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 ...(isAdmin ? [ { path: '/audit', label: 'Auditoria', icon: Icons.Shield } ] : []),
                 ...(isAdmin ? [ { path: '/moderation', label: 'Moderação', icon: Icons.Check, badge: pendingQuestionsCount > 0 ? pendingQuestionsCount : undefined } ] : []),
                 ...(isAdmin ? [ { path: '/settings', label: 'Sistema', icon: Icons.Settings } ] : []),
+                ...(isAdmin ? [ { path: '/contracts', label: 'Contratos', icon: Icons.FileText } ] : []),
             ]
         },
         {
@@ -176,13 +172,11 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         }
     ];
 
-    // White Label overrides
     const appName = globalSettings?.whiteLabel?.appName || 'Prova Fácil';
     const logoUrl = globalSettings?.whiteLabel?.logoUrl;
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
-            {/* Mobile Header */}
             <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-brand-dark z-30 flex items-center px-4 justify-between shadow-md">
                 <div className="flex items-center gap-3">
                     <button onClick={() => setSidebarOpen(true)} className="text-slate-300 hover:text-white p-1"><Icons.Menu /></button>
@@ -190,10 +184,8 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 </div>
             </div>
 
-            {/* Overlay */}
             {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity" onClick={() => setSidebarOpen(false)} />}
 
-            {/* Sidebar */}
             <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand-dark border-r border-slate-700 flex flex-col shrink-0 transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 md:z-auto`}>
                 <div className="p-6 border-b border-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -253,9 +245,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 </div>
             </aside>
 
-            {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative pt-16 md:pt-0">
-                {/* SYSTEM BANNER */}
                 {globalSettings?.banner?.active && (
                     <div className={`w-full py-2 px-4 text-center text-sm font-bold shadow-md z-20 flex items-center justify-center gap-2 ${
                         globalSettings.banner.type === 'ERROR' ? 'bg-red-600 text-white' : 
@@ -274,6 +264,24 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
 const AppContent = () => {
     const { user, loading, refreshUser } = useAuth();
+    const [pendingContract, setPendingContract] = useState<ContractTemplate | null>(null);
+
+    // Lógica para verificar Contratos Pendentes
+    useEffect(() => {
+        if (user && user.role !== UserRole.ADMIN) {
+            const checkContract = async () => {
+                const active = await FirebaseService.getActiveContractForPlan(user.plan);
+                if (active && user.lastSignedContractId !== active.id) {
+                    setPendingContract(active);
+                } else {
+                    setPendingContract(null);
+                }
+            };
+            checkContract();
+        } else {
+            setPendingContract(null);
+        }
+    }, [user]);
 
     if (loading) {
         return (
@@ -287,41 +295,51 @@ const AppContent = () => {
     }
 
     return (
-        <Routes>
-            <Route path="/p/:examId" element={<PublicExam />} />
-            <Route path="*" element={
-                !user ? (
-                    <Login />
-                ) : (
-                    <>
-                        {user.requiresPasswordChange && <ForcePasswordChangeModal user={user} refreshUser={refreshUser} />}
-                        <Layout>
-                            <Routes>
-                                <Route path="/" element={<Dashboard />} />
-                                <Route path="/hierarchy" element={<HierarchyPage />} />
-                                <Route path="/questions" element={<QuestionsPage />} />
-                                <Route path="/exams" element={<ExamsPage />} />
-                                <Route path="/exam-results" element={<ExamResults />} />
-                                <Route path="/classes" element={<ClassesPage />} />
-                                <Route path="/institutions" element={<InstitutionPage />} />
-                                <Route path="/profile" element={<ProfilePage />} />
-                                <Route path="/users" element={<UsersPage />} />
-                                <Route path="/plans" element={<PlansPage />} />
-                                <Route path="/admin-exams" element={<AdminExamsPage />} />
-                                <Route path="/marketing" element={<MarketingPage />} />
-                                <Route path="/finance" element={<FinancePage />} />
-                                <Route path="/audit" element={<AuditLogsPage />} />
-                                <Route path="/support" element={<SupportPage />} />
-                                <Route path="/moderation" element={<ModerationPage />} />
-                                <Route path="/settings" element={<SystemSettingsPage />} />
-                                <Route path="/tutorials" element={<TutorialsPage />} />
-                                <Route path="*" element={<Navigate to="/" replace />} />
-                            </Routes>
-                        </Layout>
-                    </>
-                )
-            } />
-        </Routes>
+        <>
+            {pendingContract && user && (
+                <ContractOverlay 
+                    user={user} 
+                    template={pendingContract} 
+                    onSigned={() => { setPendingContract(null); refreshUser(); }} 
+                />
+            )}
+            <Routes>
+                <Route path="/p/:examId" element={<PublicExam />} />
+                <Route path="*" element={
+                    !user ? (
+                        <Login />
+                    ) : (
+                        <>
+                            {user.requiresPasswordChange && <ForcePasswordChangeModal user={user} refreshUser={refreshUser} />}
+                            <Layout>
+                                <Routes>
+                                    <Route path="/" element={<Dashboard />} />
+                                    <Route path="/hierarchy" element={<HierarchyPage />} />
+                                    <Route path="/questions" element={<QuestionsPage />} />
+                                    <Route path="/exams" element={<ExamsPage />} />
+                                    <Route path="/exam-results" element={<ExamResults />} />
+                                    <Route path="/classes" element={<ClassesPage />} />
+                                    <Route path="/institutions" element={<InstitutionPage />} />
+                                    <Route path="/profile" element={<ProfilePage />} />
+                                    <Route path="/users" element={<UsersPage />} />
+                                    <Route path="/plans" element={<PlansPage />} />
+                                    <Route path="/admin-exams" element={<AdminExamsPage />} />
+                                    <Route path="/marketing" element={<MarketingPage />} />
+                                    <Route path="/finance" element={<FinancePage />} />
+                                    <Route path="/audit" element={<AuditLogsPage />} />
+                                    <Route path="/support" element={<SupportPage />} />
+                                    <Route path="/moderation" element={<ModerationPage />} />
+                                    <Route path="/settings" element={<SystemSettingsPage />} />
+                                    <Route path="/tutorials" element={<TutorialsPage />} />
+                                    <Route path="/contracts" element={<ContractTemplatesPage />} />
+                                    <Route path="*" element={<Navigate to="/" replace />} />
+                                </Routes>
+                            </Layout>
+                        </>
+                    )
+                } />
+            </Routes>
+        </>
     );
 };
 
