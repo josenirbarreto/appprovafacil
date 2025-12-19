@@ -49,26 +49,20 @@ const COLLECTIONS = {
     TICKETS: 'tickets',
     TICKET_MESSAGES: 'ticket_messages',
     SETTINGS: 'settings',
-    TUTORIALS: 'tutorials'
+    TUTORIALS: 'tutorials',
+    TOKENS: 'commercial_tokens' // Coleção para tokens de venda de disciplina
 };
 
 const safeLog = (message: string, error: any) => {
     console.error(message, error?.code || error?.message || String(error));
 };
 
-/**
- * cleanPayload v2: Mais agressivo na limpeza para evitar erros de estrutura circular do Firebase.
- */
 const cleanPayload = (data: any): any => {
     const seen = new WeakSet();
     const process = (obj: any): any => {
         if (obj === null || typeof obj !== 'object') return obj;
         if (obj instanceof Date) return obj.toISOString();
-        
-        // Trata Timestamps do Firestore se existirem
         if (typeof obj.toDate === 'function') return obj.toDate().toISOString();
-        
-        // Evita objetos internos do navegador ou Firebase
         if (obj.constructor && (
             obj.constructor.name === 'SyntheticBaseEvent' || 
             obj.constructor.name.startsWith('_') || 
@@ -76,18 +70,13 @@ const cleanPayload = (data: any): any => {
             obj.constructor.name === 'Q$1' || 
             obj.constructor.name === 'Sa'
         )) return null;
-
-        // Evita circularidade
         if (seen.has(obj)) return null;
         seen.add(obj);
-
         if (Array.isArray(obj)) return obj.map(process).filter(v => v !== undefined);
-        
         const newObj: any = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 const value = obj[key];
-                // Pula funções e propriedades internas do SDK
                 if (value !== undefined && typeof value !== 'function' && !key.startsWith('_')) {
                     if (key === 'auth' || key === 'firestore' || key === 'app') continue;
                     newObj[key] = process(value);
@@ -101,42 +90,28 @@ const cleanPayload = (data: any): any => {
 
 const isVisible = (item: any, user: User | null | undefined) => {
     if (!user) return false;
-    // Fix: Cast explicitly to string to avoid "no overlap" error between UserRole narrowing and UserRole.ADMIN
     if ((user.role as string) === UserRole.ADMIN) return true;
-    
-    // Se o item for uma Instituição e o usuário for Gestor/Professor vinculado a ela
     if ('name' in item && 'logoUrl' in item && user.institutionId === item.id) return true;
-
     if (item.authorId === user.id) return true;
-    
-    // Se a questão foi aprovada pela escola (institucional) e o usuário é da mesma escola
     if (item.isInstitutional && user.institutionId && item.institutionId === user.institutionId) return true;
-
     if (user.role === UserRole.TEACHER && user.subjects && user.subjects.length > 0) {
         if ('disciplineId' in item && item.disciplineId) {
             if (!user.subjects.includes(item.disciplineId)) return false;
         }
     }
-
     const sameInstitution = user.institutionId && item.institutionId === user.institutionId;
     if (user.role === UserRole.MANAGER && sameInstitution) return true;
-    
     if ('enunciado' in item || 'visibility' in item) { 
         const q = item as Question;
-        
-        // Regra do Banco Global: se aprovada pelo admin, visível para quem tem acesso à disciplina
         if (q.reviewStatus === 'APPROVED' && q.visibility === 'PUBLIC') {
             const userGrants = user.accessGrants || [];
             if (q.disciplineId && (userGrants.includes(q.disciplineId) || user.role === UserRole.ADMIN)) return true;
         }
-
         if (q.reviewStatus && q.reviewStatus !== 'APPROVED') return false;
         if (!q.visibility) return false; 
         if (q.visibility === 'PRIVATE') return false; 
         if (q.visibility === 'INSTITUTION') return sameInstitution || false;
     }
-    
-    // Fallback: se tiver autor e não for o usuário, esconde (exceto casos acima)
     if (item.authorId && item.authorId !== user.id) return false;
     if (!item.authorId) return true;
     return false;
@@ -167,6 +142,58 @@ const logAuditAction = async (action: AuditLog['action'], resource: string, deta
 };
 
 export const FirebaseService = {
+    // --- COMERCIALIZAÇÃO (TOKENS) ---
+    generateCommercialToken: async (disciplineId: string, includeQuestions: boolean) => {
+        const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const tokenData = {
+            code,
+            disciplineId,
+            includeQuestions,
+            createdAt: new Date().toISOString(),
+            status: 'ACTIVE',
+            usedBy: []
+        };
+        await setDoc(doc(db, COLLECTIONS.TOKENS, code), tokenData);
+        await logAuditAction('CREATE', 'MARKETING', `Token comercial gerado para disciplina ${disciplineId}`, code);
+        return code;
+    },
+
+    redeemCommercialToken: async (code: string, user: User) => {
+        const tokenRef = doc(db, COLLECTIONS.TOKENS, code.toUpperCase());
+        const tokenSnap = await getDoc(tokenRef);
+        
+        if (!tokenSnap.exists()) throw new Error("Token inválido ou inexistente.");
+        const tokenData = tokenSnap.data();
+        
+        if (tokenData.status !== 'ACTIVE') throw new Error("Este token não está mais ativo.");
+
+        // Busca a disciplina original
+        const discRef = doc(db, COLLECTIONS.DISCIPLINES, tokenData.disciplineId);
+        const discSnap = await getDoc(discRef);
+        if (!discSnap.exists()) throw new Error("Disciplina de origem não encontrada.");
+        
+        const originalDisc = discSnap.data() as Discipline;
+
+        // Lógica de Importação: Para simplificar o MVP, marcamos que o usuário agora "possui" essa disciplina
+        // Em um sistema real, faríamos o clone de toda a árvore (Chapters, Units, Topics, Questions)
+        // Aqui, vamos adicionar o ID da disciplina aos 'subjects' e 'accessGrants' do usuário/instituição
+        
+        const updates: any = {
+            subjects: Array.from(new Set([...(user.subjects || []), tokenData.disciplineId])),
+            accessGrants: Array.from(new Set([...(user.accessGrants || []), tokenData.disciplineId]))
+        };
+
+        await updateDoc(doc(db, COLLECTIONS.USERS, user.id), updates);
+        
+        // Registra uso do token
+        await updateDoc(tokenRef, {
+            usedBy: Array.from(new Set([...(tokenData.usedBy || []), user.id]))
+        });
+
+        await logAuditAction('UPDATE', 'USER', `Usuário resgatou conteúdo via Token: ${code}`, user.id);
+        return originalDisc.name;
+    },
+
     // --- STUDENTS ---
     getStudents: async (classId: string): Promise<Student[]> => {
         try {
@@ -495,7 +522,6 @@ export const FirebaseService = {
         if (!currentUser) return [];
         const snapshot = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
         return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Institution)).filter(item => { 
-            // Gestor/Professor vê a instituição se estiver vinculado a ela pelo ID
             if (currentUser.institutionId && item.id === currentUser.institutionId) return true; 
             return isVisible(item, currentUser); 
         });
@@ -556,22 +582,16 @@ export const FirebaseService = {
     approveQuestion: async (id: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'APPROVED', rejectionReason: null }); await logAuditAction('UPDATE', 'MODERATION', 'Questão aprovada', id); },
     rejectQuestion: async (id: string, reason: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'REJECTED', rejectionReason: reason }); await logAuditAction('UPDATE', 'MODERATION', `Questão rejeitada: ${reason}`, id); },
     
-    /**
-     * Selo Institucional: Gestor aprova questão da sua escola.
-     * Se a visibilidade for PUBLIC, já marca como APPROVED bypassando admin.
-     */
     approveInstitutionalQuestion: async (id: string, managerId: string) => {
         const qDocRef = doc(db, COLLECTIONS.QUESTIONS, id);
         const qSnap = await getDoc(qDocRef);
         if (!qSnap.exists()) return;
         const qData = qSnap.data() as Question;
-        
         const updates: Partial<Question> = {
             isInstitutional: true,
             institutionalApprovedById: managerId,
             reviewStatus: qData.visibility === 'PUBLIC' ? 'APPROVED' : qData.reviewStatus
         };
-        
         await updateDoc(qDocRef, cleanPayload(updates));
         await logAuditAction('UPDATE', 'INSTITUTION', 'Questão aprovada para Banco Institucional', id);
     },
@@ -587,16 +607,12 @@ export const FirebaseService = {
         const userData = userDoc.data() as User;
         if (!data.authorId) data.authorId = auth.currentUser!.uid; 
         if (!data.institutionId && userData.institutionId) data.institutionId = userData.institutionId; 
-        
-        // Regra de Aprovação Inicial
-        // Se for gestor ou admin criando na sua unidade, já pode marcar como aprovado.
         if (userData.role === UserRole.ADMIN || userData.role === UserRole.MANAGER) {
             data.reviewStatus = 'APPROVED';
             if (userData.role === UserRole.MANAGER) data.isInstitutional = true;
         } else {
             data.reviewStatus = (data.visibility === 'PUBLIC') ? 'PENDING' : 'APPROVED';
         }
-
         if (!data.visibility) data.visibility = 'PUBLIC'; 
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data); return { ...q, id: docRef.id }; 
     },
@@ -605,7 +621,6 @@ export const FirebaseService = {
         const data: any = cleanPayload(rest); 
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser!.uid));
         const userData = userDoc.data() as User;
-
         if (data.visibility === 'PUBLIC' && userData.role !== UserRole.ADMIN && userData.role !== UserRole.MANAGER) {
             data.reviewStatus = 'PENDING';
         }

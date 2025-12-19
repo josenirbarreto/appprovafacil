@@ -7,7 +7,7 @@ import { Icons } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
 
 const HierarchyPage = () => {
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
     const [allQuestions, setAllQuestions] = useState<Question[]>([]);
     const [loading, setLoading] = useState(true);
@@ -28,13 +28,19 @@ const HierarchyPage = () => {
     // Share Modal States
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [sharingDiscipline, setSharingDiscipline] = useState<Discipline | null>(null);
+    const [generatedToken, setGeneratedToken] = useState<string | null>(null);
+
+    // Redeem Modal States
+    const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
+    const [redeemCode, setRedeemCode] = useState('');
+    const [redeemLoading, setRedeemLoading] = useState(false);
 
     useEffect(() => { if(user) load(); }, [user]);
     
     const load = async () => { 
         const [hData, qData] = await Promise.all([
             FirebaseService.getHierarchy(user),
-            user?.role === UserRole.ADMIN ? FirebaseService.getQuestions(user) : Promise.resolve([])
+            FirebaseService.getQuestions(user)
         ]);
         setHierarchy(hData); 
         setAllQuestions(qData);
@@ -79,7 +85,35 @@ const HierarchyPage = () => {
 
     const handleOpenShare = (d: Discipline) => {
         setSharingDiscipline(d);
+        setGeneratedToken(null);
         setIsShareModalOpen(true);
+    };
+
+    const handleGenerateToken = async (includeQuestions: boolean) => {
+        if (!sharingDiscipline) return;
+        try {
+            const code = await FirebaseService.generateCommercialToken(sharingDiscipline.id, includeQuestions);
+            setGeneratedToken(code);
+        } catch (e) {
+            alert("Erro ao gerar token.");
+        }
+    };
+
+    const handleRedeem = async () => {
+        if (!redeemCode.trim() || !user) return;
+        setRedeemLoading(true);
+        try {
+            const discName = await FirebaseService.redeemCommercialToken(redeemCode, user);
+            alert(`Sucesso! A disciplina "${discName}" foi adicionada à sua conta.`);
+            setIsRedeemModalOpen(false);
+            setRedeemCode('');
+            await refreshUser();
+            await load();
+        } catch (e: any) {
+            alert(e.message || "Erro ao resgatar token.");
+        } finally {
+            setRedeemLoading(false);
+        }
     };
 
     const getDisciplineStats = (d: Discipline) => {
@@ -109,9 +143,14 @@ const HierarchyPage = () => {
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Organize disciplinas e defina pacotes de compartilhamento comercial.</p>
                 </div>
-                {user?.role === UserRole.ADMIN && (
-                    <Button onClick={() => handleOpenModal('discipline')} className="shadow-lg"><Icons.Plus /> Nova Disciplina</Button>
-                )}
+                <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => setIsRedeemModalOpen(true)} className="shadow-md">
+                        <Icons.Download /> Resgatar Conteúdo
+                    </Button>
+                    {user?.role === UserRole.ADMIN && (
+                        <Button onClick={() => handleOpenModal('discipline')} className="shadow-lg"><Icons.Plus /> Nova Disciplina</Button>
+                    )}
+                </div>
             </div>
 
             <div className="grid gap-6">
@@ -240,46 +279,83 @@ const HierarchyPage = () => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* NÍVEL 1 */}
-                            <div className="border-2 border-slate-200 rounded-2xl p-6 hover:border-brand-blue transition-colors flex flex-col group">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-100 group-hover:text-brand-blue transition-colors">
-                                        <Icons.List />
-                                    </div>
-                                    <Badge color="blue">NÍVEL 1</Badge>
+                        {generatedToken ? (
+                            <div className="bg-emerald-50 border-2 border-emerald-200 p-8 rounded-2xl text-center animate-scale-in">
+                                <p className="text-emerald-800 font-bold mb-4 uppercase text-xs tracking-widest">Token Gerado com Sucesso!</p>
+                                <div className="bg-white border-2 border-emerald-500 text-emerald-600 font-mono text-4xl font-black py-4 rounded-xl mb-4 shadow-inner">
+                                    {generatedToken}
                                 </div>
-                                <h5 className="font-bold text-lg text-slate-800">Estrutura Curricular</h5>
-                                <p className="text-sm text-slate-500 mb-6 flex-1">Compartilha apenas o esqueleto da disciplina (Capítulos, Unidades e Tópicos). Ideal para licenciamento de metodologia.</p>
-                                <div className="pt-4 border-t border-slate-100 mt-auto">
-                                    <p className="text-xs font-black text-slate-400 uppercase mb-2">Valor sugerido: <span className="text-slate-800">BAIXO</span></p>
-                                    <Button variant="outline" className="w-full justify-center">Gerar Link de Venda</Button>
-                                </div>
+                                <p className="text-sm text-emerald-600 mb-6">Envie este código para a escola compradora. <br/>Eles devem usá-lo no botão <strong>"Resgatar Conteúdo"</strong>.</p>
+                                <Button onClick={() => setGeneratedToken(null)} variant="outline" className="border-emerald-500 text-emerald-600">Gerar outro para esta disciplina</Button>
                             </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* NÍVEL 1 */}
+                                <div className="border-2 border-slate-200 rounded-2xl p-6 hover:border-brand-blue transition-colors flex flex-col group">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-100 group-hover:text-brand-blue transition-colors">
+                                            <Icons.List />
+                                        </div>
+                                        <Badge color="blue">NÍVEL 1</Badge>
+                                    </div>
+                                    <h5 className="font-bold text-lg text-slate-800">Estrutura Curricular</h5>
+                                    <p className="text-sm text-slate-500 mb-6 flex-1">Compartilha apenas o esqueleto da disciplina (Capítulos, Unidades e Tópicos). Ideal para licenciamento de metodologia.</p>
+                                    <div className="pt-4 border-t border-slate-100 mt-auto">
+                                        <p className="text-xs font-black text-slate-400 uppercase mb-2">Valor sugerido: <span className="text-slate-800">BAIXO</span></p>
+                                        <Button variant="outline" className="w-full justify-center" onClick={() => handleGenerateToken(false)}>Gerar Token de Estrutura</Button>
+                                    </div>
+                                </div>
 
-                            {/* NÍVEL 2 */}
-                            <div className="border-2 border-brand-blue bg-blue-50/30 rounded-2xl p-6 hover:shadow-lg transition-all flex flex-col relative overflow-hidden">
-                                <div className="absolute -top-3 -right-8 bg-brand-orange text-white text-[10px] font-black px-10 py-4 rotate-45 shadow-sm">RECOMENDADO</div>
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center text-white shadow-md">
-                                        <Icons.Sparkles />
+                                {/* NÍVEL 2 */}
+                                <div className="border-2 border-brand-blue bg-blue-50/30 rounded-2xl p-6 hover:shadow-lg transition-all flex flex-col relative overflow-hidden">
+                                    <div className="absolute -top-3 -right-8 bg-brand-orange text-white text-[10px] font-black px-10 py-4 rotate-45 shadow-sm">RECOMENDADO</div>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center text-white shadow-md">
+                                            <Icons.Sparkles />
+                                        </div>
+                                        <Badge color="green">NÍVEL 2</Badge>
                                     </div>
-                                    <Badge color="green">NÍVEL 2</Badge>
-                                </div>
-                                <h5 className="font-bold text-lg text-slate-800">Pacote Premium</h5>
-                                <p className="text-sm text-slate-500 mb-6 flex-1">Acesso total à estrutura + todas as questões oficiais vinculadas. O ativo intelectual completo para escolas parceiras.</p>
-                                <div className="pt-4 border-t border-slate-200 mt-auto">
-                                    <p className="text-xs font-black text-blue-400 uppercase mb-2">Valor sugerido: <span className="text-brand-blue">ALTO</span></p>
-                                    <Button className="w-full justify-center shadow-lg shadow-blue-200">Gerar Token Master</Button>
+                                    <h5 className="font-bold text-lg text-slate-800">Pacote Premium</h5>
+                                    <p className="text-sm text-slate-500 mb-6 flex-1">Acesso total à estrutura + todas as questões oficiais vinculadas. O ativo intelectual completo para escolas parceiras.</p>
+                                    <div className="pt-4 border-t border-slate-200 mt-auto">
+                                        <p className="text-xs font-black text-blue-400 uppercase mb-2">Valor sugerido: <span className="text-brand-blue">ALTO</span></p>
+                                        <Button className="w-full justify-center shadow-lg shadow-blue-200" onClick={() => handleGenerateToken(true)}>Gerar Token Master</Button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
 
                         <p className="text-[10px] text-slate-400 text-center uppercase font-bold tracking-tighter">
                             * Os tokens gerados podem ser vinculados a contratos ou planos específicos no módulo financeiro.
                         </p>
                     </div>
                 )}
+            </Modal>
+
+            {/* REDEEM MODAL - RESGATE DE CONTEÚDO */}
+            <Modal
+                isOpen={isRedeemModalOpen}
+                onClose={() => setIsRedeemModalOpen(false)}
+                title="Resgatar Conteúdo via Token"
+                maxWidth="max-w-md"
+                footer={<Button onClick={handleRedeem} disabled={redeemLoading}>{redeemLoading ? 'Validando...' : 'Resgatar Agora'}</Button>}
+            >
+                <div className="space-y-4">
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-800 text-sm">
+                        <p className="font-bold mb-1 flex items-center gap-2"><Icons.Sparkles /> Licenciamento Premium</p>
+                        <p>Insira o código enviado pela administração ou pela escola parceira para desbloquear novas disciplinas e questões.</p>
+                    </div>
+                    <Input 
+                        label="Código do Token" 
+                        value={redeemCode} 
+                        onChange={e => setRedeemCode(e.target.value.toUpperCase())} 
+                        placeholder="EX: 4X9J2B7K" 
+                        autoFocus
+                        className="text-center font-mono text-2xl tracking-widest font-black text-brand-blue border-2"
+                        onKeyDown={e => e.key === 'Enter' && handleRedeem()}
+                    />
+                    <p className="text-[10px] text-slate-400 text-center uppercase">Certifique-se de que o token ainda está dentro do prazo de validade.</p>
+                </div>
             </Modal>
 
             <Modal 
