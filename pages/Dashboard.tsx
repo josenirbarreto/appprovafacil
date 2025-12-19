@@ -1,126 +1,146 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Badge, Button } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { SimpleBarChart, SimpleDonutChart } from '../components/Charts';
 import { FirebaseService } from '../services/firebaseService';
-import { Exam, Question, SchoolClass, Discipline, Institution, QuestionType } from '../types';
+import { Exam, Question, SchoolClass, Discipline, Institution, QuestionType, User, UserRole, ExamAttempt } from '../types';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
-    const [metrics, setMetrics] = useState({
-        totalExams: 0,
-        totalQuestions: 0,
-        totalClasses: 0,
-        totalInstitutions: 0,
-        questionsByDifficulty: [] as { label: string, value: number, color: string }[],
-        questionsByType: [] as { label: string, value: number, color: string }[],
-        questionsByDiscipline: [] as { label: string, value: number, color: string }[],
-        recentExams: [] as (Exam & { className?: string, institutionName?: string })[]
+    const [data, setData] = useState({
+        exams: [] as Exam[],
+        questions: [] as Question[],
+        classes: [] as SchoolClass[],
+        institutions: [] as Institution[],
+        disciplines: [] as Discipline[],
+        users: [] as User[],
+        allAttempts: [] as ExamAttempt[]
     });
+
+    const isAdmin = user?.role === UserRole.ADMIN;
+    const isManager = user?.role === UserRole.MANAGER;
 
     useEffect(() => {
         if (!user) return;
-        const loadStats = async () => {
+        const loadAllData = async () => {
             try {
-                // Passa o 'user' para garantir que os dados sejam isolados
-                const [exams, questions, classes, institutions, disciplines] = await Promise.all([
+                const [exams, questions, classes, institutions, disciplines, users] = await Promise.all([
                     FirebaseService.getExams(user),
                     FirebaseService.getQuestions(user),
                     FirebaseService.getClasses(user),
                     FirebaseService.getInstitutions(user),
-                    FirebaseService.getHierarchy(user)
+                    FirebaseService.getHierarchy(user),
+                    FirebaseService.getUsers(user)
                 ]);
 
-                // 1. Totais Básicos
-                const totalExams = exams.length;
-                const totalQuestions = questions.length;
-                const totalClasses = classes.length;
-                const totalInstitutions = institutions.length;
+                // Busca resultados de todas as provas para calcular médias por turma
+                const attemptsPromises = exams.map(e => FirebaseService.getExamResults(e.id));
+                const attemptsArrays = await Promise.all(attemptsPromises);
+                const allAttempts = attemptsArrays.flat();
 
-                // 2. Questões por Dificuldade
-                const diffCount = { Easy: 0, Medium: 0, Hard: 0 };
-                questions.forEach(q => {
-                    if (q.difficulty in diffCount) diffCount[q.difficulty as keyof typeof diffCount]++;
-                });
-                const questionsByDifficulty = [
-                    { label: 'Fácil', value: diffCount.Easy, color: '#4ade80' },   // Green
-                    { label: 'Médio', value: diffCount.Medium, color: '#facc15' }, // Yellow
-                    { label: 'Difícil', value: diffCount.Hard, color: '#f87171' }  // Red
-                ].filter(d => d.value > 0);
-
-                // 3. Questões por Tipo
-                const typeLabels: Record<string, string> = {
-                    [QuestionType.MULTIPLE_CHOICE]: 'Múltipla Escolha',
-                    [QuestionType.TRUE_FALSE]: 'V/F',
-                    [QuestionType.SHORT_ANSWER]: 'Dissertativa',
-                    [QuestionType.NUMERIC]: 'Numérica',
-                    [QuestionType.ASSOCIATION]: 'Associação'
-                };
-                const typeCount: Record<string, number> = {};
-                questions.forEach(q => {
-                    const type = q.type;
-                    typeCount[type] = (typeCount[type] || 0) + 1;
-                });
-                const typeColors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'];
-                const questionsByType = Object.entries(typeCount).map(([type, count], index) => ({
-                    label: typeLabels[type] || type,
-                    value: count,
-                    color: typeColors[index % typeColors.length]
-                }));
-
-                // 4. Questões por Disciplina (Top 5)
-                const discCount: Record<string, number> = {};
-                questions.forEach(q => {
-                    const discName = disciplines.find(d => d.id === q.disciplineId)?.name || 'Sem Disciplina';
-                    discCount[discName] = (discCount[discName] || 0) + 1;
-                });
-                const questionsByDiscipline = Object.entries(discCount)
-                    .map(([name, count], index) => ({
-                        label: name,
-                        value: count,
-                        color: ['#3A72EC', '#22c55e', '#a855f7', '#f59e0b', '#ef4444'][index % 5]
-                    }))
-                    .sort((a, b) => b.value - a.value)
-                    .slice(0, 5); // Pegar apenas as top 5 disciplinas
-
-                // 5. Provas Recentes (Top 5)
-                const sortedExams = [...exams].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
-                const recentExams = sortedExams.map(e => ({
-                    ...e,
-                    className: classes.find(c => c.id === e.classId)?.name,
-                    institutionName: institutions.find(i => i.id === e.institutionId)?.name
-                }));
-
-                setMetrics({
-                    totalExams,
-                    totalQuestions,
-                    totalClasses,
-                    totalInstitutions,
-                    questionsByDifficulty,
-                    questionsByType,
-                    questionsByDiscipline,
-                    recentExams
+                setData({
+                    exams,
+                    questions,
+                    classes,
+                    institutions,
+                    disciplines,
+                    users,
+                    allAttempts
                 });
             } catch (error) {
-                console.error("Erro ao calcular métricas:", error);
+                console.error("Erro ao carregar dados do dashboard:", error);
             } finally {
                 setLoading(false);
             }
         };
 
-        loadStats();
+        loadAllData();
     }, [user]);
+
+    // --- CÁLCULOS BI ESCOLAR ---
+
+    // 1. Desempenho por Turma (Média de Notas)
+    const classPerformance = useMemo(() => {
+        const performanceMap: Record<string, { totalScore: number, totalQuestions: number, count: number, name: string }> = {};
+        
+        data.classes.forEach(c => {
+            performanceMap[c.id] = { totalScore: 0, totalQuestions: 0, count: 0, name: c.name };
+        });
+
+        data.allAttempts.forEach(att => {
+            const exam = data.exams.find(e => e.id === att.examId);
+            if (exam && exam.classId && performanceMap[exam.classId]) {
+                performanceMap[exam.classId].totalScore += att.score;
+                performanceMap[exam.classId].totalQuestions += att.totalQuestions;
+                performanceMap[exam.classId].count += 1;
+            }
+        });
+
+        return Object.values(performanceMap)
+            .filter(v => v.count > 0)
+            .map(v => ({
+                label: v.name,
+                value: Number(((v.totalScore / v.totalQuestions) * 100).toFixed(1)) || 0,
+                color: '#3A72EC'
+            }))
+            .sort((a, b) => b.value - a.value);
+    }, [data]);
+
+    // 2. Engajamento dos Professores (Ranking)
+    const teacherEngagement = useMemo(() => {
+        const teachers = data.users.filter(u => u.role === UserRole.TEACHER);
+        return teachers.map(t => {
+            const qCount = data.questions.filter(q => q.authorId === t.id).length;
+            const eCount = data.exams.filter(e => e.authorId === t.id).length;
+            return {
+                id: t.id,
+                name: t.name,
+                photoUrl: t.photoUrl,
+                questions: qCount,
+                exams: eCount,
+                score: (qCount * 2) + (eCount * 10) // Peso para ranking
+            };
+        }).sort((a, b) => b.score - a.score).slice(0, 5);
+    }, [data]);
+
+    // 3. Mapa de Calor de Conteúdos (Tópicos mais vs menos cobrados)
+    const contentHeatmap = useMemo(() => {
+        const usage: Record<string, { name: string, count: number, discipline: string }> = {};
+        
+        data.exams.forEach(ex => {
+            ex.questions.forEach(q => {
+                const topicId = q.topicId || 'unclassified';
+                if (!usage[topicId]) {
+                    const disc = data.disciplines.find(d => d.id === q.disciplineId);
+                    let topicName = 'Não Classificado';
+                    if (q.topicId) {
+                        disc?.chapters.forEach(c => c.units.forEach(u => u.topics.forEach(t => {
+                            if (t.id === q.topicId) topicName = t.name;
+                        })));
+                    }
+                    usage[topicId] = { name: topicName, count: 0, discipline: disc?.name || 'Geral' };
+                }
+                usage[topicId].count++;
+            });
+        });
+
+        const sorted = Object.values(usage).sort((a, b) => b.count - a.count);
+        return {
+            top: sorted.slice(0, 5),
+            forgotten: sorted.reverse().slice(0, 5)
+        };
+    }, [data]);
 
     if (loading) {
         return (
             <div className="p-8 h-full flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3 text-slate-400">
                     <div className="w-8 h-8 border-4 border-slate-200 border-t-brand-blue rounded-full animate-spin"></div>
-                    <p>Carregando estatísticas...</p>
+                    <p className="font-bold">Gerando BI Escolar...</p>
                 </div>
             </div>
         );
@@ -128,126 +148,121 @@ const Dashboard = () => {
 
     return (
         <div className="p-8 overflow-y-auto custom-scrollbar h-full bg-slate-50">
-            <div className="mb-8">
-                <h2 className="text-3xl font-display font-bold text-slate-800">Dashboard</h2>
-                <p className="text-slate-500">Visão geral do seu banco de questões e avaliações.</p>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                 <Card className="flex items-center gap-4 border-l-4 border-l-blue-500">
-                     <div className="w-12 h-12 rounded-full bg-blue-50 text-brand-blue flex items-center justify-center shrink-0"><Icons.Exams /></div>
-                     <div>
-                         <p className="text-2xl font-bold text-slate-800">{metrics.totalExams}</p>
-                         <p className="text-sm text-slate-500 font-medium">Provas Criadas</p>
-                     </div>
-                 </Card>
-                 <Card className="flex items-center gap-4 border-l-4 border-l-green-500">
-                     <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center shrink-0"><Icons.Questions /></div>
-                     <div>
-                         <p className="text-2xl font-bold text-slate-800">{metrics.totalQuestions}</p>
-                         <p className="text-sm text-slate-500 font-medium">Questões Totais</p>
-                     </div>
-                 </Card>
-                 <Card className="flex items-center gap-4 border-l-4 border-l-purple-500">
-                     <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0"><Icons.UsersGroup /></div>
-                     <div>
-                         <p className="text-2xl font-bold text-slate-800">{metrics.totalClasses}</p>
-                         <p className="text-sm text-slate-500 font-medium">Turmas Ativas</p>
-                     </div>
-                 </Card>
-                 <Card className="flex items-center gap-4 border-l-4 border-l-orange-500">
-                     <div className="w-12 h-12 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center shrink-0"><Icons.Building /></div>
-                     <div>
-                         <p className="text-2xl font-bold text-slate-800">{metrics.totalInstitutions}</p>
-                         <p className="text-sm text-slate-500 font-medium">Instituições</p>
-                     </div>
-                 </Card>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                {/* Distribuição por Disciplina */}
-                <div className="lg:col-span-2">
-                    <Card title="Questões por Disciplina (Top 5)" className="h-full min-h-[320px]">
-                        {metrics.questionsByDiscipline.length > 0 ? (
-                            <SimpleBarChart data={metrics.questionsByDiscipline} />
-                        ) : (
-                            <div className="h-40 flex items-center justify-center text-slate-400 italic">Nenhuma questão cadastrada.</div>
-                        )}
-                    </Card>
-                </div>
-
-                {/* Distribuição por Dificuldade */}
+            <div className="mb-8 flex justify-between items-end">
                 <div>
-                    <Card title="Dificuldade das Questões" className="h-full min-h-[320px] flex flex-col items-center justify-center">
-                        {metrics.questionsByDifficulty.length > 0 ? (
-                             <SimpleDonutChart data={metrics.questionsByDifficulty} />
+                    <h2 className="text-3xl font-display font-bold text-slate-800">BI Institucional</h2>
+                    <p className="text-slate-500">Monitoramento pedagógico e engajamento da unidade.</p>
+                </div>
+                {(isAdmin || isManager) && (
+                    <div className="flex gap-2">
+                        <Badge color="blue">Unidade: {data.institutions[0]?.name || 'Todas'}</Badge>
+                    </div>
+                )}
+            </div>
+
+            {/* KPI Row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <Card className="border-l-4 border-l-blue-500">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Média Institucional</p>
+                    <p className="text-3xl font-black text-slate-800">
+                        {data.allAttempts.length > 0 
+                            ? (data.allAttempts.reduce((acc, curr) => acc + (curr.score / curr.totalQuestions), 0) / data.allAttempts.length * 100).toFixed(1)
+                            : '0'}%
+                    </p>
+                </Card>
+                <Card className="border-l-4 border-l-emerald-500">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Provas Aplicadas</p>
+                    <p className="text-3xl font-black text-slate-800">{data.exams.length}</p>
+                </Card>
+                <Card className="border-l-4 border-l-orange-500">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Questões Criadas</p>
+                    <p className="text-3xl font-black text-slate-800">{data.questions.length}</p>
+                </Card>
+                <Card className="border-l-4 border-l-purple-500">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Professores Ativos</p>
+                    <p className="text-3xl font-black text-slate-800">{data.users.filter(u => u.role === UserRole.TEACHER).length}</p>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                {/* Desempenho por Turma */}
+                <div className="lg:col-span-2">
+                    <Card title="Desempenho por Turma (%)" className="h-full min-h-[350px]">
+                        {classPerformance.length > 0 ? (
+                            <div className="mt-4">
+                                <SimpleBarChart data={classPerformance} />
+                                <p className="text-[10px] text-slate-400 mt-4 italic">* Gráfico baseado na taxa de acerto média de todas as provas aplicadas em cada turma.</p>
+                            </div>
                         ) : (
-                             <div className="text-slate-400 italic">Dados insuficientes.</div>
+                            <div className="h-48 flex items-center justify-center text-slate-400 italic">Sem dados de provas aplicadas.</div>
                         )}
+                    </Card>
+                </div>
+
+                {/* Engajamento dos Professores */}
+                <div>
+                    <Card title="Ranking de Engajamento" className="h-full min-h-[350px]">
+                        <div className="space-y-4 mt-2">
+                            {teacherEngagement.map((prof, i) => (
+                                <div key={prof.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative">
+                                            <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm">
+                                                {prof.photoUrl ? <img src={prof.photoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold text-slate-400">{prof.name.charAt(0)}</div>}
+                                            </div>
+                                            <div className={`absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-sm ${i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-slate-400' : i === 2 ? 'bg-orange-600' : 'bg-slate-300'}`}>
+                                                {i + 1}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800 line-clamp-1">{prof.name}</p>
+                                            <p className="text-[10px] text-slate-500 uppercase font-black">{prof.questions} qts • {prof.exams} provas</p>
+                                        </div>
+                                    </div>
+                                    <Icons.ArrowRight />
+                                </div>
+                            ))}
+                            {teacherEngagement.length === 0 && <p className="text-center text-slate-400 py-10 italic">Nenhum professor cadastrado.</p>}
+                        </div>
                     </Card>
                 </div>
             </div>
 
+            {/* Mapa de Calor de Conteúdos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                 {/* Tipos de Questão */}
-                 <Card title="Tipos de Questão" className="min-h-[300px]">
-                    <div className="flex flex-col gap-4 mt-4">
-                        {metrics.questionsByType.map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></span>
-                                    <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                <Card title="Mapa de Conteúdos: Mais Cobrados">
+                    <div className="mt-2 space-y-3">
+                        {contentHeatmap.top.map((item, idx) => (
+                            <div key={idx} className="space-y-1">
+                                <div className="flex justify-between text-xs font-bold">
+                                    <span className="text-slate-700">{item.name} <span className="text-[10px] text-slate-400 font-normal">({item.discipline})</span></span>
+                                    <span className="text-brand-blue">{item.count} questões</span>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                        <div className="h-full rounded-full" style={{ width: `${(item.value / metrics.totalQuestions) * 100}%`, backgroundColor: item.color }}></div>
-                                    </div>
-                                    <span className="text-sm font-bold text-slate-800 min-w-[2rem] text-right">{item.value}</span>
+                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-brand-blue" style={{ width: `${(item.count / contentHeatmap.top[0].count) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}
-                        {metrics.questionsByType.length === 0 && <div className="text-center text-slate-400 py-8">Nenhuma questão cadastrada.</div>}
+                        {contentHeatmap.top.length === 0 && <p className="text-center text-slate-400 py-10">Inicie a criação de provas para ver os dados.</p>}
                     </div>
-                 </Card>
+                </Card>
 
-                 {/* Últimas Provas */}
-                 <Card title="Provas Recentes" className="min-h-[300px]">
-                    <div className="space-y-4 mt-2">
-                        {metrics.recentExams.length === 0 ? (
-                            <div className="text-center py-8 text-slate-400 border-2 border-dashed border-slate-100 rounded-lg">
-                                Nenhuma prova criada recentemente.
-                                <div className="mt-4">
-                                    <Link to="/exams"><Button variant="outline" className="text-xs">Criar Prova</Button></Link>
+                <Card title="Mapa de Conteúdos: Menos Cobrados">
+                    <div className="mt-2 space-y-3">
+                        {contentHeatmap.forgotten.map((item, idx) => (
+                            <div key={idx} className="space-y-1 opacity-80">
+                                <div className="flex justify-between text-xs font-bold">
+                                    <span className="text-slate-700">{item.name} <span className="text-[10px] text-slate-400 font-normal">({item.discipline})</span></span>
+                                    <span className="text-orange-600">{item.count} questões</span>
+                                </div>
+                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-orange-400" style={{ width: `${(item.count / contentHeatmap.top[0].count) * 100}%` }}></div>
                                 </div>
                             </div>
-                        ) : (
-                            metrics.recentExams.map(exam => (
-                                <div key={exam.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-blue-50 text-brand-blue rounded-lg flex items-center justify-center font-bold text-lg">
-                                            {exam.questions.length}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-800 text-sm">{exam.title}</h4>
-                                            <p className="text-xs text-slate-500">
-                                                {exam.className || 'Sem turma'} • {new Date(exam.createdAt).toLocaleDateString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Badge color={exam.showAnswerKey ? 'green' : 'blue'}>
-                                        {exam.showAnswerKey ? 'Gabarito ON' : 'Gabarito OFF'}
-                                    </Badge>
-                                </div>
-                            ))
-                        )}
-                        {metrics.recentExams.length > 0 && (
-                            <div className="pt-4 text-center border-t border-slate-50">
-                                <Link to="/exams" className="text-sm text-brand-blue hover:underline font-medium">Ver todas as provas</Link>
-                            </div>
-                        )}
+                        ))}
+                        {contentHeatmap.forgotten.length === 0 && <p className="text-center text-slate-400 py-10">Tudo em equilíbrio por enquanto.</p>}
                     </div>
-                 </Card>
+                </Card>
             </div>
         </div>
     );

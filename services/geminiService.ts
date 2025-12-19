@@ -1,11 +1,11 @@
 
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Question, QuestionType } from "../types";
 import { FirebaseService } from "./firebaseService";
 
 const getClient = () => {
-    const apiKey = process.env.API_KEY || ''; 
-    return new GoogleGenAI({ apiKey });
+    // Fix: Using process.env.API_KEY directly as per guidelines
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
 }
 
 export const GeminiService = {
@@ -31,8 +31,8 @@ export const GeminiService = {
                 prompt += `Type: Association/Matching. Provide pairs to match (e.g. Term A - Definition B).`;
             }
 
-            // Define Schema based on type
-            const schema: Schema = {
+            // Fix: responseSchema uses Type enum and object structure directly, removed Schema type import
+            const schema = {
                 type: Type.OBJECT,
                 properties: {
                     enunciado: { type: Type.STRING, description: "The question text/statement (in Portuguese)" },
@@ -51,7 +51,8 @@ export const GeminiService = {
             };
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                // Fix: Using recommended gemini-3-flash-preview model
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -89,7 +90,7 @@ export const GeminiService = {
         try {
             const ai = getClient();
             
-            const schema: Schema = {
+            const schema = {
                 type: Type.ARRAY,
                 items: {
                     type: Type.OBJECT,
@@ -124,7 +125,7 @@ export const GeminiService = {
             `;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -177,7 +178,7 @@ export const GeminiService = {
                 Responda APENAS o JSON.
             `;
 
-            const schema: Schema = {
+            const schema = {
                 type: Type.OBJECT,
                 properties: {
                     isDuplicate: { type: Type.BOOLEAN },
@@ -189,7 +190,7 @@ export const GeminiService = {
             };
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -243,7 +244,7 @@ export const GeminiService = {
                 }
             `;
 
-            const schema: Schema = {
+            const schema = {
                 type: Type.OBJECT,
                 properties: {
                     studentName: { type: Type.STRING },
@@ -256,11 +257,14 @@ export const GeminiService = {
             };
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [
-                    { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
-                    { text: prompt }
-                ],
+                model: 'gemini-3-flash-preview',
+                // Fix: Corrected multi-part contents structure to use { parts: [...] }
+                contents: {
+                    parts: [
+                        { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
+                        { text: prompt }
+                    ]
+                },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
