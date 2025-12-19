@@ -13,7 +13,8 @@ import {
     writeBatch,
     orderBy,
     limit,
-    increment
+    increment,
+    onSnapshot
 } from "firebase/firestore";
 import { 
     createUserWithEmailAndPassword, 
@@ -143,7 +144,6 @@ const logAuditAction = async (action: AuditLog['action'], resource: string, deta
     }
 };
 
-// Helper for digital signature hash
 async function generateSHA256(message: string) {
     const msgBuffer = new TextEncoder().encode(message);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -160,19 +160,10 @@ export const FirebaseService = {
             .sort((a, b) => b.version - a.version);
     },
 
-    /**
-     * Salva ou cria uma nova versão de contrato.
-     * @param data Dados do contrato
-     * @param forceResign Se verdadeiro, cria um NOVO documento (novo ID), forçando a reassinatura
-     */
     saveContractTemplate: async (data: Partial<ContractTemplate>, forceResign: boolean = false) => {
         const planId = data.planId || 'ALL';
-        
-        // Se for forçar reassinatura ou for um contrato novo, criamos um novo documento
         const isNewDoc = !data.id || forceResign;
-        
         if (data.isActive) {
-            // Desativa outros contratos ativos para este mesmo plano
             const q = query(
                 collection(db, COLLECTIONS.CONTRACT_TEMPLATES), 
                 where("planId", "==", planId),
@@ -185,15 +176,10 @@ export const FirebaseService = {
             });
             await batch.commit();
         }
-
-        const payload: any = {
-            ...data,
-            updatedAt: new Date().toISOString()
-        };
-
+        const payload: any = { ...data, updatedAt: new Date().toISOString() };
         if (isNewDoc) {
             payload.createdAt = new Date().toISOString();
-            if (forceResign) delete payload.id; // Remove ID antigo para gerar novo
+            if (forceResign) delete payload.id;
             const docRef = await addDoc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), cleanPayload(payload));
             await logAuditAction('CREATE', 'CONTRACT', `Contrato publicado (V${payload.version}): ${payload.title}`, docRef.id);
         } else {
@@ -205,7 +191,6 @@ export const FirebaseService = {
     seedDefaultContracts: async () => {
         const plans = (await getDocs(collection(db, COLLECTIONS.PLANS))).docs.map(d => d.data() as Plan);
         const batch = writeBatch(db);
-        
         const generateContent = (planName: string) => `
             <div style="font-family: serif; max-width: 800px; margin: auto;">
                 <h1 style="text-align: center; border-bottom: 2px solid black; padding-bottom: 10px;">CONTRATO DE LICENCIAMENTO DE SOFTWARE - PLANO ${planName.toUpperCase()}</h1>
@@ -218,7 +203,6 @@ export const FirebaseService = {
                 <p style="text-align: center;"><em>Assinado Eletronicamente via Prova Fácil SaaS</em></p>
             </div>
         `;
-
         for (const plan of plans) {
             const docRef = doc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
             batch.set(docRef, cleanPayload({
@@ -231,7 +215,6 @@ export const FirebaseService = {
                 updatedAt: new Date().toISOString()
             }));
         }
-
         const globalRef = doc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
         batch.set(globalRef, cleanPayload({
             title: `Termos de Uso Gerais (Todos os Planos)`,
@@ -242,7 +225,6 @@ export const FirebaseService = {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }));
-
         await batch.commit();
         await logAuditAction('CREATE', 'CONTRACT', 'Seed de contratos padrão executado com sucesso');
     },
@@ -285,18 +267,10 @@ export const FirebaseService = {
         });
         await logAuditAction('SECURITY', 'CONTRACT', `Contrato assinado eletronicamente pelo usuário`, user.id, { templateId: template.id });
     },
-    // ... restante dos métodos mantidos
+
     generateCommercialToken: async (disciplineId: string, includeQuestions: boolean) => {
         const code = Math.random().toString(36).substring(2, 10).toUpperCase();
-        const tokenData = {
-            code,
-            disciplineId,
-            includeQuestions,
-            createdAt: new Date().toISOString(),
-            status: 'ACTIVE',
-            usedBy: null, 
-            usedAt: null
-        };
+        const tokenData = { code, disciplineId, includeQuestions, createdAt: new Date().toISOString(), status: 'ACTIVE', usedBy: null, usedAt: null };
         await setDoc(doc(db, COLLECTIONS.TOKENS, code), tokenData);
         await logAuditAction('CREATE', 'MARKETING', `Token comercial de USO ÚNICO gerado para disciplina ${disciplineId}`, code);
         return code;
@@ -307,22 +281,13 @@ export const FirebaseService = {
         const tokenSnap = await getDoc(tokenRef);
         if (!tokenSnap.exists()) throw new Error("Token inválido ou inexistente.");
         const tokenData = tokenSnap.data();
-        if (tokenData.status !== 'ACTIVE' || tokenData.usedBy) {
-            throw new Error("Este token já foi utilizado ou está expirado.");
-        }
+        if (tokenData.status !== 'ACTIVE' || tokenData.usedBy) throw new Error("Este token já foi utilizado ou está expirado.");
         const discRef = doc(db, COLLECTIONS.DISCIPLINES, tokenData.disciplineId);
         const discSnap = await getDoc(discRef);
         if (!discSnap.exists()) throw new Error("Disciplina de origem não encontrada.");
-        const updates: any = {
-            subjects: Array.from(new Set([...(user.subjects || []), tokenData.disciplineId])),
-            accessGrants: Array.from(new Set([...(user.accessGrants || []), tokenData.disciplineId]))
-        };
+        const updates: any = { subjects: Array.from(new Set([...(user.subjects || []), tokenData.disciplineId])), accessGrants: Array.from(new Set([...(user.accessGrants || []), tokenData.disciplineId])) };
         await updateDoc(doc(db, COLLECTIONS.USERS, user.id), updates);
-        await updateDoc(tokenRef, {
-            status: 'USED',
-            usedBy: user.id,
-            usedAt: new Date().toISOString()
-        });
+        await updateDoc(tokenRef, { status: 'USED', usedBy: user.id, usedAt: new Date().toISOString() });
         await logAuditAction('UPDATE', 'USER', `Resgate via Token: ${code}`, user.id);
         return discSnap.data().name;
     },
@@ -331,12 +296,8 @@ export const FirebaseService = {
         try {
             const q = query(collection(db, COLLECTIONS.STUDENTS), where("classId", "==", classId));
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Student))
-                .sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
-        } catch (error) {
-            safeLog("Erro ao buscar alunos:", error);
-            return [];
-        }
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Student)).sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
+        } catch (error) { safeLog("Erro ao buscar alunos:", error); return []; }
     },
 
     addStudent: async (student: Omit<Student, 'id' | 'createdAt'>) => {
@@ -345,24 +306,14 @@ export const FirebaseService = {
         return docRef.id;
     },
 
-    updateStudent: async (id: string, data: Partial<Student>) => {
-        await updateDoc(doc(db, COLLECTIONS.STUDENTS, id), cleanPayload(data));
-    },
-
-    deleteStudent: async (id: string) => {
-        await deleteDoc(doc(db, COLLECTIONS.STUDENTS, id));
-    },
+    updateStudent: async (id: string, data: Partial<Student>) => { await updateDoc(doc(db, COLLECTIONS.STUDENTS, id), cleanPayload(data)); },
+    deleteStudent: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.STUDENTS, id)); },
 
     importStudents: async (classId: string, institutionId: string, list: {name: string, registration: string}[]) => {
         const batch = writeBatch(db);
         list.forEach(item => {
             const newDocRef = doc(collection(db, COLLECTIONS.STUDENTS));
-            batch.set(newDocRef, cleanPayload({
-                ...item,
-                classId,
-                institutionId,
-                createdAt: new Date().toISOString()
-            }));
+            batch.set(newDocRef, cleanPayload({ ...item, classId, institutionId, createdAt: new Date().toISOString() }));
         });
         await batch.commit();
         await logAuditAction('CREATE', 'CLASSES', `Importados ${list.length} alunos para turma`, classId);
@@ -374,7 +325,6 @@ export const FirebaseService = {
             const snapshot = await getDocs(q);
             return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Tutorial));
         } catch (error) {
-            safeLog("Erro ao buscar tutoriais:", error);
             try {
                 const snapshot = await getDocs(collection(db, COLLECTIONS.TUTORIALS));
                 return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Tutorial));
@@ -407,7 +357,6 @@ export const FirebaseService = {
             try { await setDoc(docRef, defaultSettings); } catch (e) {}
             return defaultSettings;
         } catch (error: any) {
-            if (error?.code !== 'unavailable' && error?.message !== 'unavailable') safeLog("Erro ao buscar configurações globais:", error);
             return { banner: { active: false, message: '', type: 'INFO' }, aiConfig: { totalGenerations: 0, monthlyLimit: 1000, costPerRequestEst: 0 }, whiteLabel: { appName: 'Prova Fácil' } };
         }
     },
@@ -417,8 +366,41 @@ export const FirebaseService = {
         await logAuditAction('UPDATE', 'SYSTEM', 'Configurações globais atualizadas');
     },
 
-    trackAiUsage: async () => {
-        try { await updateDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), { "aiConfig.totalGenerations": increment(1) }); } catch (error) {}
+    trackAiUsage: async () => { try { await updateDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), { "aiConfig.totalGenerations": increment(1) }); } catch (error) {} },
+
+    // --- SUPORTE / TICKETS ---
+    listenTickets: (currentUser: User, callback: (tickets: Ticket[]) => void) => {
+        let q;
+        if (currentUser.role === UserRole.ADMIN) {
+            q = query(collection(db, COLLECTIONS.TICKETS), orderBy("updatedAt", "desc"));
+        } else {
+            q = query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id), orderBy("updatedAt", "desc"));
+        }
+
+        return onSnapshot(q, (snapshot) => {
+            const tickets = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
+            callback(tickets);
+        }, (error) => {
+            console.error("Error listening tickets:", error);
+            // Fallback for missing index
+            const fallbackQ = currentUser.role === UserRole.ADMIN 
+                ? collection(db, COLLECTIONS.TICKETS)
+                : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
+            
+            onSnapshot(fallbackQ, (s) => {
+                const tickets = s.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket))
+                    .sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+                callback(tickets);
+            });
+        });
+    },
+
+    listenTicketMessages: (ticketId: string, callback: (messages: TicketMessage[]) => void) => {
+        const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId), orderBy("createdAt", "asc"));
+        return onSnapshot(q, (snapshot) => {
+            const msgs = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as TicketMessage));
+            callback(msgs);
+        });
     },
 
     getTickets: async (currentUser: User) => {
@@ -455,7 +437,7 @@ export const FirebaseService = {
     addTicketMessage: async (ticketId: string, authorId: string, authorName: string, message: string, isAdminReply: boolean) => {
         const msgData: Omit<TicketMessage, 'id'> = { ticketId, authorId, authorName, message, createdAt: new Date().toISOString(), isAdminReply };
         await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), cleanPayload(msgData));
-        await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { updatedAt: new Date().toISOString() });
+        await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { updatedAt: new Date().toISOString(), lastMessageAt: new Date().toISOString() });
     },
 
     getTicketMessages: async (ticketId: string) => {
@@ -500,15 +482,8 @@ export const FirebaseService = {
         return { ...coupon, id: docRef.id };
     },
 
-    updateCoupon: async (id: string, data: Partial<Coupon>) => {
-        await updateDoc(doc(db, COLLECTIONS.COUPONS, id), cleanPayload(data));
-        await logAuditAction('UPDATE', 'MARKETING', `Cupom atualizado`, id);
-    },
-
-    deleteCoupon: async (id: string) => {
-        await deleteDoc(doc(db, COLLECTIONS.COUPONS, id));
-        await logAuditAction('DELETE', 'MARKETING', `Cupom excluído`, id);
-    },
+    updateCoupon: async (id: string, data: Partial<Coupon>) => { await updateDoc(doc(db, COLLECTIONS.COUPONS, id), cleanPayload(data)); await logAuditAction('UPDATE', 'MARKETING', `Cupom atualizado`, id); },
+    deleteCoupon: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.COUPONS, id)); await logAuditAction('DELETE', 'MARKETING', `Cupom excluído`, id); },
 
     register: async (email: string, pass: string, name: string, role: UserRole) => {
         const userCred = await createUserWithEmailAndPassword(auth, email, pass);
@@ -592,10 +567,7 @@ export const FirebaseService = {
         if (Object.keys(data).length > 0) await logAuditAction('UPDATE', 'USER', `Perfil de usuário atualizado`, uid, { fields: Object.keys(data) });
     },
     
-    deleteUserDocument: async (uid: string) => {
-        await deleteDoc(doc(db, COLLECTIONS.USERS, uid));
-        await logAuditAction('DELETE', 'USER', `Usuário excluído do sistema`, uid);
-    },
+    deleteUserDocument: async (uid: string) => { await deleteDoc(doc(db, COLLECTIONS.USERS, uid)); await logAuditAction('DELETE', 'USER', `Usuário excluído do sistema`, uid); },
 
     getUsers: async (currentUser?: User | null) => {
         if (!currentUser) return [];
@@ -641,14 +613,8 @@ export const FirebaseService = {
         return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Campaign)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     },
 
-    addCampaign: async (campaign: Omit<Campaign, 'id'>) => {
-        const docRef = await addDoc(collection(db, COLLECTIONS.CAMPAIGNS), cleanPayload(campaign));
-        return { ...campaign, id: docRef.id };
-    },
-
-    updateCampaign: async (id: string, data: Partial<Campaign>) => {
-        await updateDoc(doc(db, COLLECTIONS.CAMPAIGNS, id), cleanPayload(data));
-    },
+    addCampaign: async (campaign: Omit<Campaign, 'id'>) => { const docRef = await addDoc(collection(db, COLLECTIONS.CAMPAIGNS), cleanPayload(campaign)); return { ...campaign, id: docRef.id }; },
+    updateCampaign: async (id: string, data: Partial<Campaign>) => { await updateDoc(doc(db, COLLECTIONS.CAMPAIGNS, id), cleanPayload(data)); },
 
     getInstitutions: async (currentUser?: User | null) => {
         if (!currentUser) return [];
@@ -719,19 +685,12 @@ export const FirebaseService = {
         const qSnap = await getDoc(qDocRef);
         if (!qSnap.exists()) return;
         const qData = qSnap.data() as Question;
-        const updates: Partial<Question> = {
-            isInstitutional: true,
-            institutionalApprovedById: managerId,
-            reviewStatus: qData.visibility === 'PUBLIC' ? 'APPROVED' : qData.reviewStatus
-        };
+        const updates: Partial<Question> = { isInstitutional: true, institutionalApprovedById: managerId, reviewStatus: qData.visibility === 'PUBLIC' ? 'APPROVED' : qData.reviewStatus };
         await updateDoc(qDocRef, cleanPayload(updates));
         await logAuditAction('UPDATE', 'INSTITUTION', 'Questão aprovada para Banco Institucional', id);
     },
 
-    removeInstitutionalSeal: async (id: string) => {
-        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { isInstitutional: false, institutionalApprovedById: null });
-        await logAuditAction('UPDATE', 'INSTITUTION', 'Selo Institucional removido', id);
-    },
+    removeInstitutionalSeal: async (id: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { isInstitutional: false, institutionalApprovedById: null }); await logAuditAction('UPDATE', 'INSTITUTION', 'Selo Institucional removido', id); },
 
     addQuestion: async (q: Question) => { 
         const data: any = cleanPayload(q); if (data.id) delete data.id; 
@@ -739,12 +698,7 @@ export const FirebaseService = {
         const userData = userDoc.data() as User;
         if (!data.authorId) data.authorId = auth.currentUser!.uid; 
         if (!data.institutionId && userData.institutionId) data.institutionId = userData.institutionId; 
-        if (userData.role === UserRole.ADMIN || userData.role === UserRole.MANAGER) {
-            data.reviewStatus = 'APPROVED';
-            if (userData.role === UserRole.MANAGER) data.isInstitutional = true;
-        } else {
-            data.reviewStatus = (data.visibility === 'PUBLIC') ? 'PENDING' : 'APPROVED';
-        }
+        if (userData.role === UserRole.ADMIN || userData.role === UserRole.MANAGER) { data.reviewStatus = 'APPROVED'; if (userData.role === UserRole.MANAGER) data.isInstitutional = true; } else { data.reviewStatus = (data.visibility === 'PUBLIC') ? 'PENDING' : 'APPROVED'; }
         if (!data.visibility) data.visibility = 'PUBLIC'; 
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data); return { ...q, id: docRef.id }; 
     },
@@ -753,9 +707,7 @@ export const FirebaseService = {
         const data: any = cleanPayload(rest); 
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser!.uid));
         const userData = userDoc.data() as User;
-        if (data.visibility === 'PUBLIC' && userData.role !== UserRole.ADMIN && userData.role !== UserRole.MANAGER) {
-            data.reviewStatus = 'PENDING';
-        }
+        if (data.visibility === 'PUBLIC' && userData.role !== UserRole.ADMIN && userData.role !== UserRole.MANAGER) { data.reviewStatus = 'PENDING'; }
         await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id!), data); 
     },
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },
