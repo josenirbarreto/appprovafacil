@@ -211,6 +211,8 @@ export interface Question {
   visibility?: 'PRIVATE' | 'INSTITUTION' | 'PUBLIC'; 
   reviewStatus?: ReviewStatus; 
   rejectionReason?: string;
+  isInstitutional?: boolean; // Se a escola aprovou como oficial dela
+  institutionalApprovedById?: string; // Quem aprovou na escola
   enunciado: string; 
   type: QuestionType;
   disciplineId: string;

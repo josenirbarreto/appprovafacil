@@ -56,22 +56,40 @@ const safeLog = (message: string, error: any) => {
     console.error(message, error?.code || error?.message || String(error));
 };
 
+/**
+ * cleanPayload v2: Mais agressivo na limpeza para evitar erros de estrutura circular do Firebase.
+ */
 const cleanPayload = (data: any): any => {
     const seen = new WeakSet();
     const process = (obj: any): any => {
         if (obj === null || typeof obj !== 'object') return obj;
         if (obj instanceof Date) return obj.toISOString();
+        
+        // Trata Timestamps do Firestore se existirem
         if (typeof obj.toDate === 'function') return obj.toDate().toISOString();
-        if (obj.constructor && (obj.constructor.name === 'SyntheticBaseEvent' || obj.constructor.name.startsWith('_') || obj.nodeType)) return null;
+        
+        // Evita objetos internos do navegador ou Firebase
+        if (obj.constructor && (
+            obj.constructor.name === 'SyntheticBaseEvent' || 
+            obj.constructor.name.startsWith('_') || 
+            obj.nodeType ||
+            obj.constructor.name === 'Q$1' || 
+            obj.constructor.name === 'Sa'
+        )) return null;
+
+        // Evita circularidade
         if (seen.has(obj)) return null;
         seen.add(obj);
+
         if (Array.isArray(obj)) return obj.map(process).filter(v => v !== undefined);
+        
         const newObj: any = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 const value = obj[key];
-                if (value !== undefined && typeof value !== 'function') {
-                    if (key.startsWith('_') || key === 'auth' || key === 'firestore' || key === 'app') continue;
+                // Pula funções e propriedades internas do SDK
+                if (value !== undefined && typeof value !== 'function' && !key.startsWith('_')) {
+                    if (key === 'auth' || key === 'firestore' || key === 'app') continue;
                     newObj[key] = process(value);
                 }
             }
@@ -83,31 +101,39 @@ const cleanPayload = (data: any): any => {
 
 const isVisible = (item: any, user: User | null | undefined) => {
     if (!user) return false;
-    if (user.role === UserRole.ADMIN) return true;
+    // Fix: Cast explicitly to string to avoid "no overlap" error between UserRole narrowing and UserRole.ADMIN
+    if ((user.role as string) === UserRole.ADMIN) return true;
     
     // Se o item for uma Instituição e o usuário for Gestor/Professor vinculado a ela
     if ('name' in item && 'logoUrl' in item && user.institutionId === item.id) return true;
 
     if (item.authorId === user.id) return true;
+    
+    // Se a questão foi aprovada pela escola (institucional) e o usuário é da mesma escola
+    if (item.isInstitutional && user.institutionId && item.institutionId === user.institutionId) return true;
+
     if (user.role === UserRole.TEACHER && user.subjects && user.subjects.length > 0) {
         if ('disciplineId' in item && item.disciplineId) {
             if (!user.subjects.includes(item.disciplineId)) return false;
         }
     }
+
     const sameInstitution = user.institutionId && item.institutionId === user.institutionId;
     if (user.role === UserRole.MANAGER && sameInstitution) return true;
     
     if ('enunciado' in item || 'visibility' in item) { 
         const q = item as Question;
+        
+        // Regra do Banco Global: se aprovada pelo admin, visível para quem tem acesso à disciplina
+        if (q.reviewStatus === 'APPROVED' && q.visibility === 'PUBLIC') {
+            const userGrants = user.accessGrants || [];
+            if (q.disciplineId && (userGrants.includes(q.disciplineId) || user.role === UserRole.ADMIN)) return true;
+        }
+
         if (q.reviewStatus && q.reviewStatus !== 'APPROVED') return false;
         if (!q.visibility) return false; 
         if (q.visibility === 'PRIVATE') return false; 
         if (q.visibility === 'INSTITUTION') return sameInstitution || false;
-        if (q.visibility === 'PUBLIC') {
-            const userGrants = user.accessGrants || [];
-            if (q.disciplineId && userGrants.includes(q.disciplineId)) return true;
-            return false;
-        }
     }
     
     // Fallback: se tiver autor e não for o usuário, esconde (exceto casos acima)
@@ -529,17 +555,62 @@ export const FirebaseService = {
     getPendingQuestions: async () => { const snapshot = await getDocs(query(collection(db, COLLECTIONS.QUESTIONS), where("reviewStatus", "==", "PENDING"))); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Question)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); },
     approveQuestion: async (id: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'APPROVED', rejectionReason: null }); await logAuditAction('UPDATE', 'MODERATION', 'Questão aprovada', id); },
     rejectQuestion: async (id: string, reason: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'REJECTED', rejectionReason: reason }); await logAuditAction('UPDATE', 'MODERATION', `Questão rejeitada: ${reason}`, id); },
+    
+    /**
+     * Selo Institucional: Gestor aprova questão da sua escola.
+     * Se a visibilidade for PUBLIC, já marca como APPROVED bypassando admin.
+     */
+    approveInstitutionalQuestion: async (id: string, managerId: string) => {
+        const qDocRef = doc(db, COLLECTIONS.QUESTIONS, id);
+        const qSnap = await getDoc(qDocRef);
+        if (!qSnap.exists()) return;
+        const qData = qSnap.data() as Question;
+        
+        const updates: Partial<Question> = {
+            isInstitutional: true,
+            institutionalApprovedById: managerId,
+            reviewStatus: qData.visibility === 'PUBLIC' ? 'APPROVED' : qData.reviewStatus
+        };
+        
+        await updateDoc(qDocRef, cleanPayload(updates));
+        await logAuditAction('UPDATE', 'INSTITUTION', 'Questão aprovada para Banco Institucional', id);
+    },
+
+    removeInstitutionalSeal: async (id: string) => {
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { isInstitutional: false, institutionalApprovedById: null });
+        await logAuditAction('UPDATE', 'INSTITUTION', 'Selo Institucional removido', id);
+    },
+
     addQuestion: async (q: Question) => { 
         const data: any = cleanPayload(q); if (data.id) delete data.id; 
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser!.uid));
         const userData = userDoc.data() as User;
         if (!data.authorId) data.authorId = auth.currentUser!.uid; 
         if (!data.institutionId && userData.institutionId) data.institutionId = userData.institutionId; 
-        data.reviewStatus = (data.visibility === 'PUBLIC' && userData.role !== UserRole.ADMIN) ? 'PENDING' : 'APPROVED';
+        
+        // Regra de Aprovação Inicial
+        // Se for gestor ou admin criando na sua unidade, já pode marcar como aprovado.
+        if (userData.role === UserRole.ADMIN || userData.role === UserRole.MANAGER) {
+            data.reviewStatus = 'APPROVED';
+            if (userData.role === UserRole.MANAGER) data.isInstitutional = true;
+        } else {
+            data.reviewStatus = (data.visibility === 'PUBLIC') ? 'PENDING' : 'APPROVED';
+        }
+
         if (!data.visibility) data.visibility = 'PUBLIC'; 
         const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), data); return { ...q, id: docRef.id }; 
     },
-    updateQuestion: async (q: Question) => { const { id, ...rest } = q; const data: any = cleanPayload(rest); if (data.visibility === 'PUBLIC' && (await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser!.uid))).data()?.role !== UserRole.ADMIN) data.reviewStatus = 'PENDING'; await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id!), data); },
+    updateQuestion: async (q: Question) => { 
+        const { id, ...rest } = q; 
+        const data: any = cleanPayload(rest); 
+        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, auth.currentUser!.uid));
+        const userData = userDoc.data() as User;
+
+        if (data.visibility === 'PUBLIC' && userData.role !== UserRole.ADMIN && userData.role !== UserRole.MANAGER) {
+            data.reviewStatus = 'PENDING';
+        }
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id!), data); 
+    },
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },
     getExams: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.EXAMS)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Exam)).filter(item => isVisible(item, currentUser)); },
     getExamById: async (id: string) => { const snap = await getDoc(doc(db, COLLECTIONS.EXAMS, id)); if (snap.exists()) return { ...(snap.data() as any), id: snap.id } as Exam; return null; },
