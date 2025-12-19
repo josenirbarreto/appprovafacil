@@ -368,54 +368,50 @@ export const FirebaseService = {
 
     trackAiUsage: async () => { try { await updateDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), { "aiConfig.totalGenerations": increment(1) }); } catch (error) {} },
 
-    // --- SUPORTE / TICKETS ---
+    // --- SUPORTE / TICKETS (OTIMIZADO PARA SEM ÍNDICES) ---
     listenTickets: (currentUser: User, callback: (tickets: Ticket[]) => void) => {
-        let q;
-        if (currentUser.role === UserRole.ADMIN) {
-            q = query(collection(db, COLLECTIONS.TICKETS), orderBy("updatedAt", "desc"));
-        } else {
-            q = query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id), orderBy("updatedAt", "desc"));
-        }
+        // Removemos o orderBy da query para evitar erro de índice composto imediato
+        const q = currentUser.role === UserRole.ADMIN 
+            ? collection(db, COLLECTIONS.TICKETS)
+            : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
 
         return onSnapshot(q, (snapshot) => {
             const tickets = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
-            callback(tickets);
+            // Ordenamos no lado do cliente
+            const sortedTickets = tickets.sort((a, b) => 
+                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            );
+            callback(sortedTickets);
         }, (error) => {
             console.error("Error listening tickets:", error);
-            // Fallback for missing index
-            const fallbackQ = currentUser.role === UserRole.ADMIN 
-                ? collection(db, COLLECTIONS.TICKETS)
-                : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
-            
-            onSnapshot(fallbackQ, (s) => {
-                const tickets = s.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket))
-                    .sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-                callback(tickets);
-            });
         });
     },
 
     listenTicketMessages: (ticketId: string, callback: (messages: TicketMessage[]) => void) => {
-        const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId), orderBy("createdAt", "asc"));
+        // Removemos o orderBy da query para evitar erro de índice composto imediato
+        const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId));
         return onSnapshot(q, (snapshot) => {
             const msgs = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as TicketMessage));
-            callback(msgs);
+            // Ordenamos no lado do cliente (ascendente para o chat)
+            const sortedMsgs = msgs.sort((a, b) => 
+                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            callback(sortedMsgs);
+        }, (error) => {
+            console.error("Error listening messages:", error);
         });
     },
 
     getTickets: async (currentUser: User) => {
         try {
             let q = currentUser.role === UserRole.ADMIN 
-                ? query(collection(db, COLLECTIONS.TICKETS), orderBy("updatedAt", "desc"))
-                : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id), orderBy("updatedAt", "desc"));
+                ? collection(db, COLLECTIONS.TICKETS)
+                : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket))
+                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
         } catch (error) {
-            try {
-                const qFallback = query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
-                const snap = await getDocs(qFallback);
-                return snap.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket)).sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-            } catch (e) { return []; }
+            return [];
         }
     },
 
@@ -437,14 +433,19 @@ export const FirebaseService = {
     addTicketMessage: async (ticketId: string, authorId: string, authorName: string, message: string, isAdminReply: boolean) => {
         const msgData: Omit<TicketMessage, 'id'> = { ticketId, authorId, authorName, message, createdAt: new Date().toISOString(), isAdminReply };
         await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), cleanPayload(msgData));
-        await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { updatedAt: new Date().toISOString(), lastMessageAt: new Date().toISOString() });
+        // Atualiza a data do ticket para ele subir na lista
+        await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { 
+            updatedAt: new Date().toISOString(), 
+            lastMessageAt: new Date().toISOString() 
+        });
     },
 
     getTicketMessages: async (ticketId: string) => {
         try {
-            const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId), orderBy("createdAt", "asc"));
+            const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId));
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as TicketMessage));
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as TicketMessage))
+                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         } catch (error) { return []; }
     },
 
@@ -455,15 +456,12 @@ export const FirebaseService = {
 
     getAuditLogs: async () => {
         try {
-            const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), orderBy("timestamp", "desc"), limit(100));
+            const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), limit(100));
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as AuditLog));
+            return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as AuditLog))
+                .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         } catch (error) {
-            try {
-                const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), limit(100));
-                const snapshot = await getDocs(q);
-                return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as AuditLog)).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            } catch(e) { return []; }
+            return [];
         }
     },
 
@@ -602,9 +600,10 @@ export const FirebaseService = {
     },
 
     getAllPayments: async () => {
-        const q = query(collection(db, COLLECTIONS.PAYMENTS), orderBy("date", "desc"));
+        const q = query(collection(db, COLLECTIONS.PAYMENTS));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Payment));
+        return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Payment))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
 
     getCampaigns: async () => {

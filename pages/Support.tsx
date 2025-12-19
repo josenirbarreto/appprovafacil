@@ -16,7 +16,7 @@ const SupportPage = () => {
     const [newTicket, setNewTicket] = useState({ subject: '', category: 'DOUBT', description: '', priority: 'MEDIUM' });
     
     // Modal de Detalhes/Chat
-    const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+    const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
     const [messages, setMessages] = useState<TicketMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [messagesLoading, setMessagesLoading] = useState(false);
@@ -24,42 +24,37 @@ const SupportPage = () => {
     // Scroll ref para o chat
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // OUvinte em tempo real para a lista de tickets
+    // Ouvinte em tempo real para a lista de tickets
     useEffect(() => {
         if (!user) return;
         
         const unsubscribe = FirebaseService.listenTickets(user, (updatedTickets) => {
             setTickets(updatedTickets);
             setLoading(false);
-
-            // Atualiza o ticket selecionado se ele estiver aberto e sofrer alteração (ex: status)
-            if (selectedTicket) {
-                const refreshed = updatedTickets.find(t => t.id === selectedTicket.id);
-                if (refreshed && (refreshed.status !== selectedTicket.status || refreshed.lastMessageAt !== selectedTicket.lastMessageAt)) {
-                    setSelectedTicket(refreshed);
-                }
-            }
         });
 
         return () => unsubscribe();
-    }, [user, selectedTicket?.id]);
+    }, [user]);
 
     // Ouvinte em tempo real para mensagens do ticket selecionado
     useEffect(() => {
-        if (!selectedTicket?.id) {
+        if (!selectedTicketId) {
             setMessages([]);
             return;
         }
 
         setMessagesLoading(true);
-        const unsubscribe = FirebaseService.listenTicketMessages(selectedTicket.id, (newMessages) => {
+        const unsubscribe = FirebaseService.listenTicketMessages(selectedTicketId, (newMessages) => {
             setMessages(newMessages);
             setMessagesLoading(false);
+            // Pequeno delay para garantir que o DOM renderizou antes do scroll
             setTimeout(() => scrollToBottom(), 100);
         });
 
         return () => unsubscribe();
-    }, [selectedTicket?.id]);
+    }, [selectedTicketId]);
+
+    const selectedTicket = tickets.find(t => t.id === selectedTicketId) || null;
 
     const handleCreateTicket = async () => {
         if (!newTicket.subject || !newTicket.description) return alert("Preencha assunto e descrição.");
@@ -87,19 +82,19 @@ const SupportPage = () => {
     };
 
     const handleSendMessage = async () => {
-        if (!newMessage.trim() || !selectedTicket || !user) return;
+        if (!newMessage.trim() || !selectedTicketId || !user) return;
         
         try {
             const isAdminReply = user.role === UserRole.ADMIN;
             await FirebaseService.addTicketMessage(
-                selectedTicket.id, 
+                selectedTicketId, 
                 user.id, 
                 user.name, 
                 newMessage, 
                 isAdminReply
             );
             setNewMessage('');
-            // O scroll e a atualização dos dados ocorrem via Listeners do Firebase
+            // O scroll ocorre automaticamente via listener
         } catch (e) {
             console.error(e);
             alert("Erro ao enviar mensagem.");
@@ -107,10 +102,9 @@ const SupportPage = () => {
     };
 
     const handleStatusChange = async (newStatus: TicketStatus) => {
-        if (!selectedTicket) return;
+        if (!selectedTicketId) return;
         try {
-            await FirebaseService.updateTicketStatus(selectedTicket.id, newStatus);
-            // O estado local é atualizado pelo listener do useEffect principal
+            await FirebaseService.updateTicketStatus(selectedTicketId, newStatus);
         } catch (e) {
             alert("Erro ao atualizar status");
         }
@@ -159,9 +153,9 @@ const SupportPage = () => {
                     <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
                         <div className="p-4 border-b border-slate-100 bg-slate-50 font-bold text-slate-700 flex justify-between items-center">
                             <span>Tickets ({tickets.length})</span>
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 items-center">
                                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                <span className="text-[10px] text-green-600 font-bold uppercase">Ao vivo</span>
+                                <span className="text-[10px] text-green-600 font-black uppercase">Live</span>
                             </div>
                         </div>
                         <div className="overflow-y-auto custom-scrollbar flex-1 p-2 space-y-2">
@@ -169,11 +163,11 @@ const SupportPage = () => {
                             {tickets.map(t => (
                                 <div 
                                     key={t.id} 
-                                    onClick={() => setSelectedTicket(t)}
-                                    className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${selectedTicket?.id === t.id ? 'border-brand-blue bg-blue-50' : 'border-slate-100 hover:bg-slate-50'}`}
+                                    onClick={() => setSelectedTicketId(t.id)}
+                                    className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${selectedTicketId === t.id ? 'border-brand-blue bg-blue-50' : 'border-slate-100 hover:bg-slate-50'}`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <Badge color={getStatusColor(t.status) as any}>{t.status === 'IN_PROGRESS' ? 'EM ANDAMENTO' : t.status === 'OPEN' ? 'ABERTO' : t.status === 'RESOLVED' ? 'RESOLVIDO' : 'FECHADO'}</Badge>
+                                        <Badge color={getStatusColor(t.status) as any}>{t.status === 'IN_PROGRESS' ? 'ANDAMENTO' : t.status === 'OPEN' ? 'ABERTO' : t.status === 'RESOLVED' ? 'RESOLVIDO' : 'FECHADO'}</Badge>
                                         <span className="text-[10px] text-slate-400">{new Date(t.updatedAt).toLocaleDateString()}</span>
                                     </div>
                                     <h4 className="font-bold text-sm text-slate-800 line-clamp-1">{t.subject}</h4>
@@ -220,8 +214,8 @@ const SupportPage = () => {
                                 </div>
 
                                 {/* Chat Area */}
-                                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 bg-slate-100/50">
-                                    {messagesLoading && messages.length === 0 && <div className="text-center text-xs text-slate-400">Iniciando conversa segura...</div>}
+                                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 bg-slate-100/50 shadow-inner">
+                                    {messagesLoading && messages.length === 0 && <div className="text-center text-xs text-slate-400 p-4 animate-pulse">Conectando...</div>}
                                     
                                     {messages.length === 0 && !messagesLoading && (
                                         <div className="text-center text-slate-400 italic text-sm mt-10">
@@ -234,10 +228,10 @@ const SupportPage = () => {
                                         const isSuporte = msg.isAdminReply;
                                         
                                         return (
-                                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in`}>
                                                 <div className={`max-w-[85%] rounded-2xl p-4 text-sm shadow-sm ${
                                                     isMe 
-                                                        ? 'bg-brand-blue text-white rounded-tr-none' 
+                                                        ? 'bg-brand-blue text-white rounded-tr-none shadow-blue-100' 
                                                         : isSuporte 
                                                             ? 'bg-purple-100 text-purple-900 border border-purple-200 rounded-tl-none' 
                                                             : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
