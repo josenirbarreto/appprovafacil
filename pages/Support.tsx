@@ -45,10 +45,12 @@ const SupportPage = () => {
 
         setMessagesLoading(true);
         const unsubscribe = FirebaseService.listenTicketMessages(selectedTicketId, (newMessages) => {
-            setMessages(newMessages);
+            if (Array.isArray(newMessages)) {
+                setMessages(newMessages);
+            }
             setMessagesLoading(false);
             // Pequeno delay para garantir que o DOM renderizou antes do scroll
-            setTimeout(() => scrollToBottom(), 100);
+            setTimeout(() => scrollToBottom(), 150);
         });
 
         return () => unsubscribe();
@@ -84,20 +86,23 @@ const SupportPage = () => {
     const handleSendMessage = async () => {
         if (!newMessage.trim() || !selectedTicketId || !user) return;
         
+        const messageText = newMessage.trim();
+        setNewMessage(''); // Limpa o input imediatamente para UX
+        
         try {
             const isAdminReply = user.role === UserRole.ADMIN;
             await FirebaseService.addTicketMessage(
                 selectedTicketId, 
                 user.id, 
                 user.name, 
-                newMessage, 
+                messageText, 
                 isAdminReply
             );
-            setNewMessage('');
             // O scroll ocorre automaticamente via listener
         } catch (e) {
-            console.error(e);
-            alert("Erro ao enviar mensagem.");
+            console.error("Erro ao enviar mensagem:", e);
+            alert("Erro ao enviar mensagem. Tente novamente.");
+            setNewMessage(messageText); // Devolve o texto em caso de erro
         }
     };
 
@@ -111,7 +116,9 @@ const SupportPage = () => {
     };
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
     };
 
     const getStatusColor = (status: string) => {
@@ -168,13 +175,13 @@ const SupportPage = () => {
                                 >
                                     <div className="flex justify-between items-start mb-1">
                                         <Badge color={getStatusColor(t.status) as any}>{t.status === 'IN_PROGRESS' ? 'ANDAMENTO' : t.status === 'OPEN' ? 'ABERTO' : t.status === 'RESOLVED' ? 'RESOLVIDO' : 'FECHADO'}</Badge>
-                                        <span className="text-[10px] text-slate-400">{new Date(t.updatedAt).toLocaleDateString()}</span>
+                                        <span className="text-[10px] text-slate-400">{t.updatedAt ? new Date(t.updatedAt).toLocaleDateString() : '-'}</span>
                                     </div>
                                     <h4 className="font-bold text-sm text-slate-800 line-clamp-1">{t.subject}</h4>
                                     <p className="text-xs text-slate-500 mt-1 line-clamp-2">{t.description}</p>
                                     {user?.role === UserRole.ADMIN && (
                                         <div className="mt-2 text-[10px] font-mono text-slate-400 bg-white px-2 py-1 rounded border border-slate-100 inline-block">
-                                            {t.authorName} ({t.authorRole})
+                                            {t.authorName || 'N/A'} ({t.authorRole || 'USER'})
                                         </div>
                                     )}
                                 </div>
@@ -215,7 +222,7 @@ const SupportPage = () => {
 
                                 {/* Chat Area */}
                                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 bg-slate-100/50 shadow-inner">
-                                    {messagesLoading && messages.length === 0 && <div className="text-center text-xs text-slate-400 p-4 animate-pulse">Conectando...</div>}
+                                    {messagesLoading && messages.length === 0 && <div className="text-center text-xs text-slate-400 p-4 animate-pulse">Conectando ao histórico...</div>}
                                     
                                     {messages.length === 0 && !messagesLoading && (
                                         <div className="text-center text-slate-400 italic text-sm mt-10">
@@ -223,12 +230,12 @@ const SupportPage = () => {
                                         </div>
                                     )}
 
-                                    {messages.map(msg => {
+                                    {messages.map((msg, index) => {
                                         const isMe = msg.authorId === user?.id;
                                         const isSuporte = msg.isAdminReply;
                                         
                                         return (
-                                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                                            <div key={msg.id || index} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in`}>
                                                 <div className={`max-w-[85%] rounded-2xl p-4 text-sm shadow-sm ${
                                                     isMe 
                                                         ? 'bg-brand-blue text-white rounded-tr-none shadow-blue-100' 
@@ -237,15 +244,15 @@ const SupportPage = () => {
                                                             : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
                                                 }`}>
                                                     <div className="flex justify-between items-center gap-4 mb-2 text-[10px] opacity-80 font-black border-b border-black/5 pb-1">
-                                                        <span>{msg.authorName.split(' ')[0]} {isSuporte && !isMe ? '• SUPORTE' : ''}</span>
-                                                        <span>{new Date(msg.createdAt).toLocaleTimeString().slice(0,5)}</span>
+                                                        <span className="uppercase tracking-tighter">{(msg.authorName || 'Usuário').split(' ')[0]} {isSuporte && !isMe ? '• SUPORTE' : ''}</span>
+                                                        <span>{msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString().slice(0,5) : '--:--'}</span>
                                                     </div>
-                                                    <p className="whitespace-pre-wrap leading-relaxed font-medium">{msg.message}</p>
+                                                    <p className="whitespace-pre-wrap leading-relaxed font-medium">{msg.message || ''}</p>
                                                 </div>
                                             </div>
                                         );
                                     })}
-                                    <div ref={messagesEndRef} />
+                                    <div ref={messagesEndRef} className="h-2" />
                                 </div>
 
                                 {/* Input Area */}

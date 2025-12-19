@@ -368,18 +368,16 @@ export const FirebaseService = {
 
     trackAiUsage: async () => { try { await updateDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), { "aiConfig.totalGenerations": increment(1) }); } catch (error) {} },
 
-    // --- SUPORTE / TICKETS (OTIMIZADO PARA SEM ÍNDICES) ---
+    // --- SUPORTE / TICKETS ---
     listenTickets: (currentUser: User, callback: (tickets: Ticket[]) => void) => {
-        // Removemos o orderBy da query para evitar erro de índice composto imediato
         const q = currentUser.role === UserRole.ADMIN 
             ? collection(db, COLLECTIONS.TICKETS)
             : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", currentUser.id));
 
         return onSnapshot(q, (snapshot) => {
             const tickets = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Ticket));
-            // Ordenamos no lado do cliente
             const sortedTickets = tickets.sort((a, b) => 
-                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
             );
             callback(sortedTickets);
         }, (error) => {
@@ -388,13 +386,11 @@ export const FirebaseService = {
     },
 
     listenTicketMessages: (ticketId: string, callback: (messages: TicketMessage[]) => void) => {
-        // Removemos o orderBy da query para evitar erro de índice composto imediato
         const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId));
         return onSnapshot(q, (snapshot) => {
             const msgs = snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as TicketMessage));
-            // Ordenamos no lado do cliente (ascendente para o chat)
             const sortedMsgs = msgs.sort((a, b) => 
-                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
             );
             callback(sortedMsgs);
         }, (error) => {
@@ -431,13 +427,23 @@ export const FirebaseService = {
     },
 
     addTicketMessage: async (ticketId: string, authorId: string, authorName: string, message: string, isAdminReply: boolean) => {
-        const msgData: Omit<TicketMessage, 'id'> = { ticketId, authorId, authorName, message, createdAt: new Date().toISOString(), isAdminReply };
-        await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), cleanPayload(msgData));
-        // Atualiza a data do ticket para ele subir na lista
-        await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { 
+        const msgData: Omit<TicketMessage, 'id'> = { 
+            ticketId: String(ticketId), 
+            authorId: String(authorId), 
+            authorName: String(authorName), 
+            message: String(message), 
+            createdAt: new Date().toISOString(), 
+            isAdminReply: Boolean(isAdminReply) 
+        };
+        // Salvamos sem cleanPayload para evitar remoção acidental de campos primitivos
+        await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), msgData);
+        
+        // Atualiza a data do ticket para ele subir na lista e refletir atividade
+        const ticketRef = doc(db, COLLECTIONS.TICKETS, ticketId);
+        await updateDoc(ticketRef, { 
             updatedAt: new Date().toISOString(), 
             lastMessageAt: new Date().toISOString() 
-        });
+        }).catch(err => console.warn("Could not update ticket timestamp", err));
     },
 
     getTicketMessages: async (ticketId: string) => {
