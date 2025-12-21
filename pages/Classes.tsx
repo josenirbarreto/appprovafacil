@@ -84,28 +84,30 @@ const ClassesPage = () => {
     };
     
     // --- GESTÃO DE ALUNOS ---
-    const openStudentsModal = (cls: SchoolClass) => {
-        // Otimização INP: startTransition permite que o clique no botão seja processado imediatamente
-        startTransition(async () => {
-            setActiveClass(cls);
-            setLoadingStudents(true);
-            setIsStudentsModalOpen(true);
-            setIsImportMode(false);
-            setEditingStudentId(null);
-            setDeleteConfirmId(null);
-            setImportMethod('PASTE');
-            setImportFile(null);
-            setImportText('');
-            setNewStudent({ name: '', registration: '' });
-            try {
-                const data = await FirebaseService.getStudents(cls.id);
+    const openStudentsModal = async (cls: SchoolClass) => {
+        // Atualizações imediatas para garantir feedback visual rápido (INP)
+        setActiveClass(cls);
+        setLoadingStudents(true);
+        setIsStudentsModalOpen(true);
+        setIsImportMode(false);
+        setEditingStudentId(null);
+        setDeleteConfirmId(null);
+        setImportMethod('PASTE');
+        setImportFile(null);
+        setImportText('');
+        setNewStudent({ name: '', registration: '' });
+
+        try {
+            const data = await FirebaseService.getStudents(cls.id);
+            // Otimização INP: startTransition envolve apenas a atualização da lista (pesada para renderizar)
+            startTransition(() => {
                 setStudents(Array.isArray(data) ? data : []);
-            } catch (e) {
-                setStudents([]);
-            } finally {
-                setLoadingStudents(false);
-            }
-        });
+            });
+        } catch (e) {
+            setStudents([]);
+        } finally {
+            setLoadingStudents(false);
+        }
     };
 
     const handleSaveStudent = async () => {
