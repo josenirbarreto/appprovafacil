@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ContractTemplate, User } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Input } from './UI';
@@ -10,6 +10,41 @@ interface ContractOverlayProps {
     template: ContractTemplate;
     onSigned: () => void;
 }
+
+// Sub-componente memoizado para evitar que o conteúdo pesado do contrato
+// seja re-processado a cada tecla digitada no campo de nome.
+const MemoizedContractContent = React.memo(({ 
+    content, 
+    contentRef, 
+    bottomRef, 
+    hasReadToBottom 
+}: { 
+    content: string, 
+    contentRef: React.RefObject<HTMLDivElement>, 
+    bottomRef: React.RefObject<HTMLDivElement>,
+    hasReadToBottom: boolean
+}) => (
+    <div 
+        ref={contentRef}
+        className="flex-1 overflow-y-auto p-8 md:p-12 bg-white font-serif leading-relaxed text-slate-800 custom-scrollbar"
+    >
+        <div className="prose prose-slate max-w-none rich-text-content mb-8">
+            <div dangerouslySetInnerHTML={{ __html: content }} />
+        </div>
+        
+        <div className="mt-12 p-8 border-2 border-dashed border-slate-200 rounded-2xl text-center bg-slate-50 relative">
+            <p className="text-sm text-slate-500 italic mb-2">Fim do documento oficial.</p>
+            {!hasReadToBottom && (
+                <div className="flex flex-col items-center gap-2 animate-pulse text-brand-blue">
+                    <Icons.ChevronDown />
+                    <p className="font-bold text-sm">Prossiga a leitura até o final para assinar.</p>
+                </div>
+            )}
+            {/* Âncora invisível para o Observer */}
+            <div ref={bottomRef} className="absolute bottom-0 h-4 w-full pointer-events-none" />
+        </div>
+    </div>
+));
 
 export const ContractOverlay: React.FC<ContractOverlayProps> = ({ user, template, onSigned }) => {
     const [typedName, setTypedName] = useState('');
@@ -26,7 +61,7 @@ export const ContractOverlay: React.FC<ContractOverlayProps> = ({ user, template
                     setHasReadToBottom(true);
                 }
             },
-            { threshold: 0.5 } // 50% da âncora final visível
+            { threshold: 0.1 } // Detecta assim que o final entra na tela
         );
 
         if (bottomRef.current) {
@@ -34,7 +69,7 @@ export const ContractOverlay: React.FC<ContractOverlayProps> = ({ user, template
         }
 
         return () => observer.disconnect();
-    }, [template]);
+    }, [template.id]); // Re-conecta se o template mudar
 
     // Fallback: se o conteúdo for menor que o container, marca como lido
     useEffect(() => {
@@ -53,9 +88,12 @@ export const ContractOverlay: React.FC<ContractOverlayProps> = ({ user, template
             clearTimeout(timer);
             window.removeEventListener('resize', checkContentHeight);
         };
-    }, [template]);
+    }, [template.id]);
 
-    const isNameValid = typedName.trim().toLowerCase() === user.name.trim().toLowerCase();
+    // Validação de nome memoizada para evitar cálculos desnecessários
+    const isNameValid = useMemo(() => 
+        typedName.trim().toLowerCase() === user.name.trim().toLowerCase(),
+    [typedName, user.name]);
 
     const handleSign = async () => {
         if (!isNameValid) {
@@ -76,7 +114,7 @@ export const ContractOverlay: React.FC<ContractOverlayProps> = ({ user, template
         <div className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
             <div className="bg-white rounded-2xl max-w-4xl w-full h-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-scale-in">
                 
-                {/* Header */}
+                {/* Header - Estático */}
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
                     <div>
                         <h2 className="text-xl font-display font-bold text-slate-800">Termos de Uso e Licenciamento</h2>
@@ -89,29 +127,15 @@ export const ContractOverlay: React.FC<ContractOverlayProps> = ({ user, template
                     </div>
                 </div>
 
-                {/* Content Area */}
-                <div 
-                    ref={contentRef}
-                    className="flex-1 overflow-y-auto p-8 md:p-12 bg-white font-serif leading-relaxed text-slate-800 custom-scrollbar"
-                >
-                    <div className="prose prose-slate max-w-none rich-text-content mb-8">
-                        <div dangerouslySetInnerHTML={{ __html: template.content }} />
-                    </div>
-                    
-                    <div className="mt-12 p-8 border-2 border-dashed border-slate-200 rounded-2xl text-center bg-slate-50 relative">
-                        <p className="text-sm text-slate-500 italic mb-2">Fim do documento oficial.</p>
-                        {!hasReadToBottom && (
-                            <div className="flex flex-col items-center gap-2 animate-pulse text-brand-blue">
-                                <Icons.ChevronDown />
-                                <p className="font-bold text-sm">Prossiga a leitura até o final para assinar.</p>
-                            </div>
-                        )}
-                        {/* Âncora invisível para o Observer */}
-                        <div ref={bottomRef} className="absolute bottom-0 h-4 w-full pointer-events-none" />
-                    </div>
-                </div>
+                {/* Área de Conteúdo Memoizada */}
+                <MemoizedContractContent 
+                    content={template.content}
+                    contentRef={contentRef}
+                    bottomRef={bottomRef}
+                    hasReadToBottom={hasReadToBottom}
+                />
 
-                {/* Footer Controls */}
+                {/* Footer Controls - Parte que altera o estado typedName */}
                 <div className="p-6 bg-slate-50 border-t border-slate-200 shrink-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
                         <div className="space-y-3">
@@ -142,7 +166,7 @@ export const ContractOverlay: React.FC<ContractOverlayProps> = ({ user, template
                             <Button 
                                 onClick={handleSign} 
                                 disabled={!hasReadToBottom || !isNameValid || loading}
-                                className={`w-full h-12 text-lg font-black shadow-lg transition-all ${(!hasReadToBottom || !isNameValid) ? 'opacity-50 grayscale' : 'shadow-blue-200 active:scale-95'}`}
+                                className={`w-full h-12 text-lg font-black shadow-lg transition-all ${(!hasReadToBottom || !isNameValid) ? 'opacity-50 grayscale cursor-not-allowed' : 'shadow-blue-200 active:scale-95'}`}
                             >
                                 {loading ? 'PROCESSANDO...' : 'ACEITAR E ASSINAR AGORA'}
                             </Button>
