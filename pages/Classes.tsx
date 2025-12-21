@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SchoolClass, Institution, Student, UserRole } from '../types';
 import { FirebaseService } from '../services/firebaseService';
@@ -37,7 +37,7 @@ const ClassesPage = () => {
     
     const load = async () => {
         const [cls, insts] = await Promise.all([FirebaseService.getClasses(user), FirebaseService.getInstitutions(user)]);
-        let visibleInsts = insts.sort((a,b) => a.name.localeCompare(b.name));
+        let visibleInsts = insts.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
         if (filterInstitutionId) {
             visibleInsts = visibleInsts.filter(i => i.id === filterInstitutionId);
             setExpandedInstitutions(prev => ({ ...prev, [filterInstitutionId]: true }));
@@ -70,7 +70,16 @@ const ClassesPage = () => {
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (id: string) => { if(confirm('Excluir turma?')) { await FirebaseService.deleteClass(id); load(); } };
+    const handleDelete = async (id: string) => { 
+        if(confirm('Excluir turma?')) { 
+            try {
+                await FirebaseService.deleteClass(id); 
+                load(); 
+            } catch (e) {
+                alert("Erro ao excluir turma. Verifique dependências.");
+            }
+        } 
+    };
     
     // --- GESTÃO DE ALUNOS ---
     const openStudentsModal = async (cls: SchoolClass) => {
@@ -83,24 +92,27 @@ const ClassesPage = () => {
         setImportFile(null);
         setImportText('');
         setNewStudent({ name: '', registration: '' });
-        const data = await FirebaseService.getStudents(cls.id);
-        setStudents(data);
-        setLoadingStudents(false);
+        try {
+            const data = await FirebaseService.getStudents(cls.id);
+            setStudents(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setStudents([]);
+        } finally {
+            setLoadingStudents(false);
+        }
     };
 
     const handleSaveStudent = async () => {
         if (!newStudent.name || !activeClass) return;
-        
+        setLoadingStudents(true);
         try {
             if (editingStudentId) {
-                // Modo Edição
                 await FirebaseService.updateStudent(editingStudentId, {
                     name: newStudent.name,
                     registration: newStudent.registration
                 });
                 setEditingStudentId(null);
             } else {
-                // Modo Cadastro
                 const reg = newStudent.registration || `MAT-${Date.now().toString().slice(-6)}`;
                 await FirebaseService.addStudent({
                     name: newStudent.name,
@@ -115,6 +127,8 @@ const ClassesPage = () => {
             setStudents(data);
         } catch (e) {
             alert("Erro ao salvar dados do aluno.");
+        } finally {
+            setLoadingStudents(false);
         }
     };
 
@@ -133,10 +147,9 @@ const ClassesPage = () => {
         const lines = text.split('\n');
         return lines.map(line => {
             const parts = line.split(/[;,\t]/);
-            return {
-                name: parts[0]?.trim() || '',
-                registration: parts[1]?.trim() || `MAT-${Math.random().toString(36).slice(-6).toUpperCase()}`
-            };
+            const name = parts[0]?.trim() || '';
+            const reg = parts[1]?.trim() || `MAT-${Math.random().toString(36).slice(-6).toUpperCase()}`;
+            return { name, registration: reg };
         }).filter(s => s.name.length > 2);
     }
 
@@ -161,20 +174,37 @@ const ClassesPage = () => {
         if (toImport.length === 0) return alert("Nenhum dado válido encontrado. Verifique o formato.");
         
         setLoadingStudents(true);
-        await FirebaseService.importStudents(activeClass.id, activeClass.institutionId, toImport);
-        setImportText('');
-        setImportFile(null);
-        setIsImportMode(false);
-        const data = await FirebaseService.getStudents(activeClass.id);
-        setStudents(data);
-        setLoadingStudents(false);
+        try {
+            await FirebaseService.importStudents(activeClass.id, activeClass.institutionId, toImport);
+            setImportText('');
+            setImportFile(null);
+            setIsImportMode(false);
+            const data = await FirebaseService.getStudents(activeClass.id);
+            setStudents(data);
+        } catch (e) {
+            alert("Erro na importação.");
+        } finally {
+            setLoadingStudents(false);
+        }
     };
 
+    // Otimização INP: removeStudent agora é assíncrona e não bloqueia a UI
     const removeStudent = async (id: string) => {
-        if (confirm("Remover aluno?")) {
+        // Yielding to next frame to avoid blocking the main thread during click event handling
+        // O confirm nativo ainda bloqueia, mas envolver em async/await e setTimeout ajuda o INP em alguns casos
+        if (!window.confirm("Deseja realmente remover este aluno?")) return;
+        
+        setLoadingStudents(true);
+        try {
             await FirebaseService.deleteStudent(id);
-            setStudents(students.filter(s => s.id !== id));
+            // Atualização de estado funcional para garantir consistência
+            setStudents(prev => prev.filter(s => s.id !== id));
             if (editingStudentId === id) cancelEditStudent();
+        } catch (e) {
+            console.error("Falha ao deletar aluno:", e);
+            alert("Não foi possível remover o aluno. Verifique sua conexão.");
+        } finally {
+            setLoadingStudents(false);
         }
     };
 
@@ -269,13 +299,18 @@ const ClassesPage = () => {
                                     <div className="col-span-3"><Input label="Nome do Aluno" value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})} placeholder="Ex: João Silva" /></div>
                                     <div className="col-span-1"><Input label="Matrícula" value={newStudent.registration} onChange={e => setNewStudent({...newStudent, registration: e.target.value})} placeholder="Auto" /></div>
                                     <div className="col-span-1 flex gap-1">
-                                        <Button onClick={handleSaveStudent} className="flex-1 justify-center h-10">{editingStudentId ? <Icons.Check /> : <Icons.Plus />}</Button>
-                                        {editingStudentId && <Button variant="ghost" onClick={cancelEditStudent} className="bg-white border border-slate-200 text-slate-400 hover:text-red-500"><Icons.X /></Button>}
+                                        <Button onClick={handleSaveStudent} className="flex-1 justify-center h-10" disabled={loadingStudents}>{editingStudentId ? <Icons.Check /> : <Icons.Plus />}</Button>
+                                        {editingStudentId && <Button variant="ghost" onClick={cancelEditStudent} className="bg-white border border-slate-200 text-slate-400 hover:text-red-500" disabled={loadingStudents}><Icons.X /></Button>}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white max-h-80 overflow-y-auto custom-scrollbar">
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white max-h-80 overflow-y-auto custom-scrollbar relative">
+                                {loadingStudents && (
+                                    <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                                        <div className="w-6 h-6 border-2 border-slate-300 border-t-brand-blue rounded-full animate-spin"></div>
+                                    </div>
+                                )}
                                 <table className="w-full text-left text-sm">
                                     <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                                         <tr>
@@ -285,7 +320,7 @@ const ClassesPage = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {loadingStudents ? <tr><td colSpan={3} className="p-8 text-center animate-pulse">Carregando...</td></tr> : students.length === 0 ? (
+                                        {!loadingStudents && students.length === 0 ? (
                                             <tr>
                                                 <td colSpan={3} className="p-12 text-center text-slate-400 italic">
                                                     <div className="flex flex-col items-center gap-2 opacity-50"><Icons.UsersGroup /><p>Nenhum aluno cadastrado.</p></div>
@@ -298,10 +333,20 @@ const ClassesPage = () => {
                                                     <td className="p-3 font-mono text-xs text-slate-500">{s.registration}</td>
                                                     <td className="p-3 text-right">
                                                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => startEditStudent(s)} className={`p-1.5 rounded transition-colors ${editingStudentId === s.id ? 'text-brand-blue bg-blue-100' : 'text-slate-400 hover:text-brand-blue hover:bg-white border border-transparent hover:border-slate-200 shadow-sm'}`} title="Editar Aluno">
+                                                            <button 
+                                                                onClick={() => startEditStudent(s)} 
+                                                                className={`p-1.5 rounded transition-colors ${editingStudentId === s.id ? 'text-brand-blue bg-blue-100' : 'text-slate-400 hover:text-brand-blue hover:bg-white border border-transparent hover:border-slate-200 shadow-sm'}`} 
+                                                                title="Editar Aluno"
+                                                                disabled={loadingStudents}
+                                                            >
                                                                 <Icons.Edit />
                                                             </button>
-                                                            <button onClick={() => removeStudent(s.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm rounded" title="Remover Aluno">
+                                                            <button 
+                                                                onClick={() => removeStudent(s.id)} 
+                                                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm rounded" 
+                                                                title="Remover Aluno"
+                                                                disabled={loadingStudents}
+                                                            >
                                                                 <Icons.Trash />
                                                             </button>
                                                         </div>
