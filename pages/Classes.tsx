@@ -30,6 +30,7 @@ const ClassesPage = () => {
     const [importText, setImportText] = useState('');
     const [importFile, setImportFile] = useState<File | null>(null);
     const [newStudent, setNewStudent] = useState({ name: '', registration: '' });
+    const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
     const [loadingStudents, setLoadingStudents] = useState(false);
 
     useEffect(() => { if(user) load(); }, [user, filterInstitutionId]);
@@ -61,7 +62,6 @@ const ClassesPage = () => {
             institutionId: filterInstitutionId || '' 
         };
         
-        // Se for gestor, já amarra a instituição dele
         if (user?.role === UserRole.MANAGER && user.institutionId) {
             initialData.institutionId = user.institutionId;
         }
@@ -77,33 +77,62 @@ const ClassesPage = () => {
         setActiveClass(cls);
         setLoadingStudents(true);
         setIsStudentsModalOpen(true);
-        setIsImportMode(false); // Reseta para manual ao abrir
+        setIsImportMode(false);
+        setEditingStudentId(null);
         setImportMethod('PASTE');
         setImportFile(null);
         setImportText('');
+        setNewStudent({ name: '', registration: '' });
         const data = await FirebaseService.getStudents(cls.id);
         setStudents(data);
         setLoadingStudents(false);
     };
 
-    const handleAddStudent = async () => {
+    const handleSaveStudent = async () => {
         if (!newStudent.name || !activeClass) return;
-        const reg = newStudent.registration || `MAT-${Date.now().toString().slice(-6)}`;
-        await FirebaseService.addStudent({
-            name: newStudent.name,
-            registration: reg,
-            classId: activeClass.id,
-            institutionId: activeClass.institutionId
-        });
+        
+        try {
+            if (editingStudentId) {
+                // Modo Edição
+                await FirebaseService.updateStudent(editingStudentId, {
+                    name: newStudent.name,
+                    registration: newStudent.registration
+                });
+                setEditingStudentId(null);
+            } else {
+                // Modo Cadastro
+                const reg = newStudent.registration || `MAT-${Date.now().toString().slice(-6)}`;
+                await FirebaseService.addStudent({
+                    name: newStudent.name,
+                    registration: reg,
+                    classId: activeClass.id,
+                    institutionId: activeClass.institutionId
+                });
+            }
+            
+            setNewStudent({ name: '', registration: '' });
+            const data = await FirebaseService.getStudents(activeClass.id);
+            setStudents(data);
+        } catch (e) {
+            alert("Erro ao salvar dados do aluno.");
+        }
+    };
+
+    const startEditStudent = (student: Student) => {
+        setIsImportMode(false);
+        setEditingStudentId(student.id);
+        setNewStudent({ name: student.name, registration: student.registration });
+    };
+
+    const cancelEditStudent = () => {
+        setEditingStudentId(null);
         setNewStudent({ name: '', registration: '' });
-        const data = await FirebaseService.getStudents(activeClass.id);
-        setStudents(data);
     };
 
     const processImportList = (text: string) => {
         const lines = text.split('\n');
         return lines.map(line => {
-            const parts = line.split(/[;,\t]/); // Aceita ponto e vírgula, vírgula ou tab
+            const parts = line.split(/[;,\t]/);
             return {
                 name: parts[0]?.trim() || '',
                 registration: parts[1]?.trim() || `MAT-${Math.random().toString(36).slice(-6).toUpperCase()}`
@@ -145,6 +174,7 @@ const ClassesPage = () => {
         if (confirm("Remover aluno?")) {
             await FirebaseService.deleteStudent(id);
             setStudents(students.filter(s => s.id !== id));
+            if (editingStudentId === id) cancelEditStudent();
         }
     };
 
@@ -182,40 +212,32 @@ const ClassesPage = () => {
             </div>
 
             {/* MODAL GESTÃO DE ALUNOS */}
-            <Modal isOpen={isStudentsModalOpen} onClose={() => setIsStudentsModalOpen(false)} title={`Alunos: ${activeClass?.name}`} maxWidth="max-w-3xl">
+            <Modal isOpen={isStudentsModalOpen} onClose={() => setIsStudentsModalOpen(false)} title={`Alunos: ${activeClass?.name}`} maxWidth="max-w-4xl">
                 <div className="space-y-6">
                     <div className="flex justify-between items-center">
                         <h4 className="font-bold text-slate-700 flex items-center gap-2"><Icons.List /> Quadro de Alunos ({students.length})</h4>
                         <div className="flex gap-2">
-                             <Button 
-                                variant={isImportMode ? "outline" : "primary"} 
-                                className={`text-xs font-black shadow-sm ${!isImportMode ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 shadow-emerald-100' : ''}`} 
-                                onClick={() => setIsImportMode(!isImportMode)}
-                             >
-                                {isImportMode ? (
-                                    <><Icons.Plus /> Cadastrar Individual</>
-                                ) : (
-                                    <><Icons.FileText /> Importar Lista de Alunos</>
-                                )}
-                             </Button>
+                             {!editingStudentId && (
+                                <Button 
+                                    variant={isImportMode ? "outline" : "primary"} 
+                                    className={`text-xs font-black shadow-sm ${!isImportMode ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 shadow-emerald-100' : ''}`} 
+                                    onClick={() => { setIsImportMode(!isImportMode); setEditingStudentId(null); }}
+                                >
+                                    {isImportMode ? (
+                                        <><Icons.Plus /> Cadastrar Individual</>
+                                    ) : (
+                                        <><Icons.FileText /> Importar Lista de Alunos</>
+                                    )}
+                                </Button>
+                             )}
                         </div>
                     </div>
 
-                    {isImportMode ? (
+                    {isImportMode && !editingStudentId ? (
                         <div className="space-y-4 animate-fade-in">
                             <div className="flex bg-slate-100 p-1 rounded-xl w-fit mx-auto mb-2">
-                                <button 
-                                    onClick={() => setImportMethod('PASTE')}
-                                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${importMethod === 'PASTE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    Colar Lista
-                                </button>
-                                <button 
-                                    onClick={() => setImportMethod('FILE')}
-                                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${importMethod === 'FILE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    Carregar Arquivo (.csv)
-                                </button>
+                                <button onClick={() => setImportMethod('PASTE')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${importMethod === 'PASTE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Colar Lista</button>
+                                <button onClick={() => setImportMethod('FILE')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${importMethod === 'FILE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Carregar Arquivo (.csv)</button>
                             </div>
 
                             <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 text-xs text-emerald-800">
@@ -224,46 +246,33 @@ const ClassesPage = () => {
                             </div>
 
                             {importMethod === 'PASTE' ? (
-                                <textarea 
-                                    className="w-full h-48 border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-blue outline-none bg-white font-medium"
-                                    placeholder="João Silva, 1001&#10;Maria Oliveira, 1002&#10;..."
-                                    value={importText}
-                                    onChange={e => setImportText(e.target.value)}
-                                />
+                                <textarea className="w-full h-48 border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-blue outline-none bg-white font-medium" placeholder="João Silva, 1001&#10;Maria Oliveira, 1002&#10;..." value={importText} onChange={e => setImportText(e.target.value)} />
                             ) : (
                                 <div className="border-2 border-dashed border-emerald-200 bg-emerald-50/30 rounded-2xl p-10 text-center relative hover:bg-emerald-50 transition-colors group">
                                     <div className="flex flex-col items-center gap-3">
-                                        <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                                            <Icons.FileText />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-emerald-900">{importFile ? importFile.name : 'Selecionar arquivo CSV'}</p>
-                                            <p className="text-xs text-emerald-600 mt-1">{importFile ? 'Clique para trocar de arquivo' : 'Arraste ou clique para buscar'}</p>
-                                        </div>
+                                        <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"><Icons.FileText /></div>
+                                        <div><p className="font-bold text-emerald-900">{importFile ? importFile.name : 'Selecionar arquivo CSV'}</p><p className="text-xs text-emerald-600 mt-1">{importFile ? 'Clique para trocar de arquivo' : 'Arraste ou clique para buscar'}</p></div>
                                     </div>
-                                    <input 
-                                        type="file" 
-                                        accept=".csv,.txt" 
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                        onChange={e => setImportFile(e.target.files?.[0] || null)}
-                                    />
+                                    <input type="file" accept=".csv,.txt" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setImportFile(e.target.files?.[0] || null)} />
                                 </div>
                             )}
 
-                            <Button 
-                                onClick={handleImportStudents} 
-                                disabled={loadingStudents || (importMethod === 'PASTE' ? !importText.trim() : !importFile)} 
-                                className="w-full justify-center bg-emerald-600 hover:bg-emerald-700 border-emerald-600 font-bold py-3 shadow-lg shadow-emerald-100"
-                            >
+                            <Button onClick={handleImportStudents} disabled={loadingStudents || (importMethod === 'PASTE' ? !importText.trim() : !importFile)} className="w-full justify-center bg-emerald-600 hover:bg-emerald-700 border-emerald-600 font-bold py-3 shadow-lg shadow-emerald-100">
                                 {loadingStudents ? 'Processando...' : `Importar ${importMethod === 'PASTE' ? 'da Caixa de Texto' : 'do Arquivo'}`}
                             </Button>
                         </div>
                     ) : (
                         <div className="space-y-4 animate-fade-in">
-                            <div className="grid grid-cols-5 gap-2 items-end bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <div className="col-span-3"><Input label="Nome do Aluno" value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})} placeholder="Ex: João Silva" /></div>
-                                <div className="col-span-1"><Input label="Matrícula" value={newStudent.registration} onChange={e => setNewStudent({...newStudent, registration: e.target.value})} placeholder="Auto" /></div>
-                                <div className="col-span-1"><Button onClick={handleAddStudent} className="w-full justify-center"><Icons.Plus /> Add</Button></div>
+                            <div className={`p-4 rounded-xl border transition-all ${editingStudentId ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-slate-50 border-slate-100'}`}>
+                                <h5 className="text-xs font-black uppercase text-slate-400 mb-3 tracking-widest">{editingStudentId ? 'Modo Edição' : 'Novo Aluno'}</h5>
+                                <div className="grid grid-cols-5 gap-2 items-end">
+                                    <div className="col-span-3"><Input label="Nome do Aluno" value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})} placeholder="Ex: João Silva" /></div>
+                                    <div className="col-span-1"><Input label="Matrícula" value={newStudent.registration} onChange={e => setNewStudent({...newStudent, registration: e.target.value})} placeholder="Auto" /></div>
+                                    <div className="col-span-1 flex gap-1">
+                                        <Button onClick={handleSaveStudent} className="flex-1 justify-center h-10">{editingStudentId ? <Icons.Check /> : <Icons.Plus />}</Button>
+                                        {editingStudentId && <Button variant="ghost" onClick={cancelEditStudent} className="bg-white border border-slate-200 text-slate-400 hover:text-red-500"><Icons.X /></Button>}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white max-h-80 overflow-y-auto custom-scrollbar">
@@ -279,19 +288,23 @@ const ClassesPage = () => {
                                         {loadingStudents ? <tr><td colSpan={3} className="p-8 text-center animate-pulse">Carregando...</td></tr> : students.length === 0 ? (
                                             <tr>
                                                 <td colSpan={3} className="p-12 text-center text-slate-400 italic">
-                                                    <div className="flex flex-col items-center gap-2 opacity-50">
-                                                        <Icons.UsersGroup />
-                                                        <p>Nenhum aluno cadastrado. Use o botão acima para importar sua lista!</p>
-                                                    </div>
+                                                    <div className="flex flex-col items-center gap-2 opacity-50"><Icons.UsersGroup /><p>Nenhum aluno cadastrado.</p></div>
                                                 </td>
                                             </tr>
                                         ) : (
                                             students.map(s => (
-                                                <tr key={s.id} className="hover:bg-slate-50 group transition-colors">
+                                                <tr key={s.id} className={`hover:bg-slate-50 group transition-colors ${editingStudentId === s.id ? 'bg-blue-50/50' : ''}`}>
                                                     <td className="p-3 font-medium text-slate-800">{s.name}</td>
                                                     <td className="p-3 font-mono text-xs text-slate-500">{s.registration}</td>
                                                     <td className="p-3 text-right">
-                                                        <button onClick={() => removeStudent(s.id)} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100"><Icons.Trash /></button>
+                                                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => startEditStudent(s)} className={`p-1.5 rounded transition-colors ${editingStudentId === s.id ? 'text-brand-blue bg-blue-100' : 'text-slate-400 hover:text-brand-blue hover:bg-white border border-transparent hover:border-slate-200 shadow-sm'}`} title="Editar Aluno">
+                                                                <Icons.Edit />
+                                                            </button>
+                                                            <button onClick={() => removeStudent(s.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm rounded" title="Remover Aluno">
+                                                                <Icons.Trash />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))

@@ -60,7 +60,12 @@ const Dashboard = () => {
         loadAllData();
     }, [user]);
 
-    // 1. Desempenho por Turma
+    // Otimização: Mapas de lookup para evitar .find() dentro de loops pesados
+    const disciplinesMap = useMemo(() => new Map(data.disciplines.map(d => [d.id, d])), [data.disciplines]);
+    const classesMap = useMemo(() => new Map(data.classes.map(c => [c.id, c])), [data.classes]);
+    const examsMap = useMemo(() => new Map(data.exams.map(e => [e.id, e])), [data.exams]);
+
+    // 1. Desempenho por Turma (Otimizado com Map)
     const classPerformance = useMemo(() => {
         const performanceMap: Record<string, { totalScore: number, totalQuestions: number, count: number, name: string }> = {};
         
@@ -69,7 +74,7 @@ const Dashboard = () => {
         });
 
         data.allAttempts.forEach(att => {
-            const exam = data.exams.find(e => e.id === att.examId);
+            const exam = examsMap.get(att.examId);
             if (exam && exam.classId && performanceMap[exam.classId]) {
                 performanceMap[exam.classId].totalScore += att.score;
                 performanceMap[exam.classId].totalQuestions += att.totalQuestions;
@@ -85,7 +90,7 @@ const Dashboard = () => {
                 color: '#3A72EC'
             }))
             .sort((a, b) => b.value - a.value);
-    }, [data]);
+    }, [data.classes, data.allAttempts, examsMap]);
 
     // 2. Ranking de Engajamento
     const teacherEngagement = useMemo(() => {
@@ -102,27 +107,32 @@ const Dashboard = () => {
                 score: (qCount * 2) + (eCount * 10)
             };
         }).sort((a, b) => b.score - a.score).slice(0, 5);
-    }, [data]);
+    }, [data.users, data.questions, data.exams]);
 
-    // 3. Mapa de Calor (Proteção contra TypeError map/forEach)
+    // 3. Mapa de Calor (Otimizado com Map de Disciplinas para evitar loops aninhados profundos)
     const contentHeatmap = useMemo(() => {
         const usage: Record<string, { name: string, count: number, discipline: string }> = {};
         
+        // Lookup Table de tópicos pré-construída para evitar .find() repetitivo
+        const topicLookup = new Map<string, { topicName: string, disciplineName: string }>();
+        data.disciplines.forEach(d => {
+            d.chapters?.forEach(c => c.units?.forEach(u => u.topics?.forEach(t => {
+                topicLookup.set(t.id, { topicName: t.name, disciplineName: d.name });
+            })));
+        });
+
         data.exams.forEach(ex => {
-            // SEGURANÇA: Garante que ex.questions seja sempre tratado como array
             const questionsList = Array.isArray(ex.questions) ? ex.questions : [];
             questionsList.forEach(q => {
                 if (!q) return;
                 const topicId = q.topicId || 'unclassified';
                 if (!usage[topicId]) {
-                    const disc = data.disciplines.find(d => d.id === q.disciplineId);
-                    let topicName = 'Não Classificado';
-                    if (q.topicId) {
-                        disc?.chapters?.forEach(c => c.units?.forEach(u => u.topics?.forEach(t => {
-                            if (t.id === q.topicId) topicName = t.name;
-                        })));
-                    }
-                    usage[topicId] = { name: topicName, count: 0, discipline: disc?.name || 'Geral' };
+                    const lookup = topicLookup.get(topicId);
+                    usage[topicId] = { 
+                        name: lookup?.topicName || 'Não Classificado', 
+                        count: 0, 
+                        discipline: lookup?.disciplineName || (disciplinesMap.get(q.disciplineId)?.name || 'Geral')
+                    };
                 }
                 usage[topicId].count++;
             });
@@ -133,7 +143,7 @@ const Dashboard = () => {
             top: sorted.slice(0, 5),
             forgotten: [...sorted].reverse().slice(0, 5)
         };
-    }, [data]);
+    }, [data.exams, data.disciplines, disciplinesMap]);
 
     if (loading) {
         return (

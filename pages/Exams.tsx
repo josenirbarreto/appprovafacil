@@ -45,6 +45,7 @@ const ExamsPage = () => {
     const [editing, setEditing] = useState<Partial<Exam>>({});
     const [currentStep, setCurrentStep] = useState(1);
     const [saving, setSaving] = useState(false);
+    const [processing, setProcessing] = useState(false); // Novo estado para INP
     const [tagInput, setTagInput] = useState('');
     const [selTag, setSelTag] = useState('');
 
@@ -98,10 +99,34 @@ const ExamsPage = () => {
         return Array.from(tags).sort();
     }, [exams]);
 
+    // Fix: Definida a variável memoizada availableForManual para filtrar questões compatíveis com os escopos selecionados.
+    const availableForManual = useMemo(() => {
+        if (!Array.isArray(allQuestions) || !Array.isArray(tempScopes) || tempScopes.length === 0) return [];
+        
+        return allQuestions.filter(q => {
+            if (!q) return false;
+            return tempScopes.some(scope => {
+                const discMatch = q.disciplineId === scope.disciplineId;
+                const chapMatch = !scope.chapterId || q.chapterId === scope.chapterId;
+                const unitMatch = !scope.unitId || q.unitId === scope.unitId;
+                const topicMatch = !scope.topicId || q.topicId === scope.topicId;
+                return discMatch && chapMatch && unitMatch && topicMatch;
+            });
+        });
+    }, [allQuestions, tempScopes]);
+
     useEffect(() => { if (user) load(); }, [user]);
     
+    // Otimização: yield para permitir renderização do step 4 antes de computar versões
     useEffect(() => {
-        if (currentStep === 4) generateVersions();
+        if (currentStep === 4) {
+            setProcessing(true);
+            const timer = setTimeout(() => {
+                generateVersions();
+                setProcessing(false);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
     }, [currentStep]);
 
     const load = async () => {
@@ -128,19 +153,6 @@ const ExamsPage = () => {
         if (!Array.isArray(allQuestions)) return [];
         return allQuestions.filter(q => q && manualSelectedIds.has(q.id));
     }, [generationMode, generatedQuestions, allQuestions, manualSelectedIds]);
-
-    const availableForManual = useMemo(() => {
-        if (!Array.isArray(tempScopes) || tempScopes.length === 0 || !Array.isArray(allQuestions)) return [];
-        return allQuestions.filter(q => {
-            if (!q) return false;
-            return tempScopes.some(scope => {
-                return q.disciplineId === scope.disciplineId &&
-                       (!scope.chapterId || q.chapterId === scope.chapterId) &&
-                       (!scope.unitId || q.unitId === scope.unitId) &&
-                       (!scope.topicId || q.topicId === scope.topicId);
-            });
-        }).sort((a, b) => (manualSelectedIds.has(b.id) ? 1 : 0) - (manualSelectedIds.has(a.id) ? 1 : 0));
-    }, [allQuestions, tempScopes, manualSelectedIds]);
 
     const shuffleArray = <T,>(array: T[]): T[] => {
         if (!Array.isArray(array)) return [];
@@ -207,7 +219,11 @@ const ExamsPage = () => {
         }]);
     };
 
-    const handleAutoGenerate = () => {
+    const handleAutoGenerate = async () => {
+        setProcessing(true);
+        // Pequeno delay para permitir o paint da UI (ex: loading ou mudança de aba)
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         const finalQuestions: Question[] = [];
         tempScopes.forEach(scope => {
             const scopeQs = allQuestions.filter(q => {
@@ -223,27 +239,36 @@ const ExamsPage = () => {
         const uniqueQuestions: Question[] = [];
         for (const q of finalQuestions) { if (q && !seenIds.has(q.id)) { seenIds.add(q.id); uniqueQuestions.push(q); } }
         setGeneratedQuestions(uniqueQuestions);
+        setProcessing(false);
     };
 
     const handleSave = useCallback(async () => {
         if(!editing.title) return alert('Título obrigatório'); 
         setSaving(true);
-        setTimeout(async () => {
-            try { 
-                const examToSave = { 
-                    ...editing, 
-                    questions: finalQuestionsToSave, 
-                    contentScopes: tempScopes, 
-                    createdAt: editing.createdAt || new Date().toISOString() 
-                } as Exam;
-                await FirebaseService.saveExam(examToSave); 
-                setIsModalOpen(false); 
-                load(); 
-            } catch (err) {
-                alert("Erro ao salvar a prova.");
-            } finally { setSaving(false); }
-        }, 50);
+        // Otimização INP: Yield para permitir feedback visual de "Salvando"
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        try { 
+            const examToSave = { 
+                ...editing, 
+                questions: finalQuestionsToSave, 
+                contentScopes: tempScopes, 
+                createdAt: editing.createdAt || new Date().toISOString() 
+            } as Exam;
+            await FirebaseService.saveExam(examToSave); 
+            setIsModalOpen(false); 
+            load(); 
+        } catch (err) {
+            alert("Erro ao salvar a prova.");
+        } finally { setSaving(false); }
     }, [editing, finalQuestionsToSave, tempScopes, load]);
+
+    const handleNextStep = async () => {
+        if (currentStep === 2 && generationMode === 'AUTO') {
+            await handleAutoGenerate();
+        }
+        setCurrentStep(s => s + 1);
+    };
 
     const handleDelete = async (id: string) => {
         if (confirm('Tem certeza que deseja excluir esta prova permanentemente?')) {
@@ -279,7 +304,6 @@ const ExamsPage = () => {
         if (!sharingExam) return;
         setSaving(true);
         try {
-            // Sanitização profunda para evitar corrupção de tipos numéricos
             const sanitizedConfig = {
                 isPublished: Boolean(shareConfig.isPublished),
                 startDate: String(shareConfig.startDate),
@@ -291,7 +315,6 @@ const ExamsPage = () => {
                 showFeedback: Boolean(shareConfig.showFeedback)
             };
             
-            // CORREÇÃO: Força explicitamente a reconstrução como Arrays reais para prevenir "ForEach is not a function"
             const updatedExam: Exam = {
                 ...sharingExam,
                 questions: Array.isArray(sharingExam.questions) ? Array.from(sharingExam.questions) : [],
@@ -486,7 +509,9 @@ const ExamsPage = () => {
 
                         {generationMode === 'AUTO' ? (
                             <div className="animate-fade-in text-center">
-                                <Button onClick={handleAutoGenerate} className="mx-auto h-16 px-10 text-xl font-black shadow-xl shadow-blue-200 mb-8 border-4 border-white">GERAR SELEÇÃO INTELIGENTE</Button>
+                                <Button onClick={handleAutoGenerate} disabled={processing} className="mx-auto h-16 px-10 text-xl font-black shadow-xl shadow-blue-200 mb-8 border-4 border-white">
+                                    {processing ? 'PROCESSANDO...' : 'GERAR SELEÇÃO INTELIGENTE'}
+                                </Button>
                                 <div className="grid gap-3 max-h-80 overflow-y-auto custom-scrollbar pr-4 text-left">
                                     {Array.isArray(generatedQuestions) && generatedQuestions.map((q, i) => (
                                         <div key={q.id || i} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm shadow-sm flex gap-4 group">
@@ -495,7 +520,7 @@ const ExamsPage = () => {
                                             <button onClick={() => setViewingQuestion(q)} className="text-slate-400 hover:text-brand-blue"><Icons.Eye /></button>
                                         </div>
                                     ))}
-                                    {(!Array.isArray(generatedQuestions) || generatedQuestions.length === 0) && <p className="text-center text-slate-400 py-10 italic">Clique no botão acima para iniciar a geração.</p>}
+                                    {(!Array.isArray(generatedQuestions) || generatedQuestions.length === 0) && !processing && <p className="text-center text-slate-400 py-10 italic">Clique no botão acima para iniciar a geração.</p>}
                                 </div>
                             </div>
                         ) : (
@@ -524,7 +549,13 @@ const ExamsPage = () => {
             case 4: 
                 const qs = examVersions[activeVersion] || finalQuestionsToSave;
                 return (
-                <div className="flex h-[75vh] animate-fade-in bg-slate-100 rounded-3xl overflow-hidden border border-slate-200 print:h-auto print:block print:border-none print:bg-white">
+                <div className="flex h-[75vh] animate-fade-in bg-slate-100 rounded-3xl overflow-hidden border border-slate-200 print:h-auto print:block print:border-none print:bg-white relative">
+                    {processing && (
+                        <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-[20] flex items-center justify-center flex-col gap-4">
+                            <div className="w-12 h-12 border-4 border-slate-200 border-t-brand-blue rounded-full animate-spin"></div>
+                            <span className="font-black text-brand-blue uppercase tracking-widest text-sm">Organizando Prova...</span>
+                        </div>
+                    )}
                     <div className="w-80 bg-white border-r border-slate-200 flex flex-col h-full print:hidden">
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
                             <div>
@@ -690,7 +721,7 @@ const ExamsPage = () => {
             </div>
             
             {/* MODAL PRINCIPAL DE CRIAÇÃO/EDIÇÃO */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Assistente de Prova Inteligente" maxWidth="max-w-6xl" footer={<div className="flex justify-between w-full">{currentStep > 1 && <Button variant="ghost" onClick={() => setCurrentStep(s => s - 1)}>Voltar</Button>}<div className="flex gap-2 ml-auto"><Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>{currentStep < 4 ? <Button onClick={() => { if (currentStep === 2 && generationMode === 'AUTO') handleAutoGenerate(); setCurrentStep(s => s + 1); }}>Próximo</Button> : <Button onClick={handleSave} disabled={saving || finalQuestionsToSave.length === 0}>{saving ? 'Salvando...' : 'Finalizar & Salvar'}</Button>}</div></div>}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Assistente de Prova Inteligente" maxWidth="max-w-6xl" footer={<div className="flex justify-between w-full">{currentStep > 1 && <Button variant="ghost" onClick={() => setCurrentStep(s => s - 1)}>Voltar</Button>}<div className="flex gap-2 ml-auto"><Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>{currentStep < 4 ? <Button onClick={handleNextStep} disabled={processing}>{processing ? 'Processando...' : 'Próximo'}</Button> : <Button onClick={handleSave} disabled={saving || processing || finalQuestionsToSave.length === 0}>{saving ? 'Salvando...' : 'Finalizar & Salvar'}</Button>}</div></div>}>
                 {renderStepIndicator()}
                 {renderStepContent()}
             </Modal>
