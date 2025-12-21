@@ -99,7 +99,7 @@ const PublicExam = () => {
 
         try {
             const previousAttempts = await FirebaseService.getStudentAttempts(exam!.id, identifier);
-            const allowed = Number(exam!.publicConfig!.allowedAttempts) || 1;
+            const allowed = parseInt(String(exam!.publicConfig!.allowedAttempts)) || 1;
             if (previousAttempts.length >= allowed) return alert(`Limite de tentativas atingido.`);
 
             let questionsToUse = [...exam!.questions];
@@ -174,8 +174,8 @@ const PublicExam = () => {
     const containerClasses = "fixed inset-0 z-50 bg-slate-50 flex flex-col overflow-y-auto custom-scrollbar";
 
     if (step === 'WELCOME') {
-        const attemptsLimit = Number(exam?.publicConfig?.allowedAttempts);
-        const displayAttempts = isNaN(attemptsLimit) ? 1 : attemptsLimit;
+        const attemptsLimit = parseInt(String(exam?.publicConfig?.allowedAttempts));
+        const displayAttempts = isNaN(attemptsLimit) || attemptsLimit < 1 ? 1 : attemptsLimit;
 
         return (
             <div className={`${containerClasses} items-center p-4 py-12`}>
@@ -208,7 +208,7 @@ const PublicExam = () => {
                         </div>
                         <div className="text-center border-x border-slate-200">
                             <p className="text-[10px] text-slate-400 font-black uppercase mb-1">Questões</p>
-                            <p className="font-black text-slate-800 text-sm">{exam?.questions.length}</p>
+                            <p className="font-black text-slate-800 text-sm">{exam?.questions?.length || 0}</p>
                         </div>
                         <div className="text-center">
                             <p className="text-[10px] text-slate-400 font-black uppercase mb-1">Tentativas</p>

@@ -99,18 +99,22 @@ const ExamsPage = () => {
     }, [currentStep]);
 
     const load = async () => {
-        const [e, i, c, h, q] = await Promise.all([
-            FirebaseService.getExams(user),
-            FirebaseService.getInstitutions(user),
-            FirebaseService.getClasses(user),
-            FirebaseService.getHierarchy(user),
-            FirebaseService.getQuestions(user)
-        ]);
-        setExams(e);
-        setInstitutions(i.sort((a,b) => a.name.localeCompare(b.name)));
-        setClasses(c);
-        setHierarchy(h);
-        setAllQuestions(q);
+        try {
+            const [e, i, c, h, q] = await Promise.all([
+                FirebaseService.getExams(user),
+                FirebaseService.getInstitutions(user),
+                FirebaseService.getClasses(user),
+                FirebaseService.getHierarchy(user),
+                FirebaseService.getQuestions(user)
+            ]);
+            setExams(e);
+            setInstitutions(i.sort((a,b) => a.name.localeCompare(b.name)));
+            setClasses(c);
+            setHierarchy(h);
+            setAllQuestions(q);
+        } catch (err) {
+            console.error("Erro ao carregar dados:", err);
+        }
     };
 
     const finalQuestionsToSave = useMemo<Question[]>(() => {
@@ -219,6 +223,8 @@ const ExamsPage = () => {
             try { 
                 await FirebaseService.saveExam({ ...editing, questions: finalQuestionsToSave, contentScopes: tempScopes, createdAt: editing.createdAt || new Date().toISOString() } as Exam); 
                 setIsModalOpen(false); load(); 
+            } catch (err) {
+                alert("Erro ao salvar a prova.");
             } finally { setSaving(false); }
         }, 30);
     }, [editing, finalQuestionsToSave, tempScopes, load]);
@@ -256,7 +262,7 @@ const ExamsPage = () => {
         if (!sharingExam) return;
         setSaving(true);
         try {
-            // Sanitização para evitar NaN no banco de dados
+            // Sanitização robusta para evitar NaN
             const sanitizedConfig = {
                 ...shareConfig,
                 allowedAttempts: parseInt(String(shareConfig.allowedAttempts)) || 1,
@@ -268,7 +274,7 @@ const ExamsPage = () => {
                 publicConfig: sanitizedConfig
             });
             setIsShareModalOpen(false);
-            load();
+            await load();
         } catch (e) {
             alert("Erro ao salvar configurações de compartilhamento.");
         } finally {

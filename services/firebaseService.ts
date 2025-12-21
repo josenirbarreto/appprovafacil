@@ -63,6 +63,7 @@ const safeLog = (message: string, error: any) => {
 const cleanPayload = (data: any): any => {
     const process = (obj: any): any => {
         if (obj === null || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(item => process(item));
         if (obj instanceof Date) return obj.toISOString();
         if (typeof obj.toDate === 'function') return obj.toDate().toISOString();
         const newObj: any = {};
