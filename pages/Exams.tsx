@@ -23,9 +23,9 @@ const getTagColor = (tag: string): "blue" | "green" | "red" | "yellow" | "purple
 const safeCloneQuestion = (q: Question): Question => {
     return {
         ...q,
-        options: q.options ? q.options.map(o => ({ ...o })) : undefined,
-        pairs: q.pairs ? q.pairs.map(p => ({ ...p })) : undefined,
-        tags: q.tags ? [...q.tags] : undefined
+        options: Array.isArray(q.options) ? q.options.map(o => ({ ...o })) : [],
+        pairs: Array.isArray(q.pairs) ? q.pairs.map(p => ({ ...p })) : undefined,
+        tags: Array.isArray(q.tags) ? [...q.tags] : []
     };
 };
 
@@ -88,7 +88,9 @@ const ExamsPage = () => {
 
     const availableTags = useMemo(() => {
         const tags = new Set<string>();
-        exams.forEach(e => e.tags?.forEach(t => tags.add(t)));
+        exams.forEach(e => {
+            if (Array.isArray(e.tags)) e.tags.forEach(t => tags.add(t));
+        });
         return Array.from(tags).sort();
     }, [exams]);
 
@@ -107,11 +109,11 @@ const ExamsPage = () => {
                 FirebaseService.getHierarchy(user),
                 FirebaseService.getQuestions(user)
             ]);
-            setExams(e);
-            setInstitutions(i.sort((a,b) => a.name.localeCompare(b.name)));
-            setClasses(c);
-            setHierarchy(h);
-            setAllQuestions(q);
+            setExams(Array.isArray(e) ? e : []);
+            setInstitutions(Array.isArray(i) ? i.sort((a,b) => a.name.localeCompare(b.name)) : []);
+            setClasses(Array.isArray(c) ? c : []);
+            setHierarchy(Array.isArray(h) ? h : []);
+            setAllQuestions(Array.isArray(q) ? q : []);
         } catch (err) {
             console.error("Erro ao carregar dados:", err);
         }
@@ -135,6 +137,7 @@ const ExamsPage = () => {
     }, [allQuestions, tempScopes, manualSelectedIds]);
 
     const shuffleArray = <T,>(array: T[]): T[] => {
+        if (!Array.isArray(array)) return [];
         const newArr = [...array];
         for (let i = newArr.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -145,14 +148,14 @@ const ExamsPage = () => {
 
     const generateVersions = () => {
         const sourceArray = finalQuestionsToSave;
-        if (sourceArray.length === 0) return;
+        if (!Array.isArray(sourceArray) || sourceArray.length === 0) return;
         const baseQuestions = sourceArray.map(q => safeCloneQuestion(q));
         const versions: Record<string, Question[]> = {};
         versions['ORIGINAL'] = [...baseQuestions];
         ['A', 'B', 'C', 'D'].forEach(ver => {
             versions[ver] = shuffleArray<Question>(baseQuestions).map((q: Question) => {
                 const newQ = safeCloneQuestion(q);
-                if (newQ.type === QuestionType.MULTIPLE_CHOICE && newQ.options) {
+                if (newQ.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(newQ.options)) {
                     newQ.options = shuffleArray(newQ.options);
                 }
                 return newQ;
@@ -164,10 +167,10 @@ const ExamsPage = () => {
 
     const handleOpenModal = (exam?: Exam, startAtStep: number = 1) => {
         if (exam) {
-            setEditing({ ...exam, tags: exam.tags || [] });
-            setTempScopes(exam.contentScopes || []);
-            setGeneratedQuestions(exam.questions || []);
-            setManualSelectedIds(new Set(exam.questions.map(q => q.id)));
+            setEditing({ ...exam, tags: Array.isArray(exam.tags) ? exam.tags : [] });
+            setTempScopes(Array.isArray(exam.contentScopes) ? exam.contentScopes : []);
+            setGeneratedQuestions(Array.isArray(exam.questions) ? exam.questions : []);
+            setManualSelectedIds(new Set(Array.isArray(exam.questions) ? exam.questions.map(q => q.id) : []));
             setGenerationMode('MANUAL');
         } else {
             setEditing({ columns: 1, showAnswerKey: false, institutionId: user?.institutionId || '', tags: [] });
@@ -350,10 +353,10 @@ const ExamsPage = () => {
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                             <label className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2"><Icons.Filter /> Organização & Etiquetas</label>
                             <div className="flex gap-2 mb-4">
-                                <input type="text" className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-blue bg-white text-slate-800 placeholder-slate-400" value={tagInput} onChange={e => setTagInput(e.target.value)} placeholder="Adicionar etiqueta..." onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), setEditing({...editing, tags: [...(editing.tags || []), tagInput.trim()]}), setTagInput(''))}/>
-                                <Button onClick={() => {setEditing({...editing, tags: [...(editing.tags || []), tagInput.trim()]}); setTagInput('');}} variant="secondary" className="px-4">ADD</Button>
+                                <input type="text" className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-blue bg-white text-slate-800 placeholder-slate-400" value={tagInput} onChange={e => setTagInput(e.target.value)} placeholder="Adicionar etiqueta..." onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), setEditing({...editing, tags: [...(Array.isArray(editing.tags) ? editing.tags : []), tagInput.trim()]}), setTagInput(''))}/>
+                                <Button onClick={() => {setEditing({...editing, tags: [...(Array.isArray(editing.tags) ? editing.tags : []), tagInput.trim()]}); setTagInput('');}} variant="secondary" className="px-4">ADD</Button>
                             </div>
-                            <div className="flex flex-wrap gap-2">{editing.tags?.map(t => (<span key={t} className={`flex items-center gap-2 text-xs font-black px-3 py-1.5 rounded-full bg-${getTagColor(t)}-100 text-${getTagColor(t)}-800 border border-${getTagColor(t)}-200 shadow-sm`}>{t}<button onClick={() => setEditing({...editing, tags: (editing.tags || []).filter(tg => tg !== t)})}><Icons.X /></button></span>))}</div>
+                            <div className="flex flex-wrap gap-2">{(Array.isArray(editing.tags) ? editing.tags : []).map(t => (<span key={t} className={`flex items-center gap-2 text-xs font-black px-3 py-1.5 rounded-full bg-${getTagColor(t)}-100 text-${getTagColor(t)}-800 border border-${getTagColor(t)}-200 shadow-sm`}>{t}<button onClick={() => setEditing({...editing, tags: (Array.isArray(editing.tags) ? editing.tags : []).filter(tg => tg !== t)})}><Icons.X /></button></span>))}</div>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-8">
@@ -478,8 +481,8 @@ const ExamsPage = () => {
                                 <div className="grid gap-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                                     {availableForManual.map((q) => (
                                         <div key={q.id} className={`p-4 rounded-2xl border-2 transition-all flex gap-4 ${manualSelectedIds.has(q.id) ? 'border-brand-blue bg-blue-50 shadow-inner' : 'bg-white border-slate-100 hover:border-slate-200'}`}>
-                                            <input type="checkbox" checked={manualSelectedIds.has(q.id)} onChange={() => { const n = new Set(manualSelectedIds); if(n.has(q.id)) n.delete(q.id); else n.add(q.id); setManualSelectedIds(n); }} className="w-6 h-6 mt-1 shrink-0 rounded text-brand-blue" />
-                                            <div className="flex-1 cursor-pointer" onClick={() => { const n = new Set(manualSelectedIds); if(n.has(q.id)) n.delete(q.id); else n.add(q.id); setManualSelectedIds(n); }}>
+                                            <input type="checkbox" checked={manualSelectedIds.has(q.id)} onChange={() => { const n = new Set(manualSelectedIds); if(n.has(q.id)) n.delete(q.id!); else n.add(q.id!); setManualSelectedIds(n); }} className="w-6 h-6 mt-1 shrink-0 rounded text-brand-blue" />
+                                            <div className="flex-1 cursor-pointer" onClick={() => { const n = new Set(manualSelectedIds); if(n.has(q.id)) n.delete(q.id!); else n.add(q.id!); setManualSelectedIds(n); }}>
                                                 <div className="text-sm font-bold text-slate-800 line-clamp-2 mb-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                                 <div className="flex gap-2"><Badge color="blue">{DifficultyLabels[q.difficulty]}</Badge></div>
                                             </div>
@@ -557,15 +560,15 @@ const ExamsPage = () => {
                                     {renderHeaderPreview()}
                                     {editing.instructions && <div className="mb-8 p-4 border border-gray-300 rounded text-sm italic rich-text-content" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
                                     <div className={`space-y-8 ${editing.columns === 2 ? 'columns-2 gap-12 print-columns-2' : ''}`}>
-                                        {qs.map((q, i) => (
+                                        {Array.isArray(qs) && qs.map((q, i) => (
                                             <div key={q.id} className="break-inside-avoid mb-8">
                                                 <div className="flex gap-3">
                                                     <strong className="shrink-0 font-bold">{i + 1}.</strong>
                                                     <div className="inline rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                                 </div>
-                                                {q.type === QuestionType.MULTIPLE_CHOICE && (
+                                                {q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options) && (
                                                     <div className="mt-4 ml-8 space-y-2">
-                                                        {q.options?.map((opt, idx) => (
+                                                        {q.options.map((opt, idx) => (
                                                             <div key={idx} className="flex gap-4">
                                                                 <span className="font-bold border border-black rounded-full w-6 h-6 flex items-center justify-center text-[11px] shrink-0">{String.fromCharCode(65+idx)}</span>
                                                                 <span className="flex-1">{opt.text}</span>
@@ -581,8 +584,9 @@ const ExamsPage = () => {
                                         <div className="mt-16 pt-12 border-t-2 border-dashed border-gray-300 print:break-before-page">
                                             <h3 className="font-black text-xl uppercase mb-6 text-center tracking-widest">Gabarito para o Professor</h3>
                                             <div className="grid grid-cols-5 gap-4">
-                                                {qs.map((q, i) => { 
-                                                    const c = q.options?.findIndex(o => o.isCorrect) ?? -1; 
+                                                {Array.isArray(qs) && qs.map((q, i) => { 
+                                                    const options = Array.isArray(q.options) ? q.options : [];
+                                                    const c = options.findIndex(o => o.isCorrect) ?? -1; 
                                                     return (<div key={i} className="flex flex-col border-2 border-slate-200 p-3 rounded-xl text-center"><span className="text-[10px] font-black text-slate-400 uppercase">Questão {i+1}</span><span className="text-2xl font-black text-brand-blue">{c >= 0 ? String.fromCharCode(65+c) : '---'}</span></div>); 
                                                 })}
                                             </div>
@@ -596,7 +600,7 @@ const ExamsPage = () => {
                                         <div className="w-16 h-16 bg-black"></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-20 gap-y-6">
-                                        {qs.map((q, i) => (
+                                        {Array.isArray(qs) && qs.map((q, i) => (
                                             <div key={i} className="flex items-center gap-4 py-2 border-b border-slate-100 break-inside-avoid">
                                                 <span className="font-black text-lg w-8">{String(i+1).padStart(2, '0')}</span>
                                                 {q.type === QuestionType.MULTIPLE_CHOICE ? (
@@ -633,18 +637,23 @@ const ExamsPage = () => {
         }
     };
 
+    const instExamsList = useMemo(() => {
+        return institutions.map(inst => {
+            const instExams = exams.filter(e => e.institutionId === inst.id && (!selTag || (Array.isArray(e.tags) && e.tags.includes(selTag))));
+            return { inst, instExams };
+        }).filter(item => item.instExams.length > 0 || !selTag);
+    }, [institutions, exams, selTag]);
+
     return (
         <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-6"><div><h2 className="text-3xl font-display font-bold text-slate-800">Minhas Provas</h2><p className="text-slate-500 mt-1">Gerencie suas avaliações.</p></div><div className="flex gap-3"><Select value={selTag} onChange={e => setSelTag(e.target.value)} className="w-48 text-sm bg-white"><option value="">Todas Etiquetas</option>{availableTags.map(t => <option key={t} value={t}>{t}</option>)}</Select><Button onClick={() => handleOpenModal()} className="shadow-lg"><Icons.Plus /> Nova Prova</Button></div></div>
             <div className="space-y-3">
-                {institutions.map(inst => {
-                    const instExams = exams.filter(e => e.institutionId === inst.id && (!selTag || e.tags?.includes(selTag)));
-                    if (instExams.length === 0 && selTag) return null;
+                {instExamsList.map(({ inst, instExams }) => {
                     const isExpandedInst = expandedInstitutions[inst.id];
                     return (
                         <div key={inst.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 select-none" onClick={() => setExpandedInstitutions(prev => ({ ...prev, [inst.id]: !prev[inst.id] }))}><div className="flex items-center gap-4"><div className={`transform transition-transform text-slate-400 ${isExpandedInst ? 'rotate-0' : '-rotate-90'}`}><Icons.ChevronDown /></div><div className="flex items-center gap-3"><div className="w-10 h-10 border border-slate-100 rounded-lg p-1 flex items-center justify-center overflow-hidden">{inst.logoUrl ? <img src={inst.logoUrl} className="max-w-full max-h-full" /> : <Icons.Building />}</div><span className="font-bold text-xl text-slate-800 font-display">{inst.name}</span></div></div><Badge color="blue">{instExams.length} provas</Badge></div>
-                            {isExpandedInst && (<div className="p-4 pt-0 divide-y divide-slate-100 border-t border-slate-50">{instExams.map(exam => (<div key={exam.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors group"><div className="flex items-center gap-4"><div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>{exam.publicConfig?.isPublished ? <Icons.Sparkles /> : <Icons.FileText />}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-slate-800 text-lg">{exam.title}</h4>{exam.publicConfig?.isPublished && <Badge color="green">ONLINE</Badge>}</div><div className="flex items-center gap-2 mt-1"><span className="text-slate-400 text-xs">{new Date(exam.createdAt).toLocaleDateString()} • {exam.questions?.length || 0} qts</span>{exam.tags?.map(t => (<span key={t} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-white border-${getTagColor(t)}-200 text-${getTagColor(t)}-700`}>{t}</span>))}</div></div></div><div className="flex items-center gap-3"><button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm shadow-sm">Resultados</button><div className="flex gap-1"><button onClick={() => handleOpenShare(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Compartilhar / Prova Online"><Icons.Share /></button><button onClick={() => handleOpenModal(exam, 4)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Imprimir"><Icons.Printer /></button><button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Icons.Edit /></button><button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><Icons.Trash /></button></div></div></div>))}</div>)}
+                            {isExpandedInst && (<div className="p-4 pt-0 divide-y divide-slate-100 border-t border-slate-50">{instExams.map(exam => (<div key={exam.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors group"><div className="flex items-center gap-4"><div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>{exam.publicConfig?.isPublished ? <Icons.Sparkles /> : <Icons.FileText />}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-slate-800 text-lg">{exam.title}</h4>{exam.publicConfig?.isPublished && <Badge color="green">ONLINE</Badge>}</div><div className="flex items-center gap-2 mt-1"><span className="text-slate-400 text-xs">{new Date(exam.createdAt).toLocaleDateString()} • {Array.isArray(exam.questions) ? exam.questions.length : 0} qts</span>{Array.isArray(exam.tags) && exam.tags.map(t => (<span key={t} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-white border-${getTagColor(t)}-200 text-${getTagColor(t)}-700`}>{t}</span>))}</div></div></div><div className="flex items-center gap-3"><button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm shadow-sm">Resultados</button><div className="flex gap-1"><button onClick={() => handleOpenShare(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Compartilhar / Prova Online"><Icons.Share /></button><button onClick={() => handleOpenModal(exam, 4)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Imprimir"><Icons.Printer /></button><button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Icons.Edit /></button><button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><Icons.Trash /></button></div></div></div>))}</div>)}
                         </div>
                     );
                 })}
@@ -758,9 +767,9 @@ const ExamsPage = () => {
             {viewingQuestion && (
                 <Modal isOpen={!!viewingQuestion} onClose={() => setViewingQuestion(null)} title="Visualizar Questão" maxWidth="max-w-3xl">
                     <div className="prose prose-slate max-w-none mb-6 rich-text-content" dangerouslySetInnerHTML={{__html: viewingQuestion.enunciado}} />
-                    {viewingQuestion.type === QuestionType.MULTIPLE_CHOICE && (
+                    {viewingQuestion.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(viewingQuestion.options) && (
                         <div className="space-y-2">
-                            {viewingQuestion.options?.map((opt, i) => (
+                            {viewingQuestion.options.map((opt, i) => (
                                 <div key={i} className={`p-3 rounded-lg border flex gap-3 ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
                                     <span className="font-bold">{String.fromCharCode(65+i)}</span>
                                     <span>{opt.text}</span>

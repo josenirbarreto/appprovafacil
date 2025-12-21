@@ -53,7 +53,7 @@ const PublicExam = () => {
                         // Se a prova tiver turma, busca a lista de alunos
                         if (data.classId) {
                             const students = await FirebaseService.getStudents(data.classId);
-                            setClassStudents(students);
+                            setClassStudents(Array.isArray(students) ? students : []);
                         }
                     }
                 }
@@ -81,6 +81,7 @@ const PublicExam = () => {
     };
 
     const handleStart = async () => {
+        if (!exam) return;
         let name = '';
         let identifier = '';
         let sid = undefined;
@@ -98,23 +99,26 @@ const PublicExam = () => {
         }
 
         try {
-            const previousAttempts = await FirebaseService.getStudentAttempts(exam!.id, identifier);
-            const allowed = parseInt(String(exam!.publicConfig!.allowedAttempts)) || 1;
+            const previousAttempts = await FirebaseService.getStudentAttempts(exam.id, identifier);
+            const allowed = parseInt(String(exam.publicConfig!.allowedAttempts)) || 1;
             if (previousAttempts.length >= allowed) return alert(`Limite de tentativas atingido.`);
 
-            let questionsToUse = [...exam!.questions];
-            if (exam!.publicConfig?.randomizeQuestions) {
+            let questionsToUse = Array.isArray(exam.questions) ? [...exam.questions] : [];
+            
+            if (exam.publicConfig?.randomizeQuestions) {
                 questionsToUse.sort(() => Math.random() - 0.5);
                 questionsToUse = questionsToUse.map(q => {
-                    if (q.type === QuestionType.MULTIPLE_CHOICE && q.options) return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
+                    if (q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options)) {
+                        return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
+                    }
                     return q;
                 });
             }
             setRandomizedQuestions(questionsToUse);
 
-            const attempt = await FirebaseService.startAttempt(exam!.id, name, identifier, questionsToUse.length, sid);
+            const attempt = await FirebaseService.startAttempt(exam.id, name, identifier, questionsToUse.length, sid);
             setCurrentAttempt(attempt);
-            if (exam!.publicConfig!.timeLimitMinutes > 0) setTimeLeft(exam!.publicConfig!.timeLimitMinutes * 60);
+            if (exam.publicConfig!.timeLimitMinutes > 0) setTimeLeft(exam.publicConfig!.timeLimitMinutes * 60);
             setStep('TAKING');
         } catch (err: any) {
             console.error("Start Exam Error:", err);
@@ -131,10 +135,12 @@ const PublicExam = () => {
             const answer = answers[q.id];
             if (!answer) return;
             if (q.type === QuestionType.MULTIPLE_CHOICE || q.type === QuestionType.TRUE_FALSE) {
-                const correctOpt = q.options?.find(o => o.isCorrect);
+                const options = Array.isArray(q.options) ? q.options : [];
+                const correctOpt = options.find(o => o.isCorrect);
                 if (correctOpt && (correctOpt.id === answer || correctOpt.text === answer)) finalScore++;
             } else if (q.type === QuestionType.NUMERIC) {
-                const correctVal = q.options?.[0]?.text;
+                const options = Array.isArray(q.options) ? q.options : [];
+                const correctVal = options[0]?.text;
                 if (parseFloat(answer) === parseFloat(correctVal || '0')) finalScore++;
             }
         });
@@ -145,7 +151,6 @@ const PublicExam = () => {
 
     const handleCloseWindow = () => {
         window.close();
-        // Fallback: se window.close() for bloqueado pelo navegador, redireciona para a home
         setTimeout(() => {
             window.location.href = "/";
         }, 100);
@@ -180,7 +185,6 @@ const PublicExam = () => {
         return (
             <div className={`${containerClasses} items-center p-4 py-12`}>
                 <Card className="max-w-lg w-full shrink-0 my-auto shadow-2xl border-t-8 border-brand-blue relative overflow-hidden">
-                    {/* Background decorativo */}
                     <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-blue-50 rounded-full"></div>
                     
                     <div className="text-center mb-8 relative z-10">
@@ -208,7 +212,7 @@ const PublicExam = () => {
                         </div>
                         <div className="text-center border-x border-slate-200">
                             <p className="text-[10px] text-slate-400 font-black uppercase mb-1">Questões</p>
-                            <p className="font-black text-slate-800 text-sm">{exam?.questions?.length || 0}</p>
+                            <p className="font-black text-slate-800 text-sm">{Array.isArray(exam?.questions) ? exam?.questions.length : 0}</p>
                         </div>
                         <div className="text-center">
                             <p className="text-[10px] text-slate-400 font-black uppercase mb-1">Tentativas</p>
@@ -263,9 +267,9 @@ const PublicExam = () => {
                             <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-3">Sua Nota Preliminar</p>
                             <p className="text-6xl font-display font-black text-brand-blue drop-shadow-sm">
                                 {currentAttempt.score} 
-                                <span className="text-2xl text-slate-300 font-bold ml-1">/ {exam.questions.length}</span>
+                                <span className="text-2xl text-slate-300 font-bold ml-1">/ {Array.isArray(exam.questions) ? exam.questions.length : 0}</span>
                             </p>
-                            {exam.questions.some(q => q.type === QuestionType.SHORT_ANSWER) && (
+                            {Array.isArray(exam.questions) && exam.questions.some(q => q.type === QuestionType.SHORT_ANSWER) && (
                                 <div className="mt-6 flex items-start gap-2 text-left bg-white p-3 rounded-xl border border-blue-100">
                                     <div className="text-blue-500 mt-0.5"><Icons.Sparkles /></div>
                                     <p className="text-[11px] text-slate-500 font-bold leading-tight uppercase">Nota Parcial: Questões dissertativas serão corrigidas pelo professor.</p>
@@ -308,9 +312,9 @@ const PublicExam = () => {
                         </div>
 
                         <div className="md:ml-14">
-                            {q.type === QuestionType.MULTIPLE_CHOICE && (
+                            {q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options) && (
                                 <div className="space-y-4">
-                                    {q.options?.map((opt, oIdx) => (
+                                    {q.options.map((opt, oIdx) => (
                                         <label key={opt.id} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${answers[q.id] === opt.id ? 'border-brand-blue bg-blue-50/50 shadow-md ring-1 ring-brand-blue' : 'border-slate-50 hover:bg-slate-50/80'}`}>
                                             <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black text-sm transition-colors ${answers[q.id] === opt.id ? 'border-brand-blue bg-brand-blue text-white shadow-sm' : 'border-slate-300 bg-white text-slate-400'}`}>
                                                 {String.fromCharCode(65 + oIdx)}
@@ -349,9 +353,9 @@ const PublicExam = () => {
             
             {/* Footer de Progresso (Mobile Friendly) */}
             <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-100 p-3 md:hidden flex justify-between items-center z-40">
-                <span className="text-[10px] font-black text-slate-400 uppercase">Respondidas: {Object.keys(answers).length} / {exam?.questions.length}</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase">Respondidas: {Object.keys(answers).length} / {Array.isArray(exam?.questions) ? exam?.questions.length : 0}</span>
                 <div className="w-32 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-blue" style={{ width: `${(Object.keys(answers).length / (exam?.questions.length || 1)) * 100}%` }}></div>
+                    <div className="h-full bg-brand-blue" style={{ width: `${(Object.keys(answers).length / (Array.isArray(exam?.questions) ? exam?.questions.length : 1)) * 100}%` }}></div>
                 </div>
             </div>
         </div>

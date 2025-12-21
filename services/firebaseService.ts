@@ -60,24 +60,33 @@ const safeLog = (message: string, error: any) => {
     console.error(message, error?.code || error?.message || String(error));
 };
 
+// Função de limpeza robusta para evitar erro de undefined e garantir preservação de ARRAYS
 const cleanPayload = (data: any): any => {
-    const process = (obj: any): any => {
-        if (obj === null || typeof obj !== 'object') return obj;
-        if (Array.isArray(obj)) return obj.map(item => process(item));
-        if (obj instanceof Date) return obj.toISOString();
-        if (typeof obj.toDate === 'function') return obj.toDate().toISOString();
-        const newObj: any = {};
-        for (const key in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                const value = obj[key];
-                if (value !== undefined && typeof value !== 'function' && !key.startsWith('_')) {
-                    newObj[key] = process(value);
-                }
+    if (data === null || data === undefined) return null;
+    
+    // Se for um valor primitivo, retorna ele mesmo
+    if (typeof data !== 'object') return data;
+
+    // Se for uma data do Firestore ou JS
+    if (data instanceof Date) return data.toISOString();
+    if (typeof data.toDate === 'function') return data.toDate().toISOString();
+
+    // SE FOR ARRAY: Mapeia cada item recursivamente e retorna um ARRAY REAL
+    if (Array.isArray(data)) {
+        return data.map(item => cleanPayload(item));
+    }
+
+    // SE FOR OBJETO: Limpa as chaves
+    const cleaned: any = {};
+    for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+            const value = data[key];
+            if (value !== undefined && typeof value !== 'function') {
+                cleaned[key] = cleanPayload(value);
             }
         }
-        return newObj;
-    };
-    return process(data);
+    }
+    return cleaned;
 };
 
 const isVisible = (item: any, user: User | null | undefined) => {
