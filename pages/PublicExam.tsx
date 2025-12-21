@@ -143,6 +143,14 @@ const PublicExam = () => {
         setStep('FINISHED');
     };
 
+    const handleCloseWindow = () => {
+        window.close();
+        // Fallback: se window.close() for bloqueado pelo navegador, redireciona para a home
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 100);
+    };
+
     if (loading) return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-50 text-slate-400">
             <div className="w-12 h-12 border-4 border-slate-200 border-t-brand-blue rounded-full animate-spin mb-4"></div>
@@ -247,7 +255,7 @@ const PublicExam = () => {
                 <Card className="max-w-md w-full text-center py-12 animate-fade-in shadow-2xl border-t-8 border-green-500">
                     <div className="w-20 h-20 bg-green-100 text-green-500 rounded-2xl flex items-center justify-center mx-auto mb-6 animate-bounce shadow-sm"><Icons.Check /></div>
                     <h2 className="text-3xl font-display font-black text-slate-800 mb-2">Prova Concluída!</h2>
-                    <p className="text-slate-500 mb-8 font-bold italic">Seas respostas foram enviadas com sucesso.</p>
+                    <p className="text-slate-500 mb-8 font-bold italic">Suas respostas foram enviadas com sucesso.</p>
                     
                     {exam?.publicConfig?.showFeedback && currentAttempt && (
                         <div className="bg-brand-blue/5 p-8 rounded-3xl border-2 border-brand-blue/10 relative overflow-hidden">
@@ -267,7 +275,7 @@ const PublicExam = () => {
                     )}
                     
                     <div className="mt-10">
-                        <Button variant="outline" className="w-full h-12 font-bold" onClick={() => window.close()}>Fechar Janela</Button>
+                        <Button variant="outline" className="w-full h-12 font-bold" onClick={handleCloseWindow}>Sair do Portal</Button>
                     </div>
                 </Card>
             </div>
