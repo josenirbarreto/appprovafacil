@@ -14,6 +14,7 @@ const DifficultyLabels: Record<string, string> = {
 };
 
 const getTagColor = (tag: string): "blue" | "green" | "red" | "yellow" | "purple" | "orange" => {
+    if (!tag) return "blue";
     const colors: any[] = ["blue", "green", "purple", "orange", "yellow", "red"];
     let hash = 0;
     for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
@@ -21,6 +22,7 @@ const getTagColor = (tag: string): "blue" | "green" | "red" | "yellow" | "purple
 };
 
 const safeCloneQuestion = (q: Question): Question => {
+    if (!q) return {} as Question;
     return {
         ...q,
         options: Array.isArray(q.options) ? q.options.map(o => ({ ...o })) : [],
@@ -88,9 +90,11 @@ const ExamsPage = () => {
 
     const availableTags = useMemo(() => {
         const tags = new Set<string>();
-        exams.forEach(e => {
-            if (Array.isArray(e.tags)) e.tags.forEach(t => tags.add(t));
-        });
+        if (Array.isArray(exams)) {
+            exams.forEach(e => {
+                if (e && Array.isArray(e.tags)) e.tags.forEach(t => tags.add(t));
+            });
+        }
         return Array.from(tags).sort();
     }, [exams]);
 
@@ -109,24 +113,26 @@ const ExamsPage = () => {
                 FirebaseService.getHierarchy(user),
                 FirebaseService.getQuestions(user)
             ]);
-            setExams(Array.isArray(e) ? e : []);
-            setInstitutions(Array.isArray(i) ? i.sort((a,b) => a.name.localeCompare(b.name)) : []);
-            setClasses(Array.isArray(c) ? c : []);
-            setHierarchy(Array.isArray(h) ? h : []);
-            setAllQuestions(Array.isArray(q) ? q : []);
+            setExams(Array.isArray(e) ? e.filter(Boolean) : []);
+            setInstitutions(Array.isArray(i) ? i.filter(Boolean).sort((a,b) => (a.name || '').localeCompare(b.name || '')) : []);
+            setClasses(Array.isArray(c) ? c.filter(Boolean) : []);
+            setHierarchy(Array.isArray(h) ? h.filter(Boolean) : []);
+            setAllQuestions(Array.isArray(q) ? q.filter(Boolean) : []);
         } catch (err) {
             console.error("Erro ao carregar dados:", err);
         }
     };
 
     const finalQuestionsToSave = useMemo<Question[]>(() => {
-        if (generationMode === 'AUTO') return generatedQuestions;
-        return allQuestions.filter(q => manualSelectedIds.has(q.id));
+        if (generationMode === 'AUTO') return Array.isArray(generatedQuestions) ? generatedQuestions : [];
+        if (!Array.isArray(allQuestions)) return [];
+        return allQuestions.filter(q => q && manualSelectedIds.has(q.id));
     }, [generationMode, generatedQuestions, allQuestions, manualSelectedIds]);
 
     const availableForManual = useMemo(() => {
-        if (tempScopes.length === 0) return [];
+        if (!Array.isArray(tempScopes) || tempScopes.length === 0 || !Array.isArray(allQuestions)) return [];
         return allQuestions.filter(q => {
+            if (!q) return false;
             return tempScopes.some(scope => {
                 return q.disciplineId === scope.disciplineId &&
                        (!scope.chapterId || q.chapterId === scope.chapterId) &&
@@ -183,9 +189,9 @@ const ExamsPage = () => {
     const handleAddScope = () => {
         if (!selectedDisc) return;
         const disc = hierarchy.find(d => d.id === selectedDisc);
-        const chap = disc?.chapters.find(c => c.id === selectedChap);
-        const unit = chap?.units.find(u => u.id === selectedUnit);
-        const topic = unit?.topics.find(t => t.id === selectedTopic);
+        const chap = disc?.chapters?.find(c => c.id === selectedChap);
+        const unit = chap?.units?.find(u => u.id === selectedUnit);
+        const topic = unit?.topics?.find(t => t.id === selectedTopic);
         
         setTempScopes([...tempScopes, { 
             id: Date.now().toString(), 
@@ -215,7 +221,7 @@ const ExamsPage = () => {
         });
         const seenIds = new Set<string>();
         const uniqueQuestions: Question[] = [];
-        for (const q of finalQuestions) { if (!seenIds.has(q.id)) { seenIds.add(q.id); uniqueQuestions.push(q); } }
+        for (const q of finalQuestions) { if (q && !seenIds.has(q.id)) { seenIds.add(q.id); uniqueQuestions.push(q); } }
         setGeneratedQuestions(uniqueQuestions);
     };
 
@@ -224,12 +230,19 @@ const ExamsPage = () => {
         setSaving(true);
         setTimeout(async () => {
             try { 
-                await FirebaseService.saveExam({ ...editing, questions: finalQuestionsToSave, contentScopes: tempScopes, createdAt: editing.createdAt || new Date().toISOString() } as Exam); 
-                setIsModalOpen(false); load(); 
+                const examToSave = { 
+                    ...editing, 
+                    questions: finalQuestionsToSave, 
+                    contentScopes: tempScopes, 
+                    createdAt: editing.createdAt || new Date().toISOString() 
+                } as Exam;
+                await FirebaseService.saveExam(examToSave); 
+                setIsModalOpen(false); 
+                load(); 
             } catch (err) {
                 alert("Erro ao salvar a prova.");
             } finally { setSaving(false); }
-        }, 30);
+        }, 50);
     }, [editing, finalQuestionsToSave, tempScopes, load]);
 
     const handleDelete = async (id: string) => {
@@ -248,7 +261,7 @@ const ExamsPage = () => {
     // --- SHARE HANDLERS ---
     const handleOpenShare = (exam: Exam) => {
         setSharingExam(exam);
-        setShareConfig(exam.publicConfig || {
+        const config = exam.publicConfig ? { ...exam.publicConfig } : {
             isPublished: false,
             startDate: new Date().toISOString().slice(0, 16),
             endDate: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
@@ -257,7 +270,8 @@ const ExamsPage = () => {
             randomizeQuestions: true,
             requireIdentifier: true,
             showFeedback: true
-        });
+        };
+        setShareConfig(config);
         setIsShareModalOpen(true);
     };
 
@@ -265,21 +279,33 @@ const ExamsPage = () => {
         if (!sharingExam) return;
         setSaving(true);
         try {
-            // Sanitização robusta para evitar NaN
+            // Sanitização profunda para evitar corrupção de tipos numéricos
             const sanitizedConfig = {
-                ...shareConfig,
-                allowedAttempts: parseInt(String(shareConfig.allowedAttempts)) || 1,
-                timeLimitMinutes: parseInt(String(shareConfig.timeLimitMinutes)) || 0
+                isPublished: Boolean(shareConfig.isPublished),
+                startDate: String(shareConfig.startDate),
+                endDate: String(shareConfig.endDate),
+                timeLimitMinutes: Math.max(0, parseInt(String(shareConfig.timeLimitMinutes)) || 0),
+                allowedAttempts: Math.max(1, parseInt(String(shareConfig.allowedAttempts)) || 1),
+                randomizeQuestions: Boolean(shareConfig.randomizeQuestions),
+                requireIdentifier: Boolean(shareConfig.requireIdentifier),
+                showFeedback: Boolean(shareConfig.showFeedback)
             };
             
-            await FirebaseService.saveExam({
+            // CORREÇÃO: Força explicitamente a reconstrução como Arrays reais para prevenir "ForEach is not a function"
+            const updatedExam: Exam = {
                 ...sharingExam,
+                questions: Array.isArray(sharingExam.questions) ? Array.from(sharingExam.questions) : [],
+                tags: Array.isArray(sharingExam.tags) ? Array.from(sharingExam.tags) : [],
+                contentScopes: Array.isArray(sharingExam.contentScopes) ? Array.from(sharingExam.contentScopes) : [],
                 publicConfig: sanitizedConfig
-            });
+            };
+            
+            await FirebaseService.saveExam(updatedExam);
             setIsShareModalOpen(false);
             await load();
         } catch (e) {
-            alert("Erro ao salvar configurações de compartilhamento.");
+            console.error("Erro no Share Config:", e);
+            alert("Erro ao salvar configurações. Tente novamente.");
         } finally {
             setSaving(false);
         }
@@ -288,7 +314,7 @@ const ExamsPage = () => {
     const copyShareLink = () => {
         const link = `${window.location.origin}${window.location.pathname}#/p/${sharingExam?.id}`;
         navigator.clipboard.writeText(link);
-        alert("Link copiado para a área de transferência!");
+        alert("Link copiado!");
     };
 
     // --- RENDER HELPERS ---
@@ -356,7 +382,7 @@ const ExamsPage = () => {
                                 <input type="text" className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-blue bg-white text-slate-800 placeholder-slate-400" value={tagInput} onChange={e => setTagInput(e.target.value)} placeholder="Adicionar etiqueta..." onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), setEditing({...editing, tags: [...(Array.isArray(editing.tags) ? editing.tags : []), tagInput.trim()]}), setTagInput(''))}/>
                                 <Button onClick={() => {setEditing({...editing, tags: [...(Array.isArray(editing.tags) ? editing.tags : []), tagInput.trim()]}); setTagInput('');}} variant="secondary" className="px-4">ADD</Button>
                             </div>
-                            <div className="flex flex-wrap gap-2">{(Array.isArray(editing.tags) ? editing.tags : []).map(t => (<span key={t} className={`flex items-center gap-2 text-xs font-black px-3 py-1.5 rounded-full bg-${getTagColor(t)}-100 text-${getTagColor(t)}-800 border border-${getTagColor(t)}-200 shadow-sm`}>{t}<button onClick={() => setEditing({...editing, tags: (Array.isArray(editing.tags) ? editing.tags : []).filter(tg => tg !== t)})}><Icons.X /></button></span>))}</div>
+                            <div className="flex flex-wrap gap-2">{(Array.isArray(editing.tags) ? editing.tags : []).map((t, idx) => (<span key={`${t}-${idx}`} className={`flex items-center gap-2 text-xs font-black px-3 py-1.5 rounded-full bg-${getTagColor(t)}-100 text-${getTagColor(t)}-800 border border-${getTagColor(t)}-200 shadow-sm`}>{t}<button onClick={() => setEditing({...editing, tags: (Array.isArray(editing.tags) ? editing.tags : []).filter(tg => tg !== t)})}><Icons.X /></button></span>))}</div>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-8">
@@ -390,8 +416,8 @@ const ExamsPage = () => {
             );
             case 2: 
                 const d = hierarchy.find(x => x.id === selectedDisc);
-                const c = d?.chapters.find(x => x.id === selectedChap);
-                const u = c?.units.find(x => x.id === selectedUnit);
+                const c = d?.chapters?.find(x => x.id === selectedChap);
+                const u = c?.units?.find(x => x.id === selectedUnit);
                 return (
                 <div className="space-y-6 animate-fade-in">
                     <div className="bg-slate-50 p-8 rounded-2xl border border-slate-200">
@@ -403,15 +429,15 @@ const ExamsPage = () => {
                             </Select>
                             <Select label="Capítulo" value={selectedChap} onChange={e => { setSelectedChap(e.target.value); setSelectedUnit(''); setSelectedTopic(''); }} disabled={!selectedDisc}>
                                 <option value="">Todos os Capítulos</option>
-                                {d?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                {Array.isArray(d?.chapters) && d.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </Select>
                             <Select label="Unidade" value={selectedUnit} onChange={e => { setSelectedUnit(e.target.value); setSelectedTopic(''); }} disabled={!selectedChap}>
                                 <option value="">Todas as Unidades</option>
-                                {c?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                {Array.isArray(c?.units) && c.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                             </Select>
                             <Select label="Tópico" value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)} disabled={!selectedUnit}>
                                 <option value="">Todos os Tópicos</option>
-                                {u?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                {Array.isArray(u?.topics) && u.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                             </Select>
                         </div>
                         <div className="flex gap-4 items-end mt-6 pt-6 border-t border-slate-200">
@@ -420,7 +446,7 @@ const ExamsPage = () => {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {tempScopes.map(scope => (
+                        {Array.isArray(tempScopes) && tempScopes.map(scope => (
                             <div key={scope.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm group">
                                 <div className="flex-1 overflow-hidden">
                                     <div className="font-black text-slate-800 truncate">{scope.disciplineName}</div>
@@ -462,14 +488,14 @@ const ExamsPage = () => {
                             <div className="animate-fade-in text-center">
                                 <Button onClick={handleAutoGenerate} className="mx-auto h-16 px-10 text-xl font-black shadow-xl shadow-blue-200 mb-8 border-4 border-white">GERAR SELEÇÃO INTELIGENTE</Button>
                                 <div className="grid gap-3 max-h-80 overflow-y-auto custom-scrollbar pr-4 text-left">
-                                    {generatedQuestions.map((q, i) => (
-                                        <div key={q.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm shadow-sm flex gap-4 group">
+                                    {Array.isArray(generatedQuestions) && generatedQuestions.map((q, i) => (
+                                        <div key={q.id || i} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm shadow-sm flex gap-4 group">
                                             <strong className="text-brand-blue shrink-0 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-slate-200 text-xs">{i+1}</strong>
-                                            <div className="flex-1 line-clamp-1 font-medium text-slate-700" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                            <div className="flex-1 line-clamp-1 font-medium text-slate-700" dangerouslySetInnerHTML={{__html: q?.enunciado || ""}} />
                                             <button onClick={() => setViewingQuestion(q)} className="text-slate-400 hover:text-brand-blue"><Icons.Eye /></button>
                                         </div>
                                     ))}
-                                    {generatedQuestions.length === 0 && <p className="text-center text-slate-400 py-10 italic">Clique no botão acima para iniciar a geração.</p>}
+                                    {(!Array.isArray(generatedQuestions) || generatedQuestions.length === 0) && <p className="text-center text-slate-400 py-10 italic">Clique no botão acima para iniciar a geração.</p>}
                                 </div>
                             </div>
                         ) : (
@@ -561,12 +587,12 @@ const ExamsPage = () => {
                                     {editing.instructions && <div className="mb-8 p-4 border border-gray-300 rounded text-sm italic rich-text-content" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
                                     <div className={`space-y-8 ${editing.columns === 2 ? 'columns-2 gap-12 print-columns-2' : ''}`}>
                                         {Array.isArray(qs) && qs.map((q, i) => (
-                                            <div key={q.id} className="break-inside-avoid mb-8">
+                                            <div key={q.id || i} className="break-inside-avoid mb-8">
                                                 <div className="flex gap-3">
                                                     <strong className="shrink-0 font-bold">{i + 1}.</strong>
-                                                    <div className="inline rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                    <div className="inline rich-text-content" dangerouslySetInnerHTML={{__html: q?.enunciado || ""}} />
                                                 </div>
-                                                {q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options) && (
+                                                {q?.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options) && (
                                                     <div className="mt-4 ml-8 space-y-2">
                                                         {q.options.map((opt, idx) => (
                                                             <div key={idx} className="flex gap-4">
@@ -576,7 +602,7 @@ const ExamsPage = () => {
                                                         ))}
                                                     </div>
                                                 )}
-                                                {(q.type === QuestionType.SHORT_ANSWER) && <div className="mt-4 ml-8 border-b border-gray-300 h-24"></div>}
+                                                {(q?.type === QuestionType.SHORT_ANSWER) && <div className="mt-4 ml-8 border-b border-gray-300 h-24"></div>}
                                             </div>
                                         ))}
                                     </div>
@@ -585,8 +611,8 @@ const ExamsPage = () => {
                                             <h3 className="font-black text-xl uppercase mb-6 text-center tracking-widest">Gabarito para o Professor</h3>
                                             <div className="grid grid-cols-5 gap-4">
                                                 {Array.isArray(qs) && qs.map((q, i) => { 
-                                                    const options = Array.isArray(q.options) ? q.options : [];
-                                                    const c = options.findIndex(o => o.isCorrect) ?? -1; 
+                                                    const options = q && Array.isArray(q.options) ? q.options : [];
+                                                    const c = options.findIndex(o => o.isCorrect); 
                                                     return (<div key={i} className="flex flex-col border-2 border-slate-200 p-3 rounded-xl text-center"><span className="text-[10px] font-black text-slate-400 uppercase">Questão {i+1}</span><span className="text-2xl font-black text-brand-blue">{c >= 0 ? String.fromCharCode(65+c) : '---'}</span></div>); 
                                                 })}
                                             </div>
@@ -603,7 +629,7 @@ const ExamsPage = () => {
                                         {Array.isArray(qs) && qs.map((q, i) => (
                                             <div key={i} className="flex items-center gap-4 py-2 border-b border-slate-100 break-inside-avoid">
                                                 <span className="font-black text-lg w-8">{String(i+1).padStart(2, '0')}</span>
-                                                {q.type === QuestionType.MULTIPLE_CHOICE ? (
+                                                {q?.type === QuestionType.MULTIPLE_CHOICE ? (
                                                     <div className="flex gap-3">
                                                         {['A','B','C','D','E'].map(L => (
                                                             <div key={L} className="flex flex-col items-center gap-1">
@@ -638,8 +664,10 @@ const ExamsPage = () => {
     };
 
     const instExamsList = useMemo(() => {
+        if (!Array.isArray(institutions) || !Array.isArray(exams)) return [];
         return institutions.map(inst => {
-            const instExams = exams.filter(e => e.institutionId === inst.id && (!selTag || (Array.isArray(e.tags) && e.tags.includes(selTag))));
+            if (!inst) return { inst: {} as Institution, instExams: [] };
+            const instExams = exams.filter(e => e && e.institutionId === inst.id && (!selTag || (Array.isArray(e.tags) && e.tags.includes(selTag))));
             return { inst, instExams };
         }).filter(item => item.instExams.length > 0 || !selTag);
     }, [institutions, exams, selTag]);
@@ -648,12 +676,13 @@ const ExamsPage = () => {
         <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-6"><div><h2 className="text-3xl font-display font-bold text-slate-800">Minhas Provas</h2><p className="text-slate-500 mt-1">Gerencie suas avaliações.</p></div><div className="flex gap-3"><Select value={selTag} onChange={e => setSelTag(e.target.value)} className="w-48 text-sm bg-white"><option value="">Todas Etiquetas</option>{availableTags.map(t => <option key={t} value={t}>{t}</option>)}</Select><Button onClick={() => handleOpenModal()} className="shadow-lg"><Icons.Plus /> Nova Prova</Button></div></div>
             <div className="space-y-3">
-                {instExamsList.map(({ inst, instExams }) => {
+                {instExamsList.map(({ inst, instExams }, idx) => {
+                    if (!inst || !inst.id) return null;
                     const isExpandedInst = expandedInstitutions[inst.id];
                     return (
-                        <div key={inst.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 select-none" onClick={() => setExpandedInstitutions(prev => ({ ...prev, [inst.id]: !prev[inst.id] }))}><div className="flex items-center gap-4"><div className={`transform transition-transform text-slate-400 ${isExpandedInst ? 'rotate-0' : '-rotate-90'}`}><Icons.ChevronDown /></div><div className="flex items-center gap-3"><div className="w-10 h-10 border border-slate-100 rounded-lg p-1 flex items-center justify-center overflow-hidden">{inst.logoUrl ? <img src={inst.logoUrl} className="max-w-full max-h-full" /> : <Icons.Building />}</div><span className="font-bold text-xl text-slate-800 font-display">{inst.name}</span></div></div><Badge color="blue">{instExams.length} provas</Badge></div>
-                            {isExpandedInst && (<div className="p-4 pt-0 divide-y divide-slate-100 border-t border-slate-50">{instExams.map(exam => (<div key={exam.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors group"><div className="flex items-center gap-4"><div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>{exam.publicConfig?.isPublished ? <Icons.Sparkles /> : <Icons.FileText />}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-slate-800 text-lg">{exam.title}</h4>{exam.publicConfig?.isPublished && <Badge color="green">ONLINE</Badge>}</div><div className="flex items-center gap-2 mt-1"><span className="text-slate-400 text-xs">{new Date(exam.createdAt).toLocaleDateString()} • {Array.isArray(exam.questions) ? exam.questions.length : 0} qts</span>{Array.isArray(exam.tags) && exam.tags.map(t => (<span key={t} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-white border-${getTagColor(t)}-200 text-${getTagColor(t)}-700`}>{t}</span>))}</div></div></div><div className="flex items-center gap-3"><button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm shadow-sm">Resultados</button><div className="flex gap-1"><button onClick={() => handleOpenShare(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Compartilhar / Prova Online"><Icons.Share /></button><button onClick={() => handleOpenModal(exam, 4)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Imprimir"><Icons.Printer /></button><button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Icons.Edit /></button><button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><Icons.Trash /></button></div></div></div>))}</div>)}
+                        <div key={inst.id || idx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 select-none" onClick={() => setExpandedInstitutions(prev => ({ ...prev, [inst.id]: !prev[inst.id] }))}><div className="flex items-center gap-4"><div className={`transform transition-transform text-slate-400 ${isExpandedInst ? 'rotate-0' : '-rotate-90'}`}><Icons.ChevronDown /></div><div className="flex items-center gap-3"><div className="w-10 h-10 border border-slate-100 rounded-lg p-1 flex items-center justify-center overflow-hidden">{inst.logoUrl ? <img src={inst.logoUrl} className="max-w-full max-h-full" /> : <Icons.Building />}</div><span className="font-bold text-xl text-slate-800 font-display">{inst.name || "Instituição s/ Nome"}</span></div></div><Badge color="blue">{instExams.length} provas</Badge></div>
+                            {isExpandedInst && (<div className="p-4 pt-0 divide-y divide-slate-100 border-t border-slate-50">{instExams.map(exam => (<div key={exam.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors group"><div className="flex items-center gap-4"><div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>{exam.publicConfig?.isPublished ? <Icons.Sparkles /> : <Icons.FileText />}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-slate-800 text-lg">{exam.title}</h4>{exam.publicConfig?.isPublished && <Badge color="green">ONLINE</Badge>}</div><div className="flex items-center gap-2 mt-1"><span className="text-slate-400 text-xs">{new Date(exam.createdAt).toLocaleDateString()} • {Array.isArray(exam.questions) ? exam.questions.length : 0} qts</span>{Array.isArray(exam.tags) && exam.tags.map((t, tIdx) => (<span key={tIdx} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-white border-${getTagColor(t)}-200 text-${getTagColor(t)}-700`}>{t}</span>))}</div></div></div><div className="flex items-center gap-3"><button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm shadow-sm">Resultados</button><div className="flex gap-1"><button onClick={() => handleOpenShare(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Compartilhar / Prova Online"><Icons.Share /></button><button onClick={() => handleOpenModal(exam, 4)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Imprimir"><Icons.Printer /></button><button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Icons.Edit /></button><button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><Icons.Trash /></button></div></div></div>))}</div>)}
                         </div>
                     );
                 })}

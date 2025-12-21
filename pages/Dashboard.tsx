@@ -38,18 +38,18 @@ const Dashboard = () => {
                 ]);
 
                 // Busca resultados de todas as provas para calcular médias por turma
-                const attemptsPromises = exams.map(e => FirebaseService.getExamResults(e.id));
+                const attemptsPromises = (Array.isArray(exams) ? exams : []).map(e => FirebaseService.getExamResults(e.id));
                 const attemptsArrays = await Promise.all(attemptsPromises);
                 const allAttempts = attemptsArrays.flat();
 
                 setData({
-                    exams,
-                    questions,
-                    classes,
-                    institutions,
-                    disciplines,
-                    users,
-                    allAttempts
+                    exams: Array.isArray(exams) ? exams : [],
+                    questions: Array.isArray(questions) ? questions : [],
+                    classes: Array.isArray(classes) ? classes : [],
+                    institutions: Array.isArray(institutions) ? institutions : [],
+                    disciplines: Array.isArray(disciplines) ? disciplines : [],
+                    users: Array.isArray(users) ? users : [],
+                    allAttempts: Array.isArray(allAttempts) ? allAttempts : []
                 });
             } catch (error) {
                 console.error("Erro ao carregar dados do dashboard:", error);
@@ -112,20 +112,24 @@ const Dashboard = () => {
         const usage: Record<string, { name: string, count: number, discipline: string }> = {};
         
         data.exams.forEach(ex => {
-            ex.questions.forEach(q => {
-                const topicId = q.topicId || 'unclassified';
-                if (!usage[topicId]) {
-                    const disc = data.disciplines.find(d => d.id === q.disciplineId);
-                    let topicName = 'Não Classificado';
-                    if (q.topicId) {
-                        disc?.chapters.forEach(c => c.units.forEach(u => u.topics.forEach(t => {
-                            if (t.id === q.topicId) topicName = t.name;
-                        })));
+            // CORREÇÃO: Check de segurança Array.isArray para evitar crash se o campo virar objeto
+            if (ex && Array.isArray(ex.questions)) {
+                ex.questions.forEach(q => {
+                    if (!q) return;
+                    const topicId = q.topicId || 'unclassified';
+                    if (!usage[topicId]) {
+                        const disc = data.disciplines.find(d => d.id === q.disciplineId);
+                        let topicName = 'Não Classificado';
+                        if (q.topicId) {
+                            disc?.chapters.forEach(c => c.units.forEach(u => u.topics.forEach(t => {
+                                if (t.id === q.topicId) topicName = t.name;
+                            })));
+                        }
+                        usage[topicId] = { name: topicName, count: 0, discipline: disc?.name || 'Geral' };
                     }
-                    usage[topicId] = { name: topicName, count: 0, discipline: disc?.name || 'Geral' };
-                }
-                usage[topicId].count++;
-            });
+                    usage[topicId].count++;
+                });
+            }
         });
 
         const sorted = Object.values(usage).sort((a, b) => b.count - a.count);
@@ -239,7 +243,7 @@ const Dashboard = () => {
                                     <span className="text-brand-blue">{item.count} questões</span>
                                 </div>
                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-brand-blue" style={{ width: `${(item.count / contentHeatmap.top[0].count) * 100}%` }}></div>
+                                    <div className="h-full bg-brand-blue" style={{ width: `${(item.count / (contentHeatmap.top[0]?.count || 1)) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}
@@ -256,7 +260,7 @@ const Dashboard = () => {
                                     <span className="text-orange-600">{item.count} questões</span>
                                 </div>
                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-orange-400" style={{ width: `${(item.count / contentHeatmap.top[0].count) * 100}%` }}></div>
+                                    <div className="h-full bg-orange-400" style={{ width: `${(item.count / (contentHeatmap.top[0]?.count || 1)) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}

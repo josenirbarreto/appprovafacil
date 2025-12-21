@@ -60,37 +60,39 @@ const safeLog = (message: string, error: any) => {
     console.error(message, error?.code || error?.message || String(error));
 };
 
-// Função de limpeza robusta para evitar erro de undefined e garantir preservação de ARRAYS
+// Função de limpeza ultrarobusta para garantir que o Firebase receba apenas objetos planos e ARRAYS reais
 const cleanPayload = (data: any): any => {
     if (data === null || data === undefined) return null;
     
-    // Se for um valor primitivo, retorna ele mesmo
+    // Primitivos
     if (typeof data !== 'object') return data;
 
-    // Se for uma data do Firestore ou JS
+    // Datas
     if (data instanceof Date) return data.toISOString();
     if (typeof data.toDate === 'function') return data.toDate().toISOString();
 
-    // SE FOR ARRAY: Mapeia cada item recursivamente e retorna um ARRAY REAL
+    // ARRAYS: Essencial garantir que o retorno seja um Array real. 
+    // Usamos Array.from para desvincular de proxies ou indexações corrompidas.
     if (Array.isArray(data)) {
-        return data.map(item => cleanPayload(item));
+        return Array.from(data).map(item => cleanPayload(item));
     }
 
-    // SE FOR OBJETO: Limpa as chaves
+    // OBJETOS: Filtra chaves inválidas e limpa valores recursivamente
     const cleaned: any = {};
-    for (const key in data) {
-        if (Object.prototype.hasOwnProperty.call(data, key)) {
-            const value = data[key];
-            if (value !== undefined && typeof value !== 'function') {
-                cleaned[key] = cleanPayload(value);
-            }
+    Object.keys(data).forEach(key => {
+        const value = data[key];
+        // Remove funções, undefined e chaves privadas do Firebase (_)
+        if (value !== undefined && typeof value !== 'function' && !key.startsWith('_')) {
+            cleaned[key] = cleanPayload(value);
         }
-    }
+    });
+    
     return cleaned;
 };
 
 const isVisible = (item: any, user: User | null | undefined) => {
     if (!user) return false;
+    if (!item) return false;
     if ((user.role as string) === UserRole.ADMIN) return true;
     if ('name' in item && 'logoUrl' in item && user.institutionId === item.id) return true;
     if (item.authorId === user.id) return true;
@@ -620,6 +622,7 @@ export const FirebaseService = {
         if (!currentUser) return [];
         const snapshot = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
         return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Institution)).filter(item => { 
+            if (!item) return false;
             if (currentUser.institutionId && item.id === currentUser.institutionId) return true; 
             return isVisible(item, currentUser); 
         });
@@ -648,7 +651,7 @@ export const FirebaseService = {
     updateInstitution: async (data: Institution) => { await updateDoc(doc(db, COLLECTIONS.INSTITUTIONS, data.id), cleanPayload(data)); return data; },
     deleteInstitution: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.INSTITUTIONS, id)); },
     
-    getClasses: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.CLASSES)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as SchoolClass)).filter(item => { if (currentUser.role === UserRole.TEACHER && currentUser.institutionId && item.institutionId === currentUser.institutionId) return true; return isVisible(item, currentUser); }); },
+    getClasses: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.CLASSES)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as SchoolClass)).filter(item => { if (!item) return false; if (currentUser.role === UserRole.TEACHER && currentUser.institutionId && item.institutionId === currentUser.institutionId) return true; return isVisible(item, currentUser); }); },
     
     addClass: async (data: SchoolClass) => { 
         const { id, ...rest } = data; 
@@ -682,7 +685,7 @@ export const FirebaseService = {
     updateHierarchyItem: async (type: 'discipline'|'chapter'|'unit'|'topic', id: string, newName: string) => { let col = COLLECTIONS.DISCIPLINES; if (type === 'chapter') col = COLLECTIONS.CHAPTERS; if (type === 'unit') col = COLLECTIONS.UNITS; if (type === 'topic') col = COLLECTIONS.TOPICS; await updateDoc(doc(db, col, id), { name: newName }); },
     deleteItem: async (type: 'discipline'|'chapter'|'unit'|'topic', ids: {dId?: string, cId?: string, uId?: string, tId?: string}) => { const batch = writeBatch(db); if (type === 'topic' && ids.tId) batch.delete(doc(db, COLLECTIONS.TOPICS, ids.tId)); else if (type === 'unit' && ids.uId) { batch.delete(doc(db, COLLECTIONS.UNITS, ids.uId)); const qT = query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", ids.uId)); (await getDocs(qT)).forEach(d => batch.delete(d.ref)); } else if (type === 'chapter' && ids.cId) { batch.delete(doc(db, COLLECTIONS.CHAPTERS, ids.cId)); const qU = query(collection(db, COLLECTIONS.UNITS), where("chapterId", "==", ids.cId)); for (const uDoc of (await getDocs(qU)).docs) { batch.delete(uDoc.ref); (await getDocs(query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", uDoc.id)))).forEach(t => batch.delete(t.ref)); } } else if (type === 'discipline' && ids.dId) { batch.delete(doc(db, COLLECTIONS.DISCIPLINES, ids.dId)); for (const cDoc of (await getDocs(query(collection(db, COLLECTIONS.CHAPTERS), where("disciplineId", "==", ids.dId)))).docs) { batch.delete(cDoc.ref); for (const uDoc of (await getDocs(query(collection(db, COLLECTIONS.UNITS), where("chapterId", "==", cDoc.id)))).docs) { batch.delete(uDoc.ref); (await getDocs(query(collection(db, COLLECTIONS.TOPICS), where("unitId", "==", uDoc.id)))).forEach(t => batch.delete(t.ref)); } } } await batch.commit(); },
     
-    getQuestions: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.QUESTIONS)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Question)).filter(item => isVisible(item, currentUser)); },
+    getQuestions: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.QUESTIONS)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Question)).filter(item => { if (!item) return false; return isVisible(item, currentUser); }); },
     getPendingQuestions: async () => { const snapshot = await getDocs(query(collection(db, COLLECTIONS.QUESTIONS), where("reviewStatus", "==", "PENDING"))); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Question)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); },
     approveQuestion: async (id: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'APPROVED', rejectionReason: null }); await logAuditAction('UPDATE', 'MODERATION', 'Questão aprovada', id); },
     rejectQuestion: async (id: string, reason: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'REJECTED', rejectionReason: reason }); await logAuditAction('UPDATE', 'MODERATION', `Questão rejeitada: ${reason}`, id); },
@@ -718,7 +721,7 @@ export const FirebaseService = {
         await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id!), data); 
     },
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },
-    getExams: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.EXAMS)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Exam)).filter(item => isVisible(item, currentUser)); },
+    getExams: async (currentUser?: User | null) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, COLLECTIONS.EXAMS)); return snapshot.docs.map(d => ({ ...(d.data() as any), id: d.id } as Exam)).filter(item => { if (!item) return false; return isVisible(item, currentUser); }); },
     getExamById: async (id: string) => { const snap = await getDoc(doc(db, COLLECTIONS.EXAMS, id)); if (snap.exists()) return { ...(snap.data() as any), id: snap.id } as Exam; return null; },
     saveExam: async (exam: Exam) => { 
         const data: any = cleanPayload(exam); const id = data.id; if (data.id) delete data.id; 
@@ -734,5 +737,5 @@ export const FirebaseService = {
     updateAttemptScore: async (id: string, score: number) => { await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { score }); await logAuditAction('UPDATE', 'ATTEMPT', `Nota alterada manualmente para ${score}`, id); },
     getStudentAttempts: async (examId: string, identifier: string) => (await getDocs(query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId), where("studentIdentifier", "==", identifier)))).docs.map(d => ({ ...(d.data() as any), id: d.id } as ExamAttempt)),
     getExamResults: async (examId: string) => (await getDocs(query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId)))).docs.map(d => ({ ...(d.data() as any), id: d.id } as ExamAttempt)),
-    getFullHierarchyString: (q: Question, hierarchy: Discipline[]) => { const disc = hierarchy.find(d => d.id === q.disciplineId); const chap = disc?.chapters.find(c => c.id === q.chapterId); const unit = chap?.units.find(u => u.id === q.unitId); const topic = unit?.topics.find(t => t.id === q.topicId); return `${disc?.name || '?'} > ${chap?.name || '?'} > ${unit?.name || '?'} > ${topic?.name || '?'}`; }
+    getFullHierarchyString: (q: Question, hierarchy: Discipline[]) => { if (!q || !hierarchy) return '?'; const disc = hierarchy.find(d => d.id === q.disciplineId); const chap = disc?.chapters.find(c => c.id === q.chapterId); const unit = chap?.units.find(u => u.id === q.unitId); const topic = unit?.topics.find(t => t.id === q.topicId); return `${disc?.name || '?'} > ${chap?.name || '?'} > ${unit?.name || '?'} > ${topic?.name || '?'}`; }
 };

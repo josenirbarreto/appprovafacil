@@ -88,7 +88,8 @@ const PublicExam = () => {
 
         if (classStudents.length > 0) {
             if (!selectedStudentId) return alert('Por favor, selecione seu nome na lista.');
-            const student = classStudents.find(s => s.id === selectedStudentId)!;
+            const student = classStudents.find(s => s.id === selectedStudentId);
+            if (!student) return;
             name = student.name;
             identifier = student.registration;
             sid = student.id;
@@ -100,7 +101,7 @@ const PublicExam = () => {
 
         try {
             const previousAttempts = await FirebaseService.getStudentAttempts(exam.id, identifier);
-            const allowed = parseInt(String(exam.publicConfig!.allowedAttempts)) || 1;
+            const allowed = parseInt(String(exam.publicConfig?.allowedAttempts || 1)) || 1;
             if (previousAttempts.length >= allowed) return alert(`Limite de tentativas atingido.`);
 
             let questionsToUse = Array.isArray(exam.questions) ? [...exam.questions] : [];
@@ -108,17 +109,19 @@ const PublicExam = () => {
             if (exam.publicConfig?.randomizeQuestions) {
                 questionsToUse.sort(() => Math.random() - 0.5);
                 questionsToUse = questionsToUse.map(q => {
-                    if (q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options)) {
+                    if (q && q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options)) {
                         return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
                     }
                     return q;
                 });
             }
-            setRandomizedQuestions(questionsToUse);
+            setRandomizedQuestions(questionsToUse.filter(Boolean));
 
             const attempt = await FirebaseService.startAttempt(exam.id, name, identifier, questionsToUse.length, sid);
             setCurrentAttempt(attempt);
-            if (exam.publicConfig!.timeLimitMinutes > 0) setTimeLeft(exam.publicConfig!.timeLimitMinutes * 60);
+            if (exam.publicConfig?.timeLimitMinutes && exam.publicConfig.timeLimitMinutes > 0) {
+                setTimeLeft(exam.publicConfig.timeLimitMinutes * 60);
+            }
             setStep('TAKING');
         } catch (err: any) {
             console.error("Start Exam Error:", err);
@@ -179,7 +182,7 @@ const PublicExam = () => {
     const containerClasses = "fixed inset-0 z-50 bg-slate-50 flex flex-col overflow-y-auto custom-scrollbar";
 
     if (step === 'WELCOME') {
-        const attemptsLimit = parseInt(String(exam?.publicConfig?.allowedAttempts));
+        const attemptsLimit = parseInt(String(exam?.publicConfig?.allowedAttempts || 1));
         const displayAttempts = isNaN(attemptsLimit) || attemptsLimit < 1 ? 1 : attemptsLimit;
 
         return (
@@ -201,7 +204,7 @@ const PublicExam = () => {
                         {institution && (
                             <h2 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{institution.name}</h2>
                         )}
-                        <h1 className="text-3xl font-display font-black text-slate-800 leading-tight mb-2">{exam?.title}</h1>
+                        <h1 className="text-3xl font-display font-black text-slate-800 leading-tight mb-2">{exam?.title || "Prova"}</h1>
                         <p className="text-slate-500 font-bold italic">{exam?.headerText || 'Seja bem-vindo(a)!'}</p>
                     </div>
 
@@ -269,7 +272,7 @@ const PublicExam = () => {
                                 {currentAttempt.score} 
                                 <span className="text-2xl text-slate-300 font-bold ml-1">/ {Array.isArray(exam.questions) ? exam.questions.length : 0}</span>
                             </p>
-                            {Array.isArray(exam.questions) && exam.questions.some(q => q.type === QuestionType.SHORT_ANSWER) && (
+                            {Array.isArray(exam.questions) && exam.questions.some(q => q && q.type === QuestionType.SHORT_ANSWER) && (
                                 <div className="mt-6 flex items-start gap-2 text-left bg-white p-3 rounded-xl border border-blue-100">
                                     <div className="text-blue-500 mt-0.5"><Icons.Sparkles /></div>
                                     <p className="text-[11px] text-slate-500 font-bold leading-tight uppercase">Nota Parcial: Questões dissertativas serão corrigidas pelo professor.</p>
@@ -304,44 +307,47 @@ const PublicExam = () => {
             </div>
 
             <div className="max-w-3xl w-full mx-auto p-4 md:p-8 space-y-10 flex-1">
-                {randomizedQuestions.map((q, idx) => (
-                    <div key={q.id} className="bg-white p-6 md:p-10 rounded-3xl shadow-sm border border-slate-200 transition-all hover:shadow-md">
-                        <div className="flex gap-4 mb-8">
-                            <span className="bg-slate-800 text-white font-black w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg shadow-lg border-2 border-white ring-1 ring-slate-100">{idx + 1}</span>
-                            <div className="prose prose-slate max-w-none text-slate-800 pt-1 font-bold text-lg leading-relaxed rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                        </div>
+                {randomizedQuestions.map((q, idx) => {
+                    if (!q) return null;
+                    return (
+                        <div key={q.id || idx} className="bg-white p-6 md:p-10 rounded-3xl shadow-sm border border-slate-200 transition-all hover:shadow-md">
+                            <div className="flex gap-4 mb-8">
+                                <span className="bg-slate-800 text-white font-black w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg shadow-lg border-2 border-white ring-1 ring-slate-100">{idx + 1}</span>
+                                <div className="prose prose-slate max-w-none text-slate-800 pt-1 font-bold text-lg leading-relaxed rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                            </div>
 
-                        <div className="md:ml-14">
-                            {q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options) && (
-                                <div className="space-y-4">
-                                    {q.options.map((opt, oIdx) => (
-                                        <label key={opt.id} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${answers[q.id] === opt.id ? 'border-brand-blue bg-blue-50/50 shadow-md ring-1 ring-brand-blue' : 'border-slate-50 hover:bg-slate-50/80'}`}>
-                                            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black text-sm transition-colors ${answers[q.id] === opt.id ? 'border-brand-blue bg-brand-blue text-white shadow-sm' : 'border-slate-300 bg-white text-slate-400'}`}>
-                                                {String.fromCharCode(65 + oIdx)}
-                                            </div>
-                                            <input type="radio" name={q.id} value={opt.id} checked={answers[q.id] === opt.id} onChange={() => handleAnswer(q.id, opt.id)} className="hidden" />
-                                            <span className="text-base text-slate-700 font-bold flex-1">{opt.text}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            )}
-                            {(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && (
-                                <div className="relative">
-                                    <textarea 
-                                        className="w-full border-2 border-slate-100 rounded-2xl p-5 text-lg font-bold focus:ring-4 focus:ring-blue-100 outline-none bg-slate-50/30 transition-all focus:bg-white focus:border-brand-blue shadow-inner placeholder-slate-300" 
-                                        placeholder="Digite sua resposta aqui..." 
-                                        rows={4} 
-                                        value={answers[q.id] || ''} 
-                                        onChange={e => handleAnswer(q.id, e.target.value)} 
-                                    />
-                                    <div className="absolute top-4 right-4 text-slate-200">
-                                        <Icons.Edit />
+                            <div className="md:ml-14">
+                                {q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options) && (
+                                    <div className="space-y-4">
+                                        {q.options.map((opt, oIdx) => (
+                                            <label key={opt.id || oIdx} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${answers[q.id] === opt.id ? 'border-brand-blue bg-blue-50/50 shadow-md ring-1 ring-brand-blue' : 'border-slate-50 hover:bg-slate-50/80'}`}>
+                                                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black text-sm transition-colors ${answers[q.id] === opt.id ? 'border-brand-blue bg-brand-blue text-white shadow-sm' : 'border-slate-300 bg-white text-slate-400'}`}>
+                                                    {String.fromCharCode(65 + oIdx)}
+                                                </div>
+                                                <input type="radio" name={q.id} value={opt.id} checked={answers[q.id] === opt.id} onChange={() => handleAnswer(q.id, opt.id)} className="hidden" />
+                                                <span className="text-base text-slate-700 font-bold flex-1">{opt.text}</span>
+                                            </label>
+                                        ))}
                                     </div>
-                                </div>
-                            )}
+                                )}
+                                {(q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.NUMERIC) && (
+                                    <div className="relative">
+                                        <textarea 
+                                            className="w-full border-2 border-slate-100 rounded-2xl p-5 text-lg font-bold focus:ring-4 focus:ring-blue-100 outline-none bg-slate-50/30 transition-all focus:bg-white focus:border-brand-blue shadow-inner placeholder-slate-300" 
+                                            placeholder="Digite sua resposta aqui..." 
+                                            rows={4} 
+                                            value={answers[q.id] || ''} 
+                                            onChange={e => handleAnswer(q.id, e.target.value)} 
+                                        />
+                                        <div className="absolute top-4 right-4 text-slate-200">
+                                            <Icons.Edit />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
                 
                 <div className="pt-12 pb-32">
                     <Button onClick={handleSubmit} className="w-full justify-center py-6 text-2xl font-black shadow-2xl shadow-blue-500/30 hover:scale-[1.01] transform transition-all bg-brand-blue rounded-3xl active:scale-95">
@@ -351,11 +357,10 @@ const PublicExam = () => {
                 </div>
             </div>
             
-            {/* Footer de Progresso (Mobile Friendly) */}
             <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-100 p-3 md:hidden flex justify-between items-center z-40">
                 <span className="text-[10px] font-black text-slate-400 uppercase">Respondidas: {Object.keys(answers).length} / {Array.isArray(exam?.questions) ? exam?.questions.length : 0}</span>
                 <div className="w-32 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-blue" style={{ width: `${(Object.keys(answers).length / (Array.isArray(exam?.questions) ? exam?.questions.length : 1)) * 100}%` }}></div>
+                    <div className="h-full bg-brand-blue" style={{ width: `${(Object.keys(answers).length / (Array.isArray(exam?.questions) ? Math.max(1, exam?.questions.length) : 1)) * 100}%` }}></div>
                 </div>
             </div>
         </div>
