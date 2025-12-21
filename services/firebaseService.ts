@@ -54,17 +54,55 @@ const COLLECTIONS = {
     SIGNATURES: 'signatures_log'
 };
 
-const cleanPayload = (data: any): any => {
+/**
+ * Limpa o payload para o Firestore.
+ * - Remove funções e valores undefined.
+ * - Converte Datas para ISO strings.
+ * - Detecta circularidade para evitar erros de JSON.
+ * - Preserva Arrays corretamente (importante para questões/opções).
+ */
+const cleanPayload = (data: any, seen = new WeakSet()): any => {
     if (data === null || data === undefined) return null;
+    
+    // Tipos primitivos: retorna direto
     if (typeof data !== 'object') return data;
+    
+    // Datas: converte para string
     if (data instanceof Date) return data.toISOString();
+
+    // Prevenção de circularidade (objetos já processados nesta pilha)
+    if (seen.has(data)) return undefined;
+    seen.add(data);
+
+    // Tratamento de Arrays: processa cada item recursivamente
+    if (Array.isArray(data)) {
+        return data
+            .map(item => cleanPayload(item, seen))
+            .filter(i => i !== undefined); // Remove nulos gerados por circularidade ou funções
+    }
+
+    // Objetos Planos
     const cleaned: any = {};
     Object.keys(data).forEach(key => {
         const value = data[key];
-        if (value !== undefined && typeof value !== 'function' && !key.startsWith('_')) {
-            cleaned[key] = cleanPayload(value);
+
+        // Regras de exclusão de propriedades
+        if (
+            value === undefined || 
+            typeof value === 'function' || 
+            key.startsWith('_') || 
+            key === 'i' || // Chave interna comum de circularidade em Firebase
+            key === 'src'  // Chave interna comum de circularidade em DOM/Firebase
+        ) {
+            return;
+        }
+
+        const cleanedValue = cleanPayload(value, seen);
+        if (cleanedValue !== undefined) {
+            cleaned[key] = cleanedValue;
         }
     });
+
     return cleaned;
 };
 
@@ -73,6 +111,18 @@ export const FirebaseService = {
     login: async (email: string, pass: string) => { await signInWithEmailAndPassword(auth, email, pass); return await FirebaseService.getCurrentUserData(); },
     logout: async () => { await signOut(auth); },
     getCurrentUserData: async () => { const user = auth.currentUser; if (!user) return null; const snap = await getDoc(doc(db, COLLECTIONS.USERS, user.uid)); return snap.exists() ? snap.data() as User : null; },
+    
+    // Novo: Listener para o perfil do usuário logado
+    listenToCurrentUser: (uid: string, callback: (u: User | null) => void) => {
+        return onSnapshot(doc(db, COLLECTIONS.USERS, uid), (snap) => {
+            if (snap.exists()) {
+                callback({ ...snap.data(), id: snap.id } as User);
+            } else {
+                callback(null);
+            }
+        });
+    },
+
     getUsers: async (currentUser?: User | null) => { 
         let q;
         if (currentUser?.role === UserRole.ADMIN) q = collection(db, COLLECTIONS.USERS);

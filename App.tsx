@@ -89,7 +89,6 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     
     const [globalSettings, setGlobalSettings] = useState<SystemSettings | null>(null);
     
-    // Otimização INP: Fecha o sidebar apenas se ele estiver aberto
     useEffect(() => { 
         if (isSidebarOpen) setSidebarOpen(false); 
     }, [location.pathname]);
@@ -130,7 +129,6 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     const isAdmin = user?.role === UserRole.ADMIN;
     const isManager = user?.role === UserRole.MANAGER;
 
-    // Otimização INP: Memoiza o menu para evitar reconstrução em cada render
     const menuGroups = useMemo(() => [
         {
             title: null, 
@@ -174,7 +172,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 },
             ]
         }
-    ], [isAdmin, isManager, openTicketsCount, pendingQuestionsCount]);
+    ], [isAdmin, isManager, openTicketsCount, pendingQuestionsCount, location.pathname]);
 
     const appName = globalSettings?.whiteLabel?.appName || 'Prova Fácil';
     const logoUrl = globalSettings?.whiteLabel?.logoUrl;
@@ -270,7 +268,6 @@ const AppContent = () => {
     const { user, loading, refreshUser } = useAuth();
     const [pendingContract, setPendingContract] = useState<ContractTemplate | null>(null);
 
-    // Lógica para verificar Contratos Pendentes
     useEffect(() => {
         if (user && user.role !== UserRole.ADMIN) {
             const checkContract = async () => {
@@ -359,21 +356,26 @@ const App = () => {
     };
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        let unsubscribeUser: (() => void) | undefined;
+
+        const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
             if (firebaseUser) {
-                try {
-                    const userData = await FirebaseService.getCurrentUserData();
+                // Em vez de carregar uma vez, ouvimos as mudanças no perfil do usuário
+                unsubscribeUser = FirebaseService.listenToCurrentUser(firebaseUser.uid, (userData) => {
                     setUser(userData);
-                } catch (error) {
-                    console.error("Error fetching user", error);
-                    setUser(null);
-                }
+                    setLoading(false);
+                });
             } else {
+                if (unsubscribeUser) unsubscribeUser();
                 setUser(null);
+                setLoading(false);
             }
-            setLoading(false);
         });
-        return () => unsubscribe();
+
+        return () => {
+            unsubscribeAuth();
+            if (unsubscribeUser) unsubscribeUser();
+        };
     }, []);
 
     return (
