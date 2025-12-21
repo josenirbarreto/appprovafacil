@@ -37,7 +37,6 @@
           size: auto;
         }
 
-        /* GLOBAL RESET FOR PRINTING SPA */
         html, body {
           height: auto !important;
           min-height: 0 !important;
@@ -52,19 +51,12 @@
           position: static !important;
         }
 
-        /* Oculta tudo por padrão e mostra apenas o que for explicitly printable */
-        body > * {
-           /* Não use display:none no root se o modal estiver dentro dele */
-        }
-
-        /* Reseta containers de layout para não cortar conteúdo */
         #root > div, main {
             height: auto !important;
             overflow: visible !important;
             display: block !important; 
         }
 
-        /* Remove scrolls internos na impressão */
         .custom-scrollbar, div[class*="overflow-y-auto"], div[class*="overflow-hidden"] {
             height: auto !important;
             overflow: visible !important;
@@ -82,6 +74,13 @@
           break-inside: avoid !important;
           page-break-inside: avoid !important;
         }
+
+        /* Linha divisória entre colunas */
+        .print-columns-2 {
+          column-count: 2;
+          column-gap: 12mm;
+          column-rule: 1px solid #cbd5e1;
+        }
       }
 
       .print-only { display: none; }
@@ -91,7 +90,6 @@
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
 
-      /* RICH TEXT STYLES */
       .rich-text-content h1, .rich-text-content h2, .rich-text-content h3 { font-weight: bold; margin-bottom: 0.5em; }
       .rich-text-content p { margin-bottom: 0.5em; }
       .rich-text-content a { color: #3A72EC !important; text-decoration: underline !important; cursor: pointer; }

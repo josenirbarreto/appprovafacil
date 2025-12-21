@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Exam, Institution, SchoolClass, Discipline, Question, ExamContentScope, QuestionType, PublicExamConfig } from '../types';
@@ -62,7 +63,7 @@ const ExamsPage = () => {
     const [examVersions, setExamVersions] = useState<Record<string, Question[]>>({});
     
     const [printSettings, setPrintSettings] = useState({ 
-        fontSize: 'text-sm', 
+        fontSize: 'text-[12pt]', 
         showName: true, 
         showDate: true, 
         showClass: true, 
@@ -71,7 +72,20 @@ const ExamsPage = () => {
 
     const [expandedInstitutions, setExpandedInstitutions] = useState<Record<string, boolean>>({});
 
-    // Fix: Added missing availableTags memoization to extract all unique tags from exams list
+    // --- SHARE STATES ---
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [sharingExam, setSharingExam] = useState<Exam | null>(null);
+    const [shareConfig, setShareConfig] = useState<PublicExamConfig>({
+        isPublished: false,
+        startDate: new Date().toISOString().slice(0, 16),
+        endDate: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
+        timeLimitMinutes: 60,
+        allowedAttempts: 1,
+        randomizeQuestions: true,
+        requireIdentifier: true,
+        showFeedback: true
+    });
+
     const availableTags = useMemo(() => {
         const tags = new Set<string>();
         exams.forEach(e => e.tags?.forEach(t => tags.add(t)));
@@ -132,7 +146,6 @@ const ExamsPage = () => {
         const versions: Record<string, Question[]> = {};
         versions['ORIGINAL'] = [...baseQuestions];
         ['A', 'B', 'C', 'D'].forEach(ver => {
-            // Fix: Explicitly typed shuffleArray and map parameter as Question to fix line 130 'unknown' type inference error
             versions[ver] = shuffleArray<Question>(baseQuestions).map((q: Question) => {
                 const newQ = safeCloneQuestion(q);
                 if (newQ.type === QuestionType.MULTIPLE_CHOICE && newQ.options) {
@@ -210,12 +223,56 @@ const ExamsPage = () => {
         }, 30);
     }, [editing, finalQuestionsToSave, tempScopes, load]);
 
-    // Fix: Added missing handleDelete function to support exam removal
     const handleDelete = async (id: string) => {
         if (confirm('Tem certeza que deseja excluir esta prova permanentemente?')) {
             await FirebaseService.deleteExam(id);
             load();
         }
+    };
+
+    const handlePrint = () => {
+        setTimeout(() => {
+            window.print();
+        }, 100);
+    };
+
+    // --- SHARE HANDLERS ---
+    const handleOpenShare = (exam: Exam) => {
+        setSharingExam(exam);
+        setShareConfig(exam.publicConfig || {
+            isPublished: false,
+            startDate: new Date().toISOString().slice(0, 16),
+            endDate: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
+            timeLimitMinutes: 60,
+            allowedAttempts: 1,
+            randomizeQuestions: true,
+            requireIdentifier: true,
+            showFeedback: true
+        });
+        setIsShareModalOpen(true);
+    };
+
+    const handleSaveShareConfig = async () => {
+        if (!sharingExam) return;
+        setSaving(true);
+        try {
+            await FirebaseService.saveExam({
+                ...sharingExam,
+                publicConfig: shareConfig
+            });
+            setIsShareModalOpen(false);
+            load();
+        } catch (e) {
+            alert("Erro ao salvar configurações de compartilhamento.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const copyShareLink = () => {
+        const link = `${window.location.origin}${window.location.pathname}#/p/${sharingExam?.id}`;
+        navigator.clipboard.writeText(link);
+        alert("Link copiado para a área de transferência!");
     };
 
     // --- RENDER HELPERS ---
@@ -280,7 +337,7 @@ const ExamsPage = () => {
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                             <label className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2"><Icons.Filter /> Organização & Etiquetas</label>
                             <div className="flex gap-2 mb-4">
-                                <input type="text" className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-blue" value={tagInput} onChange={e => setTagInput(e.target.value)} placeholder="Adicionar etiqueta..." onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), setEditing({...editing, tags: [...(editing.tags || []), tagInput.trim()]}), setTagInput(''))}/>
+                                <input type="text" className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-blue bg-white text-slate-800 placeholder-slate-400" value={tagInput} onChange={e => setTagInput(e.target.value)} placeholder="Adicionar etiqueta..." onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), setEditing({...editing, tags: [...(editing.tags || []), tagInput.trim()]}), setTagInput(''))}/>
                                 <Button onClick={() => {setEditing({...editing, tags: [...(editing.tags || []), tagInput.trim()]}); setTagInput('');}} variant="secondary" className="px-4">ADD</Button>
                             </div>
                             <div className="flex flex-wrap gap-2">{editing.tags?.map(t => (<span key={t} className={`flex items-center gap-2 text-xs font-black px-3 py-1.5 rounded-full bg-${getTagColor(t)}-100 text-${getTagColor(t)}-800 border border-${getTagColor(t)}-200 shadow-sm`}>{t}<button onClick={() => setEditing({...editing, tags: (editing.tags || []).filter(tg => tg !== t)})}><Icons.X /></button></span>))}</div>
@@ -369,14 +426,14 @@ const ExamsPage = () => {
                     <div className="bg-white rounded-3xl border-4 border-slate-100 p-8 shadow-2xl">
                         <h4 className="text-center font-black text-slate-800 text-xl mb-8 uppercase tracking-widest">Como deseja selecionar as questões?</h4>
                         <div className="flex justify-center gap-8 mb-10">
-                            <button onClick={() => setGenerationMode('AUTO')} className={`flex flex-col items-center gap-4 p-8 rounded-3xl border-4 transition-all w-64 ${generationMode === 'AUTO' ? 'border-brand-blue bg-blue-50 shadow-xl scale-105' : 'border-slate-100 grayscale opacity-60 hover:grayscale-0'}`}>
+                            <button onClick={() => setGenerationMode('AUTO')} className={`flex flex-col items-center gap-4 p-8 rounded-3xl border-4 transition-all w-64 ${generationMode === 'AUTO' ? 'border-brand-blue bg-blue-50 shadow-xl scale-105 ring-2 ring-blue-200' : 'border-slate-100 grayscale opacity-60 hover:grayscale-0'}`}>
                                 <div className="w-20 h-20 bg-brand-blue rounded-2xl flex items-center justify-center text-white text-4xl shadow-lg"><Icons.Magic /></div>
                                 <div className="text-center">
                                     <span className="font-black text-lg block text-brand-blue">AUTOMÁTICO</span>
                                     <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase">A IA escolhe as melhores questões para você.</p>
                                 </div>
                             </button>
-                            <button onClick={() => setGenerationMode('MANUAL')} className={`flex flex-col items-center gap-4 p-8 rounded-3xl border-4 transition-all w-64 ${generationMode === 'MANUAL' ? 'border-brand-blue bg-blue-50 shadow-xl scale-105' : 'border-slate-100 grayscale opacity-60 hover:grayscale-0'}`}>
+                            <button onClick={() => setGenerationMode('MANUAL')} className={`flex flex-col items-center gap-4 p-8 rounded-3xl border-4 transition-all w-64 ${generationMode === 'MANUAL' ? 'border-brand-blue bg-blue-50 shadow-xl scale-105 ring-2 ring-blue-200' : 'border-slate-100 grayscale opacity-60 hover:grayscale-0'}`}>
                                 <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center text-white text-4xl shadow-lg"><Icons.List /></div>
                                 <div className="text-center">
                                     <span className="font-black text-lg block text-slate-800">MANUAL</span>
@@ -386,9 +443,9 @@ const ExamsPage = () => {
                         </div>
 
                         {generationMode === 'AUTO' ? (
-                            <div className="animate-fade-in">
+                            <div className="animate-fade-in text-center">
                                 <Button onClick={handleAutoGenerate} className="mx-auto h-16 px-10 text-xl font-black shadow-xl shadow-blue-200 mb-8 border-4 border-white">GERAR SELEÇÃO INTELIGENTE</Button>
-                                <div className="grid gap-3 max-h-80 overflow-y-auto custom-scrollbar pr-4">
+                                <div className="grid gap-3 max-h-80 overflow-y-auto custom-scrollbar pr-4 text-left">
                                     {generatedQuestions.map((q, i) => (
                                         <div key={q.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm shadow-sm flex gap-4 group">
                                             <strong className="text-brand-blue shrink-0 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-slate-200 text-xs">{i+1}</strong>
@@ -396,6 +453,7 @@ const ExamsPage = () => {
                                             <button onClick={() => setViewingQuestion(q)} className="text-slate-400 hover:text-brand-blue"><Icons.Eye /></button>
                                         </div>
                                     ))}
+                                    {generatedQuestions.length === 0 && <p className="text-center text-slate-400 py-10 italic">Clique no botão acima para iniciar a geração.</p>}
                                 </div>
                             </div>
                         ) : (
@@ -473,7 +531,11 @@ const ExamsPage = () => {
                                 )}
                             </div>
                         </div>
-                        <div className="p-4 border-t border-slate-200 bg-slate-50"><Button onClick={() => window.print()} className="w-full justify-center shadow-xl h-12 font-black"><Icons.Printer /> IMPRIMIR AGORA</Button></div>
+                        <div className="p-4 border-t border-slate-200 bg-slate-50">
+                            <Button onClick={handlePrint} className="w-full justify-center shadow-xl h-12 font-black active:scale-95 transition-all">
+                                <Icons.Printer /> IMPRIMIR AGORA
+                            </Button>
+                        </div>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-10 bg-slate-300/40 print:p-0 print:bg-white print:overflow-visible">
                         <div className={`bg-white shadow-2xl mx-auto p-[20mm] w-full max-w-[210mm] min-h-[297mm] text-black print:shadow-none print:w-full print:p-0 ${printSettings.fontSize}`}>
@@ -481,7 +543,7 @@ const ExamsPage = () => {
                                 <>
                                     {renderHeaderPreview()}
                                     {editing.instructions && <div className="mb-8 p-4 border border-gray-300 rounded text-sm italic rich-text-content" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
-                                    <div className={`space-y-8 ${editing.columns === 2 ? 'columns-2 gap-12' : ''}`}>
+                                    <div className={`space-y-8 ${editing.columns === 2 ? 'columns-2 gap-12 print-columns-2' : ''}`}>
                                         {qs.map((q, i) => (
                                             <div key={q.id} className="break-inside-avoid mb-8">
                                                 <div className="flex gap-3">
@@ -515,14 +577,14 @@ const ExamsPage = () => {
                                     )}
                                 </>
                             ) : (
-                                <div className="flex flex-col h-full">
+                                <div className="flex flex-col h-full print:block">
                                     <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-8">
                                         <div><h1 className="text-3xl font-black uppercase tracking-tighter">Cartão-Resposta</h1><p className="font-bold text-lg">{editing.title}</p></div>
                                         <div className="w-16 h-16 bg-black"></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-20 gap-y-6">
                                         {qs.map((q, i) => (
-                                            <div key={i} className="flex items-center gap-4 py-2 border-b border-slate-100">
+                                            <div key={i} className="flex items-center gap-4 py-2 border-b border-slate-100 break-inside-avoid">
                                                 <span className="font-black text-lg w-8">{String(i+1).padStart(2, '0')}</span>
                                                 {q.type === QuestionType.MULTIPLE_CHOICE ? (
                                                     <div className="flex gap-3">
@@ -539,13 +601,15 @@ const ExamsPage = () => {
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="mt-auto pt-10 border-t-2 border-slate-200 flex justify-between text-[10px] font-bold text-slate-400 uppercase">
-                                        <span>ID PROVA: {editing.id?.slice(0,8)}</span>
+                                    <div className="mt-auto pt-10 border-t-2 border-slate-200 flex justify-between text-[10px] font-bold text-slate-400 uppercase print:fixed print:bottom-10 print:left-20 print:right-20">
+                                        <span>ID PROVA: {editing.id?.slice(0,8) || 'AUTO-GEN'}</span>
                                         <span>ÂNCORES PARA LEITURA ÓPTICA</span>
                                         <span>PF-SCANNER-V1</span>
                                     </div>
-                                    {/* Âncoras visuais nos cantos para o Scanner */}
-                                    <div className="fixed top-0 left-0 w-4 h-4 bg-black"></div><div className="fixed top-0 right-0 w-4 h-4 bg-black"></div><div className="fixed bottom-0 left-0 w-4 h-4 bg-black"></div><div className="fixed bottom-0 right-0 w-4 h-4 bg-black"></div>
+                                    <div className="absolute top-0 left-0 w-4 h-4 bg-black"></div>
+                                    <div className="absolute top-0 right-0 w-4 h-4 bg-black"></div>
+                                    <div className="absolute bottom-0 left-0 w-4 h-4 bg-black"></div>
+                                    <div className="absolute bottom-0 right-0 w-4 h-4 bg-black"></div>
                                 </div>
                             )}
                         </div>
@@ -558,7 +622,7 @@ const ExamsPage = () => {
 
     return (
         <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar">
-            <div className="flex justify-between items-center mb-6"><div><h2 className="text-3xl font-display font-bold text-slate-800">Minhas Provas</h2><p className="text-slate-500 mt-1">Gerencie suas avaliações.</p></div><div className="flex gap-3"><Select value={selTag} onChange={e => setSelTag(e.target.value)} className="w-48 text-sm"><option value="">Todas Etiquetas</option>{availableTags.map(t => <option key={t} value={t}>{t}</option>)}</Select><Button onClick={() => handleOpenModal()} className="shadow-lg"><Icons.Plus /> Nova Prova</Button></div></div>
+            <div className="flex justify-between items-center mb-6"><div><h2 className="text-3xl font-display font-bold text-slate-800">Minhas Provas</h2><p className="text-slate-500 mt-1">Gerencie suas avaliações.</p></div><div className="flex gap-3"><Select value={selTag} onChange={e => setSelTag(e.target.value)} className="w-48 text-sm bg-white"><option value="">Todas Etiquetas</option>{availableTags.map(t => <option key={t} value={t}>{t}</option>)}</Select><Button onClick={() => handleOpenModal()} className="shadow-lg"><Icons.Plus /> Nova Prova</Button></div></div>
             <div className="space-y-3">
                 {institutions.map(inst => {
                     const instExams = exams.filter(e => e.institutionId === inst.id && (!selTag || e.tags?.includes(selTag)));
@@ -567,18 +631,120 @@ const ExamsPage = () => {
                     return (
                         <div key={inst.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 select-none" onClick={() => setExpandedInstitutions(prev => ({ ...prev, [inst.id]: !prev[inst.id] }))}><div className="flex items-center gap-4"><div className={`transform transition-transform text-slate-400 ${isExpandedInst ? 'rotate-0' : '-rotate-90'}`}><Icons.ChevronDown /></div><div className="flex items-center gap-3"><div className="w-10 h-10 border border-slate-100 rounded-lg p-1 flex items-center justify-center overflow-hidden">{inst.logoUrl ? <img src={inst.logoUrl} className="max-w-full max-h-full" /> : <Icons.Building />}</div><span className="font-bold text-xl text-slate-800 font-display">{inst.name}</span></div></div><Badge color="blue">{instExams.length} provas</Badge></div>
-                            {isExpandedInst && (<div className="p-4 pt-0 divide-y divide-slate-100 border-t border-slate-50">{instExams.map(exam => (<div key={exam.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors group"><div className="flex items-center gap-4"><div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>{exam.publicConfig?.isPublished ? <Icons.Sparkles /> : <Icons.FileText />}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-slate-800 text-lg">{exam.title}</h4>{exam.publicConfig?.isPublished && <Badge color="green">ONLINE</Badge>}</div><div className="flex items-center gap-2 mt-1"><span className="text-slate-400 text-xs">{new Date(exam.createdAt).toLocaleDateString()} • {exam.questions?.length || 0} qts</span>{exam.tags?.map(t => (<span key={t} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-white border-${getTagColor(t)}-200 text-${getTagColor(t)}-700`}>{t}</span>))}</div></div></div><div className="flex items-center gap-3"><button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm shadow-sm">Resultados</button><div className="flex gap-1"><button onClick={() => handleOpenModal(exam, 4)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Printer /></button><button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"><Icons.Edit /></button><button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Icons.Trash /></button></div></div></div>))}</div>)}
+                            {isExpandedInst && (<div className="p-4 pt-0 divide-y divide-slate-100 border-t border-slate-50">{instExams.map(exam => (<div key={exam.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors group"><div className="flex items-center gap-4"><div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${exam.publicConfig?.isPublished ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-brand-blue'}`}>{exam.publicConfig?.isPublished ? <Icons.Sparkles /> : <Icons.FileText />}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-slate-800 text-lg">{exam.title}</h4>{exam.publicConfig?.isPublished && <Badge color="green">ONLINE</Badge>}</div><div className="flex items-center gap-2 mt-1"><span className="text-slate-400 text-xs">{new Date(exam.createdAt).toLocaleDateString()} • {exam.questions?.length || 0} qts</span>{exam.tags?.map(t => (<span key={t} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-white border-${getTagColor(t)}-200 text-${getTagColor(t)}-700`}>{t}</span>))}</div></div></div><div className="flex items-center gap-3"><button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-bold text-sm shadow-sm">Resultados</button><div className="flex gap-1"><button onClick={() => handleOpenShare(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Compartilhar / Prova Online"><Icons.Share /></button><button onClick={() => handleOpenModal(exam, 4)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Imprimir"><Icons.Printer /></button><button onClick={() => handleOpenModal(exam)} className="p-2 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Icons.Edit /></button><button onClick={() => handleDelete(exam.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><Icons.Trash /></button></div></div></div>))}</div>)}
                         </div>
                     );
                 })}
+                {exams.length === 0 && <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 italic">Você ainda não criou nenhuma prova.</div>}
             </div>
+            
+            {/* MODAL PRINCIPAL DE CRIAÇÃO/EDIÇÃO */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Assistente de Prova Inteligente" maxWidth="max-w-6xl" footer={<div className="flex justify-between w-full">{currentStep > 1 && <Button variant="ghost" onClick={() => setCurrentStep(s => s - 1)}>Voltar</Button>}<div className="flex gap-2 ml-auto"><Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>{currentStep < 4 ? <Button onClick={() => { if (currentStep === 2 && generationMode === 'AUTO') handleAutoGenerate(); setCurrentStep(s => s + 1); }}>Próximo</Button> : <Button onClick={handleSave} disabled={saving || finalQuestionsToSave.length === 0}>{saving ? 'Salvando...' : 'Finalizar & Salvar'}</Button>}</div></div>}>
                 {renderStepIndicator()}
                 {renderStepContent()}
             </Modal>
+
+            {/* MODAL DE COMPARTILHAMENTO / CONFIG ONLINE */}
+            <Modal
+                isOpen={isShareModalOpen}
+                onClose={() => setIsShareModalOpen(false)}
+                title="Configurações de Prova Online"
+                maxWidth="max-w-2xl"
+                footer={<Button onClick={handleSaveShareConfig} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Configurações'}</Button>}
+            >
+                <div className="space-y-6">
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-xl">
+                        <div className="flex items-center gap-2 text-blue-800 font-bold mb-1">
+                            <Icons.Share /> Link de Acesso Público
+                        </div>
+                        <p className="text-sm text-blue-700 mb-3">Distribua este link para que os alunos possam realizar a prova diretamente pelo navegador.</p>
+                        <div className="flex gap-2">
+                            <input 
+                                readOnly 
+                                value={`${window.location.origin}${window.location.pathname}#/p/${sharingExam?.id}`} 
+                                className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-600"
+                            />
+                            <Button onClick={copyShareLink} variant="outline" className="h-9 text-xs">Copiar Link</Button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b pb-1">1. Visibilidade</h4>
+                            <label className="flex items-center gap-3 p-3 border-2 border-slate-100 rounded-xl cursor-pointer hover:bg-slate-50 transition-all">
+                                <input 
+                                    type="checkbox" 
+                                    checked={shareConfig.isPublished} 
+                                    onChange={e => setShareConfig({...shareConfig, isPublished: e.target.checked})}
+                                    className="w-5 h-5 text-brand-blue rounded border-slate-300"
+                                />
+                                <div>
+                                    <span className="text-sm font-bold text-slate-800">Prova Ativada</span>
+                                    <p className="text-[10px] text-slate-500 font-medium">Permitir acesso pelo link público.</p>
+                                </div>
+                            </label>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700">Início da Disponibilidade</label>
+                                <input 
+                                    type="datetime-local" 
+                                    value={shareConfig.startDate}
+                                    onChange={e => setShareConfig({...shareConfig, startDate: e.target.value})}
+                                    className="w-full border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700">Fim da Disponibilidade</label>
+                                <input 
+                                    type="datetime-local" 
+                                    value={shareConfig.endDate}
+                                    onChange={e => setShareConfig({...shareConfig, endDate: e.target.value})}
+                                    className="w-full border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b pb-1">2. Regras e Feedback</h4>
+                            
+                            <Input 
+                                label="Tempo Limite (Minutos)" 
+                                type="number" 
+                                value={shareConfig.timeLimitMinutes}
+                                onChange={e => setShareConfig({...shareConfig, timeLimitMinutes: Number(e.target.value)})}
+                                placeholder="0 = Sem limite"
+                            />
+
+                            <Input 
+                                label="Máx. Tentativas por Aluno" 
+                                type="number" 
+                                value={shareConfig.allowedAttempts}
+                                onChange={e => setShareConfig({...shareConfig, allowedAttempts: Number(e.target.value)})}
+                            />
+
+                            <div className="space-y-2 pt-2">
+                                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" checked={shareConfig.randomizeQuestions} onChange={e => setShareConfig({...shareConfig, randomizeQuestions: e.target.checked})} className="rounded text-brand-blue" />
+                                    Embaralhar Questões e Opções
+                                </label>
+                                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" checked={shareConfig.requireIdentifier} onChange={e => setShareConfig({...shareConfig, requireIdentifier: e.target.checked})} className="rounded text-brand-blue" />
+                                    Exigir Matrícula/Código
+                                </label>
+                                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" checked={shareConfig.showFeedback} onChange={e => setShareConfig({...shareConfig, showFeedback: e.target.checked})} className="rounded text-brand-blue" />
+                                    Mostrar Nota ao Finalizar
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+
             {viewingQuestion && (
                 <Modal isOpen={!!viewingQuestion} onClose={() => setViewingQuestion(null)} title="Visualizar Questão" maxWidth="max-w-3xl">
-                    <div className="prose prose-slate max-w-none mb-6" dangerouslySetInnerHTML={{__html: viewingQuestion.enunciado}} />
+                    <div className="prose prose-slate max-w-none mb-6 rich-text-content" dangerouslySetInnerHTML={{__html: viewingQuestion.enunciado}} />
                     {viewingQuestion.type === QuestionType.MULTIPLE_CHOICE && (
                         <div className="space-y-2">
                             {viewingQuestion.options?.map((opt, i) => (

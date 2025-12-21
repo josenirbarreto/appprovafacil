@@ -78,23 +78,27 @@ const QuestionsPage = () => {
         return Array.from(tags).sort();
     }, [allQuestions]);
 
-    const filteredQuestions = allQuestions.filter(q => {
-        if (selDisc && q.disciplineId !== selDisc) return false;
-        if (selChap && q.chapterId !== selChap) return false;
-        if (selUnit && q.unitId !== selUnit) return false;
-        if (selTopic && q.topicId !== selTopic) return false;
-        if (selTag && (!q.tags || !q.tags.includes(selTag))) return false;
-        if (searchText) {
-            const term = searchText.toLowerCase();
-            return q.enunciado.toLowerCase().includes(term) || q.tags?.some(t => t.toLowerCase().includes(term));
-        }
-        
-        if (visFilter === 'MINE') return q.authorId === user?.id;
-        if (visFilter === 'SCHOOL') return q.isInstitutional === true || q.visibility === 'INSTITUTION' || (user?.institutionId && q.institutionId === user.institutionId);
-        if (visFilter === 'GLOBAL') return q.visibility === 'PUBLIC' && q.reviewStatus === 'APPROVED' && q.authorId !== user?.id && !q.isInstitutional;
+    const filteredQuestions = useMemo(() => {
+        return allQuestions.filter(q => {
+            if (selDisc && q.disciplineId !== selDisc) return false;
+            if (selChap && q.chapterId !== selChap) return false;
+            if (selUnit && q.unitId !== selUnit) return false;
+            if (selTopic && q.topicId !== selTopic) return false;
+            if (selTag && (!q.tags || !q.tags.includes(selTag))) return false;
+            
+            if (searchText) {
+                const term = searchText.toLowerCase();
+                if (!(q.enunciado.toLowerCase().includes(term) || q.tags?.some(t => t.toLowerCase().includes(term)))) return false;
+            }
+            
+            if (visFilter === 'MINE') return q.authorId === user?.id;
+            if (visFilter === 'SCHOOL') return q.isInstitutional === true || q.visibility === 'INSTITUTION' || (user?.institutionId && q.institutionId === user.institutionId);
+            if (visFilter === 'GLOBAL') return q.visibility === 'PUBLIC' && q.reviewStatus === 'APPROVED' && q.authorId !== user?.id && !q.isInstitutional;
 
-        return true;
-    });
+            // visFilter === 'ALL'
+            return true;
+        });
+    }, [allQuestions, selDisc, selChap, selUnit, selTopic, selTag, searchText, visFilter, user?.id, user?.institutionId]);
 
     const selectedQuestion = allQuestions.find(q => q.id === selectedQuestionId);
 
@@ -267,6 +271,10 @@ const QuestionsPage = () => {
         } catch (e) { alert("Erro na geração."); } finally { setGenerating(false); }
     };
 
+    const activeDiscipline = hierarchy.find(d => d.id === editing.disciplineId);
+    const activeChapter = activeDiscipline?.chapters.find(c => c.id === editing.chapterId);
+    const activeUnit = activeChapter?.units.find(u => u.id === editing.unitId);
+
     return (
         <div className="flex flex-col h-full bg-slate-50">
             <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 shadow-sm z-10">
@@ -350,32 +358,75 @@ const QuestionsPage = () => {
                 </div>
             </div>
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isCloneMode ? "Clonar Questão" : "Editar Questão"} maxWidth="max-w-4xl" footer={<Button onClick={handleSave}>{isCloneMode ? 'Salvar Cópia' : 'Salvar'}</Button>}>
-                <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div className="space-y-4">
-                        <Select label="Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value})}><option value="">Selecione...</option>{hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Select label="Dificuldade" value={editing.difficulty || 'Medium'} onChange={e => setEditing({...editing, difficulty: e.target.value as any})}><option value="Easy">Fácil</option><option value="Medium">Médio</option><option value="Hard">Difícil</option></Select>
-                            <Select label="Visibilidade" value={editing.visibility || 'PUBLIC'} onChange={e => setEditing({...editing, visibility: e.target.value as any})}><option value="PUBLIC">🌍 Banco Global</option><option value="INSTITUTION">🏫 Minha Escola</option><option value="PRIVATE">🔒 Somente Eu</option></Select>
+            <Modal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                title={isCloneMode ? "Clonar Questão" : (editing.id ? "Editar Questão" : "Nova Questão")} 
+                maxWidth="max-w-5xl" 
+                footer={<Button onClick={handleSave}>{isCloneMode ? 'Salvar Cópia' : 'Salvar'}</Button>}
+            >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    {/* Coluna 1: Classificação */}
+                    <div className="space-y-6">
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+                            <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b pb-2">1. Localização Curricular</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Select label="Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}><option value="">Selecione...</option>{hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
+                                <Select label="Capítulo" value={editing.chapterId || ''} onChange={e => setEditing({...editing, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!editing.disciplineId}><option value="">Selecione...</option>{activeDiscipline?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+                                <Select label="Unidade" value={editing.unitId || ''} onChange={e => setEditing({...editing, unitId: e.target.value, topicId: ''})} disabled={!editing.chapterId}><option value="">Selecione...</option>{activeChapter?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
+                                <Select label="Tópico" value={editing.topicId || ''} onChange={e => setEditing({...editing, topicId: e.target.value})} disabled={!editing.unitId}><option value="">Selecione...</option>{activeUnit?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+                            </div>
                         </div>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <label className="text-sm font-bold text-slate-700 mb-2 block">Etiquetas de Organização</label>
-                            <div className="flex gap-2 mb-3"><input type="text" className="flex-1 text-sm border border-slate-300 rounded px-3 py-1.5 outline-none" placeholder="Nova etiqueta..." value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}/><button type="button" onClick={addTag} className="bg-slate-200 px-3 rounded font-bold text-xs">ADD</button></div>
-                            <div className="flex flex-wrap gap-1.5">{editing.tags?.map(t => (<span key={t} className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded bg-${getTagColor(t)}-100 text-${getTagColor(t)}-800`}>{t}<button onClick={() => removeTag(t)}><Icons.X /></button></span>))}</div>
+
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+                            <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b pb-2">2. Propriedades</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Select label="Dificuldade" value={editing.difficulty || 'Medium'} onChange={e => setEditing({...editing, difficulty: e.target.value as any})}><option value="Easy">Fácil</option><option value="Medium">Médio</option><option value="Hard">Difícil</option></Select>
+                                <Select label="Visibilidade" value={editing.visibility || 'PUBLIC'} onChange={e => setEditing({...editing, visibility: e.target.value as any})}><option value="PUBLIC">🌍 Banco Global</option><option value="INSTITUTION">🏫 Minha Escola</option><option value="PRIVATE">🔒 Somente Eu</option></Select>
+                            </div>
                         </div>
                     </div>
-                    <div className="space-y-4">
-                        <Select label="Capítulo" value={editing.chapterId || ''} onChange={e => setEditing({...editing, chapterId: e.target.value})} disabled={!editing.disciplineId}><option value="">Selecione...</option>{hierarchy.find(d => d.id === editing.disciplineId)?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
-                        <Select label="Tipo" value={editing.type || QuestionType.MULTIPLE_CHOICE} onChange={e => setEditing({...editing, type: e.target.value as any})}>{Object.entries(QuestionTypeLabels).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</Select>
+
+                    {/* Coluna 2: Metadata */}
+                    <div className="space-y-6">
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4 h-full">
+                            <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b pb-2">3. Etiquetas e Tipo</h4>
+                            <Select label="Tipo da Questão" value={editing.type || QuestionType.MULTIPLE_CHOICE} onChange={e => setEditing({...editing, type: e.target.value as any})}>{Object.entries(QuestionTypeLabels).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</Select>
+                            
+                            <div className="pt-2">
+                                <label className="text-sm font-bold text-slate-700 mb-2 block">Etiquetas de Organização</label>
+                                <div className="flex gap-2 mb-3"><input type="text" className="flex-1 text-sm border border-slate-300 rounded px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-blue bg-white" placeholder="Ex: Vestibular 2024..." value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}/><button type="button" onClick={addTag} className="bg-brand-blue text-white px-4 rounded font-bold text-xs">ADD</button></div>
+                                <div className="flex flex-wrap gap-1.5">{editing.tags?.map(t => (<span key={t} className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded bg-${getTagColor(t)}-100 text-${getTagColor(t)}-800 border border-${getTagColor(t)}-200 shadow-sm`}>{t}<button onClick={() => removeTag(t)} className="hover:text-red-500 ml-1"><Icons.X /></button></span>))}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className="space-y-4">
-                    <RichTextEditor label="Enunciado" value={editing.enunciado || ''} onChange={html => setEditing({...editing, enunciado: html})} />
-                    {editing.type === QuestionType.MULTIPLE_CHOICE && (<div className="space-y-2"><label className="text-sm font-semibold">Alternativas</label>{editing.options?.map((opt, idx) => (<div key={idx} className="flex gap-2 items-center"><input type="radio" name="correct" checked={opt.isCorrect} onChange={() => { const newOpts = editing.options?.map((o, i) => ({ ...o, isCorrect: i === idx })) || []; setEditing({ ...editing, options: newOpts }); }} /><Input value={opt.text} onChange={e => { const newOpts = [...(editing.options || [])]; newOpts[idx] = { ...newOpts[idx], text: e.target.value }; setEditing({ ...editing, options: newOpts }); }} placeholder={`Opção ${idx + 1}`} /><button onClick={() => { const newOpts = [...(editing.options || [])]; newOpts.splice(idx, 1); setEditing({ ...editing, options: newOpts }); }} className="text-red-400 hover:text-red-600 p-1"><Icons.Trash /></button></div>))}<Button variant="ghost" onClick={() => setEditing({ ...editing, options: [...(editing.options || []), { id: Date.now().toString(), text: '', isCorrect: false }] })}>+ Adicionar Opção</Button></div>)}
+
+                <div className="space-y-8 mt-8 pt-8 border-t border-slate-100">
+                    <RichTextEditor label="Enunciado da Questão" value={editing.enunciado || ''} onChange={html => setEditing({...editing, enunciado: html})} />
+                    
+                    {editing.type === QuestionType.MULTIPLE_CHOICE && (
+                        <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                            <label className="text-sm font-black uppercase text-slate-400 tracking-widest">Alternativas</label>
+                            {editing.options?.map((opt, idx) => (
+                                <div key={idx} className="flex gap-4 items-center animate-fade-in">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[10px] font-black mb-1">{String.fromCharCode(65+idx)}</span>
+                                        <input type="radio" name="correct" checked={opt.isCorrect} onChange={() => { const newOpts = editing.options?.map((o, i) => ({ ...o, isCorrect: i === idx })) || []; setEditing({ ...editing, options: newOpts }); }} className="w-5 h-5 text-brand-blue" />
+                                    </div>
+                                    <Input className="flex-1" value={opt.text} onChange={e => { const newOpts = [...(editing.options || [])]; newOpts[idx] = { ...newOpts[idx], text: e.target.value }; setEditing({ ...editing, options: newOpts }); }} placeholder={`Texto da alternativa ${idx + 1}...`} />
+                                    <button onClick={() => { const newOpts = [...(editing.options || [])]; newOpts.splice(idx, 1); setEditing({ ...editing, options: newOpts }); }} className="text-slate-300 hover:text-red-500 p-2 mt-4"><Icons.Trash /></button>
+                                </div>
+                            ))}
+                            <Button variant="ghost" className="w-full border-2 border-dashed border-slate-300 text-slate-500 mt-2" onClick={() => setEditing({ ...editing, options: [...(editing.options || []), { id: Date.now().toString(), text: '', isCorrect: false }] })}>
+                                <Icons.Plus /> Adicionar Opção
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </Modal>
 
-            {/* MODAL IA GERAR MELHORADO */}
+            {/* MODAL IA GERAR */}
             <Modal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} title="Assistente de Geração por IA" maxWidth="max-w-3xl" footer={<Button onClick={confirmAiGeneration} disabled={generating || !aiParams.disciplineId}>{generating ? <><span className="animate-spin mr-2">◌</span> Gerando Questão...</> : 'Confirmar e Gerar'}</Button>}>
                 <div className="space-y-6">
                     <div className="bg-blue-50 border-l-4 border-blue-400 p-4 text-sm text-blue-800 flex items-start gap-3">
@@ -383,9 +434,9 @@ const QuestionsPage = () => {
                         <p>Preencha os detalhes abaixo para que a IA crie uma questão pedagógica de alta qualidade baseada no seu currículo.</p>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
-                            <h4 className="font-bold text-slate-700 uppercase text-xs tracking-widest border-b pb-1">1. Localização Curricular</h4>
+                            <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b pb-1">1. Localização Curricular</h4>
                             <Select label="Disciplina" value={aiParams.disciplineId} onChange={e => setAiParams({...aiParams, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})}>
                                 <option value="">Selecione a disciplina...</option>
                                 {hierarchy.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -408,7 +459,7 @@ const QuestionsPage = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <h4 className="font-bold text-slate-700 uppercase text-xs tracking-widest border-b pb-1">2. Configurações da Questão</h4>
+                            <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b pb-1">2. Configurações</h4>
                             <Select label="Tipo de Questão" value={aiParams.type} onChange={e => setAiParams({...aiParams, type: e.target.value as any})}>
                                 {Object.entries(QuestionTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                             </Select>
@@ -422,8 +473,8 @@ const QuestionsPage = () => {
                             <div className="pt-2">
                                 <label className="text-sm font-semibold text-slate-700 mb-1 block">Contexto Extra (Opcional)</label>
                                 <textarea 
-                                    className="w-full border border-slate-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-brand-blue outline-none min-h-[100px]"
-                                    placeholder="Ex: Focar em interpretação de gráficos, relacionar com atualidades, nível vestibular..."
+                                    className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-brand-blue outline-none min-h-[100px] bg-white text-slate-800"
+                                    placeholder="Ex: Focar em interpretação de gráficos..."
                                     value={aiParams.instruction}
                                     onChange={e => setAiParams({...aiParams, instruction: e.target.value})}
                                 />
