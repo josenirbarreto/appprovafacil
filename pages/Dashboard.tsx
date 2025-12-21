@@ -37,7 +37,6 @@ const Dashboard = () => {
                     FirebaseService.getUsers(user)
                 ]);
 
-                // Busca resultados de todas as provas para calcular médias por turma
                 const attemptsPromises = (Array.isArray(exams) ? exams : []).map(e => FirebaseService.getExamResults(e.id));
                 const attemptsArrays = await Promise.all(attemptsPromises);
                 const allAttempts = attemptsArrays.flat();
@@ -61,9 +60,7 @@ const Dashboard = () => {
         loadAllData();
     }, [user]);
 
-    // --- CÁLCULOS BI ESCOLAR ---
-
-    // 1. Desempenho por Turma (Média de Notas)
+    // 1. Desempenho por Turma
     const classPerformance = useMemo(() => {
         const performanceMap: Record<string, { totalScore: number, totalQuestions: number, count: number, name: string }> = {};
         
@@ -84,13 +81,13 @@ const Dashboard = () => {
             .filter(v => v.count > 0)
             .map(v => ({
                 label: v.name,
-                value: Number(((v.totalScore / v.totalQuestions) * 100).toFixed(1)) || 0,
+                value: Number(((v.totalScore / Math.max(1, v.totalQuestions)) * 100).toFixed(1)) || 0,
                 color: '#3A72EC'
             }))
             .sort((a, b) => b.value - a.value);
     }, [data]);
 
-    // 2. Engajamento dos Professores (Ranking)
+    // 2. Ranking de Engajamento
     const teacherEngagement = useMemo(() => {
         const teachers = data.users.filter(u => u.role === UserRole.TEACHER);
         return teachers.map(t => {
@@ -102,40 +99,39 @@ const Dashboard = () => {
                 photoUrl: t.photoUrl,
                 questions: qCount,
                 exams: eCount,
-                score: (qCount * 2) + (eCount * 10) // Peso para ranking
+                score: (qCount * 2) + (eCount * 10)
             };
         }).sort((a, b) => b.score - a.score).slice(0, 5);
     }, [data]);
 
-    // 3. Mapa de Calor de Conteúdos (Tópicos mais vs menos cobrados)
+    // 3. Mapa de Calor (Proteção contra TypeError map/forEach)
     const contentHeatmap = useMemo(() => {
         const usage: Record<string, { name: string, count: number, discipline: string }> = {};
         
         data.exams.forEach(ex => {
-            // CORREÇÃO: Check de segurança Array.isArray para evitar crash se o campo virar objeto
-            if (ex && Array.isArray(ex.questions)) {
-                ex.questions.forEach(q => {
-                    if (!q) return;
-                    const topicId = q.topicId || 'unclassified';
-                    if (!usage[topicId]) {
-                        const disc = data.disciplines.find(d => d.id === q.disciplineId);
-                        let topicName = 'Não Classificado';
-                        if (q.topicId) {
-                            disc?.chapters.forEach(c => c.units.forEach(u => u.topics.forEach(t => {
-                                if (t.id === q.topicId) topicName = t.name;
-                            })));
-                        }
-                        usage[topicId] = { name: topicName, count: 0, discipline: disc?.name || 'Geral' };
+            // SEGURANÇA: Garante que ex.questions seja sempre tratado como array
+            const questionsList = Array.isArray(ex.questions) ? ex.questions : [];
+            questionsList.forEach(q => {
+                if (!q) return;
+                const topicId = q.topicId || 'unclassified';
+                if (!usage[topicId]) {
+                    const disc = data.disciplines.find(d => d.id === q.disciplineId);
+                    let topicName = 'Não Classificado';
+                    if (q.topicId) {
+                        disc?.chapters?.forEach(c => c.units?.forEach(u => u.topics?.forEach(t => {
+                            if (t.id === q.topicId) topicName = t.name;
+                        })));
                     }
-                    usage[topicId].count++;
-                });
-            }
+                    usage[topicId] = { name: topicName, count: 0, discipline: disc?.name || 'Geral' };
+                }
+                usage[topicId].count++;
+            });
         });
 
         const sorted = Object.values(usage).sort((a, b) => b.count - a.count);
         return {
             top: sorted.slice(0, 5),
-            forgotten: sorted.reverse().slice(0, 5)
+            forgotten: [...sorted].reverse().slice(0, 5)
         };
     }, [data]);
 
@@ -157,20 +153,14 @@ const Dashboard = () => {
                     <h2 className="text-3xl font-display font-bold text-slate-800">BI Institucional</h2>
                     <p className="text-slate-500">Monitoramento pedagógico e engajamento da unidade.</p>
                 </div>
-                {(isAdmin || isManager) && (
-                    <div className="flex gap-2">
-                        <Badge color="blue">Unidade: {data.institutions[0]?.name || 'Todas'}</Badge>
-                    </div>
-                )}
             </div>
 
-            {/* KPI Row */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <Card className="border-l-4 border-l-blue-500">
                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Média Institucional</p>
                     <p className="text-3xl font-black text-slate-800">
                         {data.allAttempts.length > 0 
-                            ? (data.allAttempts.reduce((acc, curr) => acc + (curr.score / curr.totalQuestions), 0) / data.allAttempts.length * 100).toFixed(1)
+                            ? (data.allAttempts.reduce((acc, curr) => acc + (curr.score / Math.max(1, curr.totalQuestions)), 0) / data.allAttempts.length * 100).toFixed(1)
                             : '0'}%
                     </p>
                 </Card>
@@ -189,7 +179,6 @@ const Dashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                {/* Desempenho por Turma */}
                 <div className="lg:col-span-2">
                     <Card title="Desempenho por Turma (%)" className="h-full min-h-[350px]">
                         {classPerformance.length > 0 ? (
@@ -203,7 +192,6 @@ const Dashboard = () => {
                     </Card>
                 </div>
 
-                {/* Engajamento dos Professores */}
                 <div>
                     <Card title="Ranking de Engajamento" className="h-full min-h-[350px]">
                         <div className="space-y-4 mt-2">
@@ -232,7 +220,6 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            {/* Mapa de Calor de Conteúdos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card title="Mapa de Conteúdos: Mais Cobrados">
                     <div className="mt-2 space-y-3">
@@ -243,11 +230,10 @@ const Dashboard = () => {
                                     <span className="text-brand-blue">{item.count} questões</span>
                                 </div>
                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-brand-blue" style={{ width: `${(item.count / (contentHeatmap.top[0]?.count || 1)) * 100}%` }}></div>
+                                    <div className="h-full bg-brand-blue" style={{ width: `${(item.count / Math.max(1, contentHeatmap.top[0]?.count || 1)) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}
-                        {contentHeatmap.top.length === 0 && <p className="text-center text-slate-400 py-10">Inicie a criação de provas para ver os dados.</p>}
                     </div>
                 </Card>
 
@@ -260,11 +246,10 @@ const Dashboard = () => {
                                     <span className="text-orange-600">{item.count} questões</span>
                                 </div>
                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-orange-400" style={{ width: `${(item.count / (contentHeatmap.top[0]?.count || 1)) * 100}%` }}></div>
+                                    <div className="h-full bg-orange-400" style={{ width: `${(item.count / Math.max(1, contentHeatmap.top[0]?.count || 1)) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}
-                        {contentHeatmap.forgotten.length === 0 && <p className="text-center text-slate-400 py-10">Tudo em equilíbrio por enquanto.</p>}
                     </div>
                 </Card>
             </div>
