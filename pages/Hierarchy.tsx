@@ -129,15 +129,10 @@ const HierarchyPage = () => {
     };
 
     const getComponentStats = (cc: CurricularComponent) => {
-        let disciplines = cc.disciplines.length;
+        let disciplines = cc.disciplines?.length || 0;
         let questions = allQuestions.filter(q => q.componentId === cc.id).length;
         return { disciplines, questions };
     };
-
-    const colorPalette = [
-        { header: 'bg-brand-dark', body: 'bg-slate-50', discipline: 'bg-blue-600', chapter: 'bg-blue-100', unit: 'bg-white', text: 'text-blue-900', border: 'border-blue-200' },
-        { header: 'bg-brand-dark', body: 'bg-slate-50', discipline: 'bg-emerald-600', chapter: 'bg-emerald-100', unit: 'bg-white', text: 'text-emerald-900', border: 'border-emerald-200' },
-    ];
 
     if(loading) return <div className="p-8 flex items-center justify-center text-slate-500 font-bold animate-pulse">Carregando acervo...</div>;
 
@@ -148,7 +143,7 @@ const HierarchyPage = () => {
                     <h2 className="text-3xl font-display font-bold text-slate-800 flex items-center gap-2">
                         <Icons.BookOpen /> Gestão de Conteúdos
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Organize componentes curriculares e suas sub-disciplinas.</p>
+                    <p className="text-slate-500 text-sm mt-1">Organize componentes curriculares e suas disciplinas.</p>
                 </div>
                 <div className="flex gap-2">
                     {user?.role !== UserRole.ADMIN && (
@@ -166,13 +161,12 @@ const HierarchyPage = () => {
                 {filteredHierarchy.length === 0 && (
                     <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200 text-slate-400">
                         <div className="mb-2"><Icons.BookOpen /></div>
-                        <p>Nenhum componente cadastrado para seu perfil.</p>
+                        <p>Nenhum componente curricular disponível.</p>
                     </div>
                 )}
 
-                {filteredHierarchy.map((cc, index) => {
+                {filteredHierarchy.map((cc) => {
                     const isExpanded = expandedComponents[cc.id] === true;
-                    const colors = colorPalette[index % colorPalette.length];
                     const stats = getComponentStats(cc);
 
                     return (
@@ -209,8 +203,8 @@ const HierarchyPage = () => {
 
                             {isExpanded && (
                                 <div className="p-4 bg-slate-50 space-y-4 animate-fade-in">
-                                    {cc.disciplines.length === 0 ? (
-                                        <p className="text-slate-500 text-sm italic text-center py-4">Nenhuma disciplina cadastrada para este componente.</p>
+                                    {(!cc.disciplines || cc.disciplines.length === 0) ? (
+                                        <p className="text-slate-500 text-sm italic text-center py-4">Nenhuma disciplina cadastrada.</p>
                                     ) : (
                                         cc.disciplines.map(d => {
                                             const isDiscExpanded = expandedDisciplines[d.id] === true;
@@ -235,7 +229,7 @@ const HierarchyPage = () => {
 
                                                     {isDiscExpanded && (
                                                         <div className="p-4 space-y-4">
-                                                            {d.chapters.map(c => (
+                                                            {d.chapters?.map(c => (
                                                                 <div key={c.id} className="border-l-4 border-blue-200 pl-4 py-1">
                                                                     <div className="flex justify-between items-center mb-3">
                                                                         <h5 className="font-bold text-slate-700">{c.name}</h5>
@@ -245,7 +239,7 @@ const HierarchyPage = () => {
                                                                         </div>
                                                                     </div>
                                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                                        {c.units.map(u => (
+                                                                        {c.units?.map(u => (
                                                                             <div key={u.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                                                                                 <div className="flex justify-between items-center mb-2">
                                                                                     <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">{u.name}</span>
@@ -255,7 +249,7 @@ const HierarchyPage = () => {
                                                                                     </div>
                                                                                 </div>
                                                                                 <div className="flex flex-wrap gap-1.5">
-                                                                                    {u.topics.map(t => (
+                                                                                    {u.topics?.map(t => (
                                                                                         <div key={t.id} className="group bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px] font-medium text-slate-500 flex items-center gap-1">
                                                                                             {t.name}
                                                                                             {user?.role === UserRole.ADMIN && <button onClick={() => handleDelete('topic', { tId: t.id })} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Icons.X /></button>}
@@ -280,15 +274,13 @@ const HierarchyPage = () => {
                 })}
             </div>
 
-            {/* Modal de Token para Componente Curricular */}
+            {/* Modal de Token */}
             <Modal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} title={`Licenciar Componente: ${sharingComponent?.name}`} maxWidth="max-w-2xl">
                 {sharingComponent && (
                     <div className="space-y-6">
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
-                            <div>
-                                <h4 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-1">Impacto da Licença</h4>
-                                <p className="text-sm text-slate-500">Este token liberará o Componente e todas as suas Disciplinas vinculadas.</p>
-                            </div>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <h4 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-1">Impacto da Licença</h4>
+                            <p className="text-sm text-slate-500">Este token liberará o Componente e todas as suas Disciplinas vinculadas.</p>
                         </div>
 
                         {generatedToken ? (
@@ -301,14 +293,14 @@ const HierarchyPage = () => {
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-4">
-                                <Card className="p-6 border-2 border-slate-200 hover:border-brand-blue cursor-pointer" onClick={() => handleGenerateToken(false)}>
+                                <div className="p-6 border-2 border-slate-200 rounded-xl hover:border-brand-blue cursor-pointer bg-white transition-all" onClick={() => handleGenerateToken(false)}>
                                     <h5 className="font-bold text-slate-800">Apenas Estrutura</h5>
                                     <p className="text-xs text-slate-500 mt-1">Libera o currículo vazio para o usuário preencher.</p>
-                                </Card>
-                                <Card className="p-6 border-2 border-brand-blue bg-blue-50 cursor-pointer" onClick={() => handleGenerateToken(true)}>
+                                </div>
+                                <div className="p-6 border-2 border-brand-blue bg-blue-50 rounded-xl cursor-pointer transition-all" onClick={() => handleGenerateToken(true)}>
                                     <h5 className="font-bold text-brand-blue">Pacote Completo</h5>
                                     <p className="text-xs text-blue-700 mt-1">Libera currículo + todas as questões já cadastradas.</p>
-                                </Card>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -323,7 +315,7 @@ const HierarchyPage = () => {
 
             <Modal isOpen={isRedeemModalOpen} onClose={() => setIsRedeemModalOpen(false)} title="Resgatar Conteúdo" footer={<Button onClick={handleRedeem} disabled={redeemLoading}>{redeemLoading ? 'Processando...' : 'Ativar Agora'}</Button>} maxWidth="max-w-md">
                 <div className="space-y-4">
-                    <p className="text-sm text-slate-600">Insira o código de ativação fornecido pela plataforma para liberar novas disciplinas.</p>
+                    <p className="text-sm text-slate-600">Insira o código de ativação fornecido para liberar novos componentes curriculares.</p>
                     <Input label="Código do Token" value={redeemCode} onChange={e => setRedeemCode(e.target.value.toUpperCase())} placeholder="EX: 4X9J2B7K" className="text-center font-mono text-xl" />
                 </div>
             </Modal>

@@ -79,16 +79,16 @@ export const FirebaseService = {
         else if (currentUser?.role === UserRole.MANAGER) q = query(collection(db, COLLECTIONS.USERS), where("institutionId", "==", currentUser.institutionId));
         else return [];
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({ ...d.data(), id: d.id } as User));
+        return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as User));
     },
-    getUserByEmail: async (email: string) => { const q = query(collection(db, COLLECTIONS.USERS), where("email", "==", email), limit(1)); const snap = await getDocs(q); return snap.empty ? null : { ...snap.docs[0].data(), id: snap.docs[0].id } as User; },
+    getUserByEmail: async (email: string) => { const q = query(collection(db, COLLECTIONS.USERS), where("email", "==", email), limit(1)); const snap = await getDocs(q); return snap.empty ? null : { ...(snap.docs[0].data() as object), id: snap.docs[0].id } as User; },
     register: async (email: string, pass: string, name: string, role: UserRole) => { const cred = await createUserWithEmailAndPassword(auth, email, pass); const user: User = { id: cred.user.uid, name, email, role, status: 'ACTIVE', plan: 'BASIC', subscriptionEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }; await setDoc(doc(db, COLLECTIONS.USERS, cred.user.uid), user); return user; },
     createSubUser: async (owner: User, data: any) => { const id = `sub-${Date.now()}`; const user: User = { id, name: data.name, email: data.email, role: data.role, status: 'ACTIVE', plan: owner.plan, subscriptionEnd: owner.subscriptionEnd, ownerId: owner.id, subjects: data.subjects, institutionId: owner.institutionId, requiresPasswordChange: true }; await setDoc(doc(db, COLLECTIONS.USERS, id), user); return user; },
     updateUser: async (id: string, data: Partial<User>) => { await updateDoc(doc(db, COLLECTIONS.USERS, id), cleanPayload(data)); },
     changeUserPassword: async (newPassword: string) => { if (auth.currentUser) { await updatePassword(auth.currentUser, newPassword); await updateDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid), { requiresPasswordChange: false }); } },
     resetPassword: async (email: string) => { await sendPasswordResetEmail(auth, email); },
 
-    // Hierarchy (CurricularComponent > Discipline > Chapter > Unit > Topic)
+    // Hierarchy (Componente > Disciplina > Capítulo > Unidade > Tópico)
     getHierarchy: async () => { 
         const [cc, d, c, u, t] = await Promise.all([
             getDocs(collection(db, COLLECTIONS.COMPONENTS)),
@@ -98,11 +98,11 @@ export const FirebaseService = {
             getDocs(collection(db, COLLECTIONS.TOPICS))
         ]); 
         
-        const components = cc.docs.map(doc => ({ ...doc.data(), id: doc.id, disciplines: [] } as CurricularComponent));
-        const disciplines = d.docs.map(doc => ({ ...doc.data(), id: doc.id, chapters: [] } as Discipline)); 
-        const chapters = c.docs.map(doc => ({ ...doc.data(), id: doc.id, units: [] } as Chapter)); 
-        const units = u.docs.map(doc => ({ ...doc.data(), id: doc.id, topics: [] } as Unit)); 
-        const topics = t.docs.map(doc => ({ ...doc.data(), id: doc.id } as Topic)); 
+        const components = cc.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, disciplines: [] } as CurricularComponent));
+        const disciplines = d.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, chapters: [] } as Discipline)); 
+        const chapters = c.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, units: [] } as Chapter)); 
+        const units = u.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, topics: [] } as Unit)); 
+        const topics = t.docs.map(doc => ({ ...(doc.data() as object), id: doc.id } as Topic)); 
         
         units.forEach(un => un.topics = topics.filter(to => to.unitId === un.id)); 
         chapters.forEach(ch => ch.units = units.filter(un => un.chapterId === ch.id)); 
@@ -165,7 +165,7 @@ export const FirebaseService = {
         
         const q = constraints.length > 0 ? query(collection(db, COLLECTIONS.QUESTIONS), ...constraints) : collection(db, COLLECTIONS.QUESTIONS);
         const snap = await getDocs(q);
-        let results = snap.docs.map(d => ({...d.data(), id: d.id} as Question));
+        let results = snap.docs.map(d => ({...(d.data() as object), id: d.id} as Question));
         
         if (currentUser?.role === UserRole.TEACHER) {
             const authorizedComponents = [
@@ -184,7 +184,7 @@ export const FirebaseService = {
         }
         return results;
     },
-    getPendingQuestions: async () => { const q = query(collection(db, COLLECTIONS.QUESTIONS), where("visibility", "==", "PUBLIC"), where("reviewStatus", "==", "PENDING")); const snap = await getDocs(q); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Question)); },
+    getPendingQuestions: async () => { const q = query(collection(db, COLLECTIONS.QUESTIONS), where("visibility", "==", "PUBLIC"), where("reviewStatus", "==", "PENDING")); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Question)); },
     addQuestion: async (q: Question) => { const { id, ...data } = q; const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), cleanPayload(data)); return { ...q, id: docRef.id }; },
     updateQuestion: async (q: Question) => { const { id, ...data } = q; await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), cleanPayload(data)); },
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },
@@ -201,12 +201,12 @@ export const FirebaseService = {
         else if (currentUser?.role === UserRole.TEACHER) q = query(collection(db, COLLECTIONS.EXAMS), where("authorId", "==", currentUser.id));
         else return [];
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({...d.data(), id: d.id} as Exam));
+        return snap.docs.map(d => ({...(d.data() as object), id: d.id} as Exam));
     },
-    getExamById: async (id: string) => { const snap = await getDoc(doc(db, COLLECTIONS.EXAMS, id)); return snap.exists() ? { ...snap.data(), id: snap.id } as Exam : null; },
+    getExamById: async (id: string) => { const snap = await getDoc(doc(db, COLLECTIONS.EXAMS, id)); return snap.exists() ? { ...(snap.data() as object), id: snap.id } as Exam : null; },
     saveExam: async (e: any) => { if(e.id) { await updateDoc(doc(db, COLLECTIONS.EXAMS, e.id), cleanPayload(e)); return e; } const docRef = await addDoc(collection(db, COLLECTIONS.EXAMS), cleanPayload(e)); return {...e, id: docRef.id}; },
     deleteExam: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.EXAMS, id)); },
-    getExamResults: async (examId: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamAttempt)); },
+    getExamResults: async (examId: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ExamAttempt)); },
     updateAttemptScore: async (id: string, score: number, manualGradingComplete: boolean = true, questionScores?: Record<string, number>) => { const updates: any = { score, manualGradingComplete }; if (questionScores) updates.questionScores = questionScores; await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), updates); },
     startAttempt: async (examId: string, studentName: string, studentIdentifier: string, totalQuestions: number, studentId?: string) => { const attempt = { examId, studentName, studentIdentifier, studentId, totalQuestions, startedAt: new Date().toISOString(), answers: {}, score: 0, status: 'IN_PROGRESS' }; const docRef = await addDoc(collection(db, COLLECTIONS.ATTEMPTS), cleanPayload(attempt)); return { ...attempt, id: docRef.id } as ExamAttempt; },
     submitAttempt: async (id: string, answers: any, score: number, total: number) => { await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { answers, score, totalQuestions: total, submittedAt: new Date().toISOString(), status: 'COMPLETED' }); },
@@ -217,7 +217,7 @@ export const FirebaseService = {
         if (!currentUser) return [];
         if (currentUser.role === UserRole.ADMIN) {
             const snap = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
-            return snap.docs.map(d => ({...d.data(), id: d.id} as Institution));
+            return snap.docs.map(d => ({...(d.data() as object), id: d.id} as Institution));
         }
         const qOwner = query(collection(db, COLLECTIONS.INSTITUTIONS), where("ownerId", "==", currentUser.id));
         const [singleSnap, ownerSnap] = await Promise.all([
@@ -225,11 +225,11 @@ export const FirebaseService = {
             getDocs(qOwner)
         ]);
         const results: Map<string, Institution> = new Map();
-        if (singleSnap?.exists()) results.set(singleSnap.id, { ...singleSnap.data(), id: singleSnap.id } as Institution);
-        ownerSnap.docs.forEach(d => results.set(d.id, { ...d.data(), id: d.id } as Institution));
+        if (singleSnap?.exists()) results.set(singleSnap.id, { ...(singleSnap.data() as object), id: singleSnap.id } as Institution);
+        ownerSnap.docs.forEach(d => results.set(d.id, { ...(d.data() as object), id: d.id } as Institution));
         return Array.from(results.values());
     },
-    getInstitutionById: async (id: string) => { const snap = await getDoc(doc(db, COLLECTIONS.INSTITUTIONS, id)); return snap.exists() ? { ...snap.data(), id: snap.id } as Institution : null; },
+    getInstitutionById: async (id: string) => { const snap = await getDoc(doc(db, COLLECTIONS.INSTITUTIONS, id)); return snap.exists() ? { ...(snap.data() as object), id: snap.id } as Institution : null; },
     addInstitution: async (data: Institution, creator?: User | null) => { 
         const payload = { ...data, ownerId: creator?.id };
         const docRef = await addDoc(collection(db, COLLECTIONS.INSTITUTIONS), cleanPayload(payload));
@@ -244,49 +244,49 @@ export const FirebaseService = {
         else if (currentUser?.institutionId) q = query(collection(db, COLLECTIONS.CLASSES), where("institutionId", "==", currentUser.institutionId));
         else return [];
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({...d.data(), id: d.id} as SchoolClass));
+        return snap.docs.map(d => ({...(d.data() as object), id: d.id} as SchoolClass));
     },
     addClass: async (cls: SchoolClass) => { const docRef = await addDoc(collection(db, COLLECTIONS.CLASSES), cleanPayload(cls)); return { ...cls, id: docRef.id }; },
     updateClass: async (cls: SchoolClass) => { await updateDoc(doc(db, COLLECTIONS.CLASSES, cls.id), cleanPayload(cls)); },
     deleteClass: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.CLASSES, id)); },
-    getStudents: async (classId: string) => { const q = query(collection(db, COLLECTIONS.STUDENTS), where("classId", "==", classId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Student)); },
+    getStudents: async (classId: string) => { const q = query(collection(db, COLLECTIONS.STUDENTS), where("classId", "==", classId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Student)); },
     addStudent: async (s: any) => { await addDoc(collection(db, COLLECTIONS.STUDENTS), cleanPayload(s)); },
     updateStudent: async (id: string, data: any) => { await updateDoc(doc(db, COLLECTIONS.STUDENTS, id), cleanPayload(data)); },
     deleteStudent: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.STUDENTS, id)); },
     importStudents: async (classId: string, institutionId: string, list: any[]) => { const batch = writeBatch(db); list.forEach(s => { const ref = doc(collection(db, COLLECTIONS.STUDENTS)); batch.set(ref, { ...s, classId, institutionId, createdAt: new Date().toISOString() }); }); await batch.commit(); },
 
     // Plans & Payments
-    getPlans: async () => { const snap = await getDocs(collection(db, COLLECTIONS.PLANS)); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Plan)); },
+    getPlans: async () => { const snap = await getDocs(collection(db, COLLECTIONS.PLANS)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Plan)); },
     savePlan: async (p: Plan) => { if (p.id) await updateDoc(doc(db, COLLECTIONS.PLANS, p.id), cleanPayload(p)); else await addDoc(collection(db, COLLECTIONS.PLANS), cleanPayload(p)); },
     deletePlan: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.PLANS, id)); },
-    getPayments: async (userId: string) => { const q = query(collection(db, COLLECTIONS.PAYMENTS), where("userId", "==", userId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Payment)); },
+    getPayments: async (userId: string) => { const q = query(collection(db, COLLECTIONS.PAYMENTS), where("userId", "==", userId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Payment)); },
     addPayment: async (p: any) => { await addDoc(collection(db, COLLECTIONS.PAYMENTS), { ...p, date: new Date().toISOString() }); },
-    getAllPayments: async () => { const snap = await getDocs(collection(db, COLLECTIONS.PAYMENTS)); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Payment)); },
+    getAllPayments: async () => { const snap = await getDocs(collection(db, COLLECTIONS.PAYMENTS)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Payment)); },
 
     // Marketing & Coupons
-    getCampaigns: async () => { const snap = await getDocs(collection(db, COLLECTIONS.CAMPAIGNS)); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Campaign)); },
+    getCampaigns: async () => { const snap = await getDocs(collection(db, COLLECTIONS.CAMPAIGNS)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Campaign)); },
     addCampaign: async (c: any) => { await addDoc(collection(db, COLLECTIONS.CAMPAIGNS), cleanPayload(c)); },
-    getCoupons: async () => { const snap = await getDocs(collection(db, COLLECTIONS.COUPONS)); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Coupon)); },
+    getCoupons: async () => { const snap = await getDocs(collection(db, COLLECTIONS.COUPONS)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Coupon)); },
     addCoupon: async (c: Coupon) => { await addDoc(collection(db, COLLECTIONS.COUPONS), cleanPayload(c)); },
     updateCoupon: async (id: string, c: Partial<Coupon>) => { await updateDoc(doc(db, COLLECTIONS.COUPONS, id), cleanPayload(c)); },
     deleteCoupon: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.COUPONS, id)); },
 
     // System & Audit
-    getSystemSettings: async () => { const snap = await getDoc(doc(db, COLLECTIONS.SETTINGS, 'global')); return snap.exists() ? snap.data() as SystemSettings : { banner: { active: false, message: '', type: 'INFO' }, aiConfig: { totalGenerations: 0, monthlyLimit: 1000, costPerRequestEst: 0.001 }, whiteLabel: { appName: 'Prova Fácil' } } as SystemSettings; },
+    getSystemSettings: async () => { const snap = await getDoc(doc(db, COLLECTIONS.SETTINGS, 'global')); return snap.exists() ? (snap.data() as SystemSettings) : { banner: { active: false, message: '', type: 'INFO' }, aiConfig: { totalGenerations: 0, monthlyLimit: 1000, costPerRequestEst: 0.001 }, whiteLabel: { appName: 'Prova Fácil' } } as SystemSettings; },
     saveSystemSettings: async (s: SystemSettings) => { await setDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), cleanPayload(s)); },
-    getAuditLogs: async () => { const snap = await getDocs(query(collection(db, COLLECTIONS.AUDIT_LOGS), orderBy("timestamp", "desc"))); return snap.docs.map(d => ({ ...d.data(), id: d.id } as AuditLog)); },
+    getAuditLogs: async () => { const snap = await getDocs(query(collection(db, COLLECTIONS.AUDIT_LOGS), orderBy("timestamp", "desc"))); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as AuditLog)); },
     trackAiUsage: async () => { try { await updateDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), { "aiConfig.totalGenerations": increment(1) }); } catch (error) {} },
 
     // Support
-    listenTickets: (user: User, callback: (ts: Ticket[]) => void) => { const q = user.role === UserRole.ADMIN ? collection(db, COLLECTIONS.TICKETS) : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", user.id)); return onSnapshot(q, (snap) => { callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as Ticket))); }); },
-    listenTicketMessages: (ticketId: string, callback: (ms: TicketMessage[]) => void) => { const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId), orderBy("createdAt", "asc")); return onSnapshot(q, (snap) => { callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as TicketMessage))); }); },
+    listenTickets: (user: User, callback: (ts: Ticket[]) => void) => { const q = user.role === UserRole.ADMIN ? collection(db, COLLECTIONS.TICKETS) : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", user.id)); return onSnapshot(q, (snap) => { callback(snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Ticket))); }); },
+    listenTicketMessages: (ticketId: string, callback: (ms: TicketMessage[]) => void) => { const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId), orderBy("createdAt", "asc")); return onSnapshot(q, (snap) => { callback(snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as TicketMessage))); }); },
     createTicket: async (t: any) => { await addDoc(collection(db, COLLECTIONS.TICKETS), { ...t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); },
     addTicketMessage: async (ticketId: string, authorId: string, authorName: string, message: string, isAdminReply: boolean) => { await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), { ticketId, authorId, authorName, message, isAdminReply, createdAt: new Date().toISOString() }); await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { updatedAt: new Date().toISOString() }); },
     updateTicketStatus: async (id: string, status: TicketStatus) => { await updateDoc(doc(db, COLLECTIONS.TICKETS, id), { status, updatedAt: new Date().toISOString() }); },
     getAdminOpenTicketsCount: async () => { const q = query(collection(db, COLLECTIONS.TICKETS), where("status", "!=", "CLOSED")); const snap = await getDocs(q); return snap.size; },
 
     // Tutorials
-    getTutorials: async () => { const snap = await getDocs(collection(db, COLLECTIONS.TUTORIALS)); return snap.docs.map(d => ({ ...d.data(), id: d.id } as Tutorial)); },
+    getTutorials: async () => { const snap = await getDocs(collection(db, COLLECTIONS.TUTORIALS)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Tutorial)); },
     addTutorial: async (t: Tutorial) => { await addDoc(collection(db, COLLECTIONS.TUTORIALS), { ...cleanPayload(t), createdAt: new Date().toISOString() }); },
     deleteTutorial: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.TUTORIALS, id)); },
 
@@ -294,11 +294,11 @@ export const FirebaseService = {
     getActiveContractForPlan: async (plan: string) => { 
         const q = query(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), where("isActive", "==", true)); 
         const snap = await getDocs(q); 
-        const all = snap.docs.map(d => ({ ...d.data(), id: d.id } as ContractTemplate)); 
+        const all = snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ContractTemplate)); 
         all.sort((a, b) => (b.version || 0) - (a.version || 0));
         return all.find(t => t.planId === plan || t.planId === 'ALL') || null; 
     },
-    getContractTemplates: async () => { const snap = await getDocs(collection(db, COLLECTIONS.CONTRACT_TEMPLATES)); return snap.docs.map(d => ({ ...d.data(), id: d.id } as ContractTemplate)); },
+    getContractTemplates: async () => { const snap = await getDocs(collection(db, COLLECTIONS.CONTRACT_TEMPLATES)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ContractTemplate)); },
     saveContractTemplate: async (t: any, forceNewVersion: boolean = false) => { if (!forceNewVersion && t.id) { await updateDoc(doc(db, COLLECTIONS.CONTRACT_TEMPLATES, t.id), { ...cleanPayload(t), updatedAt: new Date().toISOString() }); } else { const { id, ...data } = t; await addDoc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), { ...cleanPayload(data), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); } },
     signContract: async (user: User, template: ContractTemplate, typedName: string) => { await addDoc(collection(db, COLLECTIONS.SIGNATURES), { userId: user.id, userName: user.name, templateId: template.id, version: template.version, timestamp: new Date().toISOString(), typedName }); await updateDoc(doc(db, COLLECTIONS.USERS, user.id), { lastSignedContractId: template.id }); },
     seedDefaultContracts: async () => { /* Seed implementation */ },

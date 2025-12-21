@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FirebaseService } from '../services/firebaseService';
 import { GeminiService } from '../services/geminiService';
-import { Exam, ExamAttempt, QuestionType, Question, Discipline } from '../types';
+import { Exam, ExamAttempt, QuestionType, Question, Discipline, CurricularComponent } from '../types';
 import { Button, Card, Badge, Modal, Input } from '../components/UI';
 import { Icons } from '../components/Icons';
 
@@ -12,7 +12,7 @@ const ExamResults = () => {
     const navigate = useNavigate();
     const [exam, setExam] = useState<Exam | null>(null);
     const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
-    const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
+    const [hierarchy, setHierarchy] = useState<CurricularComponent[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'LIST' | 'ANALYSIS'>('LIST');
     
@@ -112,13 +112,14 @@ const ExamResults = () => {
     const topicAnalysis = useMemo(() => {
         if (!exam || questions.length === 0 || attempts.length === 0) return [];
 
-        // Mapeamento de nomes de tópicos e caminhos a partir da hierarquia
         const topicLookup: Record<string, { name: string, path: string }> = {};
-        hierarchy.forEach(d => {
-            d.chapters?.forEach(c => {
-                c.units?.forEach(u => {
-                    u.topics?.forEach(t => {
-                        topicLookup[t.id] = { name: t.name, path: `${d.name} > ${c.name}` };
+        hierarchy.forEach(cc => {
+            cc.disciplines?.forEach(d => {
+                d.chapters?.forEach(c => {
+                    c.units?.forEach(u => {
+                        u.topics?.forEach(t => {
+                            topicLookup[t.id] = { name: t.name, path: `${cc.name} > ${d.name}` };
+                        });
                     });
                 });
             });
@@ -138,7 +139,6 @@ const ExamResults = () => {
                 const studentAns = att.answers?.[q.id];
                 const isDiscursive = q.type === QuestionType.SHORT_ANSWER;
                 if (isDiscursive) {
-                    // Considera "sucesso" no tema se nota for superior a 60%
                     if ((att.questionScores?.[q.id] || 0) >= 0.6) analysisMap[topicId].correct++;
                 } else {
                     const correctOpt = q.options?.find(o => o.isCorrect);
@@ -169,7 +169,6 @@ const ExamResults = () => {
                 </div>
             </div>
 
-            {/* KPIs de Desempenho */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 shrink-0">
                 <Card className="p-6 border-l-4 border-l-blue-500 shadow-sm flex flex-col items-center text-center">
                     <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-1">Avaliados</p>
@@ -197,7 +196,6 @@ const ExamResults = () => {
                 </Card>
             </div>
 
-            {/* Tabs de Visualização */}
             <div className="flex gap-6 border-b border-slate-200 mb-8 shrink-0">
                 <button onClick={() => setActiveTab('LIST')} className={`pb-3 px-2 text-sm font-black uppercase tracking-widest transition-all ${activeTab === 'LIST' ? 'text-brand-blue border-b-4 border-brand-blue' : 'text-slate-400 hover:text-slate-600'}`}>Lista de Alunos</button>
                 <button onClick={() => setActiveTab('ANALYSIS')} className={`pb-3 px-2 text-sm font-black uppercase tracking-widest transition-all ${activeTab === 'ANALYSIS' ? 'text-brand-blue border-b-4 border-brand-blue' : 'text-slate-400 hover:text-slate-600'}`}>Análise de Temas</button>
@@ -253,7 +251,6 @@ const ExamResults = () => {
                         </table>
                     </Card>
                 ) : (
-                    /* ABA DE ANÁLISE DE TEMAS */
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in pb-10">
                          {topicAnalysis.length === 0 ? (
                              <Card className="col-span-full py-20 text-center border-2 border-dashed border-slate-200 bg-white">
@@ -279,7 +276,6 @@ const ExamResults = () => {
                 )}
             </div>
 
-            {/* MODAL DE REVISÃO INDIVIDUAL */}
             <Modal 
                 isOpen={isGradingModalOpen} 
                 onClose={() => setIsGradingModalOpen(false)} 

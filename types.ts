@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGER = 'MANAGER', 
@@ -44,8 +43,7 @@ export interface ExamAttempt {
   questionScores?: Record<string, number>; 
 }
 
-export interface Topic { id: string; name: string; unitId: string; createdAt?: string; authorId?: string; }
-export interface Unit { id: string; name: string; chapterId: string; topics: Topic[]; createdAt?: string; authorId?: string; }
+// Hierarquia de 5 níveis
 export interface Topic { id: string; name: string; unitId: string; createdAt?: string; authorId?: string; }
 export interface Unit { id: string; name: string; chapterId: string; topics: Topic[]; createdAt?: string; authorId?: string; }
 export interface Chapter { id: string; name: string; disciplineId: string; units: Unit[]; createdAt?: string; authorId?: string; }
@@ -72,7 +70,6 @@ export interface Question {
   institutionId?: string; 
   visibility?: 'PRIVATE' | 'INSTITUTION' | 'PUBLIC'; 
   reviewStatus?: 'PENDING' | 'APPROVED' | 'REJECTED'; 
-  // Fix: Added missing 'type' property to Question interface
   type: QuestionType;
   enunciado: string; 
   componentId: string;

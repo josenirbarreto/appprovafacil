@@ -4,7 +4,7 @@ import { Card, Badge, Button } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { SimpleBarChart, SimpleDonutChart } from '../components/Charts';
 import { FirebaseService } from '../services/firebaseService';
-import { Exam, Question, SchoolClass, Discipline, Institution, QuestionType, User, UserRole, ExamAttempt } from '../types';
+import { Exam, Question, SchoolClass, Discipline, Institution, QuestionType, User, UserRole, ExamAttempt, CurricularComponent } from '../types';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -16,7 +16,7 @@ const Dashboard = () => {
         questions: [] as Question[],
         classes: [] as SchoolClass[],
         institutions: [] as Institution[],
-        disciplines: [] as Discipline[],
+        hierarchy: [] as CurricularComponent[],
         users: [] as User[],
         allAttempts: [] as ExamAttempt[]
     });
@@ -28,12 +28,11 @@ const Dashboard = () => {
         if (!user) return;
         const loadAllData = async () => {
             try {
-                const [exams, questions, classes, institutions, disciplines, users] = await Promise.all([
+                const [exams, questions, classes, institutions, hierarchy, users] = await Promise.all([
                     FirebaseService.getExams(user),
                     FirebaseService.getQuestions(user),
                     FirebaseService.getClasses(user),
                     FirebaseService.getInstitutions(user),
-                    // Fix: getHierarchy não aceita argumentos
                     FirebaseService.getHierarchy(),
                     FirebaseService.getUsers(user)
                 ]);
@@ -47,7 +46,7 @@ const Dashboard = () => {
                     questions: Array.isArray(questions) ? questions : [],
                     classes: Array.isArray(classes) ? classes : [],
                     institutions: Array.isArray(institutions) ? institutions : [],
-                    disciplines: Array.isArray(disciplines) ? disciplines : [],
+                    hierarchy: Array.isArray(hierarchy) ? hierarchy : [],
                     users: Array.isArray(users) ? users : [],
                     allAttempts: Array.isArray(allAttempts) ? allAttempts : []
                 });
@@ -61,12 +60,11 @@ const Dashboard = () => {
         loadAllData();
     }, [user]);
 
-    // Otimização: Mapas de lookup para evitar .find() dentro de loops pesados
-    const disciplinesMap = useMemo(() => new Map(data.disciplines.map(d => [d.id, d])), [data.disciplines]);
+    // Otimização: Mapas de lookup
     const classesMap = useMemo(() => new Map(data.classes.map(c => [c.id, c])), [data.classes]);
     const examsMap = useMemo(() => new Map(data.exams.map(e => [e.id, e])), [data.exams]);
 
-    // 1. Desempenho por Turma (Otimizado com Map)
+    // 1. Desempenho por Turma
     const classPerformance = useMemo(() => {
         const performanceMap: Record<string, { totalScore: number, totalQuestions: number, count: number, name: string }> = {};
         
@@ -110,16 +108,17 @@ const Dashboard = () => {
         }).sort((a, b) => b.score - a.score).slice(0, 5);
     }, [data.users, data.questions, data.exams]);
 
-    // 3. Mapa de Calor (Otimizado com Map de Disciplinas para evitar loops aninhados profundos)
+    // 3. Mapa de Calor por Tópicos
     const contentHeatmap = useMemo(() => {
         const usage: Record<string, { name: string, count: number, discipline: string }> = {};
         
-        // Lookup Table de tópicos pré-construída para evitar .find() repetitivo
         const topicLookup = new Map<string, { topicName: string, disciplineName: string }>();
-        data.disciplines.forEach(d => {
-            d.chapters?.forEach(c => c.units?.forEach(u => u.topics?.forEach(t => {
-                topicLookup.set(t.id, { topicName: t.name, disciplineName: d.name });
-            })));
+        data.hierarchy.forEach(cc => {
+            cc.disciplines?.forEach(d => {
+                d.chapters?.forEach(c => c.units?.forEach(u => u.topics?.forEach(t => {
+                    topicLookup.set(t.id, { topicName: t.name, disciplineName: d.name });
+                })));
+            });
         });
 
         data.exams.forEach(ex => {
@@ -132,7 +131,7 @@ const Dashboard = () => {
                     usage[topicId] = { 
                         name: lookup?.topicName || 'Não Classificado', 
                         count: 0, 
-                        discipline: lookup?.disciplineName || (disciplinesMap.get(q.disciplineId)?.name || 'Geral')
+                        discipline: lookup?.disciplineName || 'Geral'
                     };
                 }
                 usage[topicId].count++;
@@ -144,7 +143,7 @@ const Dashboard = () => {
             top: sorted.slice(0, 5),
             forgotten: [...sorted].reverse().slice(0, 5)
         };
-    }, [data.exams, data.disciplines, disciplinesMap]);
+    }, [data.exams, data.hierarchy]);
 
     if (loading) {
         return (
