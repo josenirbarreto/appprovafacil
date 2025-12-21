@@ -61,27 +61,15 @@ const safeLog = (message: string, error: any) => {
 };
 
 const cleanPayload = (data: any): any => {
-    const seen = new WeakSet();
     const process = (obj: any): any => {
         if (obj === null || typeof obj !== 'object') return obj;
         if (obj instanceof Date) return obj.toISOString();
         if (typeof obj.toDate === 'function') return obj.toDate().toISOString();
-        if (obj.constructor && (
-            obj.constructor.name === 'SyntheticBaseEvent' || 
-            obj.constructor.name.startsWith('_') || 
-            obj.nodeType ||
-            obj.constructor.name === 'Q$1' || 
-            obj.constructor.name === 'Sa'
-        )) return null;
-        if (seen.has(obj)) return null;
-        seen.add(obj);
-        if (Array.isArray(obj)) return obj.map(process).filter(v => v !== undefined);
         const newObj: any = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 const value = obj[key];
                 if (value !== undefined && typeof value !== 'function' && !key.startsWith('_')) {
-                    if (key === 'auth' || key === 'firestore' || key === 'app') continue;
                     newObj[key] = process(value);
                 }
             }
@@ -435,10 +423,7 @@ export const FirebaseService = {
             createdAt: new Date().toISOString(), 
             isAdminReply: Boolean(isAdminReply) 
         };
-        // Salvamos sem cleanPayload para evitar remoção acidental de campos primitivos
         await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), msgData);
-        
-        // Atualiza a data do ticket para ele subir na lista e refletir atividade
         const ticketRef = doc(db, COLLECTIONS.TICKETS, ticketId);
         await updateDoc(ticketRef, { 
             updatedAt: new Date().toISOString(), 
@@ -628,6 +613,13 @@ export const FirebaseService = {
             if (currentUser.institutionId && item.id === currentUser.institutionId) return true; 
             return isVisible(item, currentUser); 
         });
+    },
+
+    getInstitutionById: async (id: string): Promise<Institution | null> => {
+        const docRef = doc(db, COLLECTIONS.INSTITUTIONS, id);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) return { ...(snap.data() as any), id: snap.id } as Institution;
+        return null;
     },
     
     addInstitution: async (data: Institution) => { 
