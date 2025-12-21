@@ -233,10 +233,12 @@ const ExamResults = () => {
     const handleSaveScan = async () => {
         if (!scanResult || !exam) return;
         try {
+            // FIX: Adicionando exam.questions.length como 4º argumento (totalQuestions) conforme esperado por FirebaseService.startAttempt
             const attempt = await FirebaseService.startAttempt(
                 exam.id, 
                 scanResult.studentName, 
-                'SCANNER-' + Date.now()
+                'SCANNER-' + Date.now(),
+                exam.questions.length
             );
             await FirebaseService.submitAttempt(
                 attempt.id,

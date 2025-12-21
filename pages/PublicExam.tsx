@@ -99,7 +99,7 @@ const PublicExam = () => {
 
         try {
             const previousAttempts = await FirebaseService.getStudentAttempts(exam!.id, identifier);
-            const allowed = exam!.publicConfig!.allowedAttempts || 1;
+            const allowed = Number(exam!.publicConfig!.allowedAttempts) || 1;
             if (previousAttempts.length >= allowed) return alert(`Limite de tentativas atingido.`);
 
             let questionsToUse = [...exam!.questions];
@@ -112,12 +112,13 @@ const PublicExam = () => {
             }
             setRandomizedQuestions(questionsToUse);
 
-            const attempt = await FirebaseService.startAttempt(exam!.id, name, identifier, sid);
+            const attempt = await FirebaseService.startAttempt(exam!.id, name, identifier, questionsToUse.length, sid);
             setCurrentAttempt(attempt);
             if (exam!.publicConfig!.timeLimitMinutes > 0) setTimeLeft(exam!.publicConfig!.timeLimitMinutes * 60);
             setStep('TAKING');
         } catch (err: any) {
-            alert("Erro ao iniciar a prova.");
+            console.error("Start Exam Error:", err);
+            alert("Erro ao iniciar a prova. Verifique se o banco de dados está online.");
         }
     };
 
@@ -165,6 +166,9 @@ const PublicExam = () => {
     const containerClasses = "fixed inset-0 z-50 bg-slate-50 flex flex-col overflow-y-auto custom-scrollbar";
 
     if (step === 'WELCOME') {
+        const attemptsLimit = Number(exam?.publicConfig?.allowedAttempts);
+        const displayAttempts = isNaN(attemptsLimit) ? 1 : attemptsLimit;
+
         return (
             <div className={`${containerClasses} items-center p-4 py-12`}>
                 <Card className="max-w-lg w-full shrink-0 my-auto shadow-2xl border-t-8 border-brand-blue relative overflow-hidden">
@@ -200,7 +204,7 @@ const PublicExam = () => {
                         </div>
                         <div className="text-center">
                             <p className="text-[10px] text-slate-400 font-black uppercase mb-1">Tentativas</p>
-                            <p className="font-black text-slate-800 text-sm">{exam?.publicConfig?.allowedAttempts || 1}</p>
+                            <p className="font-black text-slate-800 text-sm">{displayAttempts}</p>
                         </div>
                     </div>
 

@@ -256,9 +256,16 @@ const ExamsPage = () => {
         if (!sharingExam) return;
         setSaving(true);
         try {
+            // Sanitização para evitar NaN no banco de dados
+            const sanitizedConfig = {
+                ...shareConfig,
+                allowedAttempts: parseInt(String(shareConfig.allowedAttempts)) || 1,
+                timeLimitMinutes: parseInt(String(shareConfig.timeLimitMinutes)) || 0
+            };
+            
             await FirebaseService.saveExam({
                 ...sharingExam,
-                publicConfig: shareConfig
+                publicConfig: sanitizedConfig
             });
             setIsShareModalOpen(false);
             load();

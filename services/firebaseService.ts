@@ -192,7 +192,7 @@ export const FirebaseService = {
             </div>
         `;
         for (const plan of plans) {
-            const docRef = doc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES));
+            const docRef = doc(collection(db, COLLECTIONS.PLANS));
             batch.set(docRef, cleanPayload({
                 title: `Contrato Padrão - ${plan.name}`,
                 planId: plan.name,
@@ -719,7 +719,7 @@ export const FirebaseService = {
     getPlans: async () => (await getDocs(collection(db, COLLECTIONS.PLANS))).docs.map(d => ({ ...(d.data() as any), id: d.id } as Plan)),
     savePlan: async (plan: Plan) => { const data: any = cleanPayload(plan); const id = data.id; if (data.id) delete data.id; if (id) { await updateDoc(doc(db, COLLECTIONS.PLANS, id), data); return { ...plan, id }; } else { const docRef = await addDoc(collection(db, COLLECTIONS.PLANS), data); return { ...plan, id: docRef.id }; } },
     deletePlan: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.PLANS, id)); },
-    startAttempt: async (examId: string, studentName: string, studentIdentifier: string, studentId?: string): Promise<ExamAttempt> => { const attempt: Partial<ExamAttempt> = { examId, studentName, studentIdentifier, studentId, startedAt: new Date().toISOString(), answers: {}, score: 0, status: 'IN_PROGRESS' }; const docRef = await addDoc(collection(db, COLLECTIONS.ATTEMPTS), attempt); return { ...attempt, id: docRef.id } as ExamAttempt; },
+    startAttempt: async (examId: string, studentName: string, studentIdentifier: string, totalQuestions: number, studentId?: string): Promise<ExamAttempt> => { const attempt: Partial<ExamAttempt> = { examId, studentName, studentIdentifier, studentId, totalQuestions, startedAt: new Date().toISOString(), answers: {}, score: 0, status: 'IN_PROGRESS' }; const docRef = await addDoc(collection(db, COLLECTIONS.ATTEMPTS), cleanPayload(attempt)); return { ...attempt, id: docRef.id } as ExamAttempt; },
     submitAttempt: async (id: string, answers: Record<string, string>, score: number, totalQuestions: number) => { await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { answers, score, totalQuestions, submittedAt: new Date().toISOString(), status: 'COMPLETED' }); },
     updateAttemptScore: async (id: string, score: number) => { await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { score }); await logAuditAction('UPDATE', 'ATTEMPT', `Nota alterada manualmente para ${score}`, id); },
     getStudentAttempts: async (examId: string, identifier: string) => (await getDocs(query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId), where("studentIdentifier", "==", identifier)))).docs.map(d => ({ ...(d.data() as any), id: d.id } as ExamAttempt)),
