@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Discipline, UserRole, Question } from '../types';
+import { Discipline, UserRole, Question, CurricularComponent } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Input, Badge, Card } from '../components/UI';
 import { Icons } from '../components/Icons';
@@ -8,26 +8,27 @@ import { useAuth } from '../contexts/AuthContext';
 
 const HierarchyPage = () => {
     const { user, refreshUser } = useAuth();
-    const [hierarchy, setHierarchy] = useState<Discipline[]>([]);
+    const [hierarchy, setHierarchy] = useState<CurricularComponent[]>([]);
     const [allQuestions, setAllQuestions] = useState<Question[]>([]);
     const [loading, setLoading] = useState(true);
+    const [expandedComponents, setExpandedComponents] = useState<Record<string, boolean>>({});
     const [expandedDisciplines, setExpandedDisciplines] = useState<Record<string, boolean>>({});
-    const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
     
     // Modal States
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newItemName, setNewItemName] = useState('');
     const [modalConfig, setModalConfig] = useState<{
-        type: 'discipline' | 'chapter' | 'unit' | 'topic';
+        type: 'component' | 'discipline' | 'chapter' | 'unit' | 'topic';
         title: string;
+        ccId?: string;
         dId?: string;
         cId?: string;
         uId?: string;
-    }>({ type: 'discipline', title: '' });
+    }>({ type: 'component', title: '' });
 
     // Share Modal States
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-    const [sharingDiscipline, setSharingDiscipline] = useState<Discipline | null>(null);
+    const [sharingComponent, setSharingComponent] = useState<CurricularComponent | null>(null);
     const [generatedToken, setGeneratedToken] = useState<string | null>(null);
 
     // Redeem Modal States
@@ -39,13 +40,22 @@ const HierarchyPage = () => {
     
     const load = async () => { 
         const [hData, qData] = await Promise.all([
-            FirebaseService.getHierarchy(user),
+            FirebaseService.getHierarchy(),
             FirebaseService.getQuestions(user)
         ]);
         setHierarchy(hData); 
         setAllQuestions(qData);
         setLoading(false); 
     };
+
+    const filteredHierarchy = useMemo(() => {
+        if (!user || user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) return hierarchy;
+        const authorized = [
+            ...(user.subjects || []),
+            ...(user.accessGrants || [])
+        ];
+        return hierarchy.filter(cc => authorized.includes(cc.id));
+    }, [hierarchy, user]);
 
     const handleDelete = async (type: any, ids: any) => {
         if(confirm('Tem certeza? Isso apagará todos os itens filhos.')) {
@@ -54,9 +64,10 @@ const HierarchyPage = () => {
         }
     }
     
-    const handleOpenModal = (type: 'discipline' | 'chapter' | 'unit' | 'topic', ids: { dId?: string, cId?: string, uId?: string } = {}) => {
+    const handleOpenModal = (type: 'component' | 'discipline' | 'chapter' | 'unit' | 'topic', ids: any = {}) => {
         let title = '';
         switch(type) {
+            case 'component': title = 'Novo Componente Curricular'; break;
             case 'discipline': title = 'Nova Disciplina'; break;
             case 'chapter': title = 'Novo Capítulo'; break;
             case 'unit': title = 'Nova Unidade'; break;
@@ -69,12 +80,13 @@ const HierarchyPage = () => {
 
     const handleSave = async () => {
         if (!newItemName.trim()) return;
-        const { type, dId, cId, uId } = modalConfig;
+        const { type, ccId, dId, cId, uId } = modalConfig;
         try {
-            if (type === 'discipline') await FirebaseService.addDiscipline(newItemName);
+            if (type === 'component') await FirebaseService.addComponent(newItemName);
+            else if (type === 'discipline' && ccId) await FirebaseService.addDiscipline(ccId, newItemName);
             else if (type === 'chapter' && dId) await FirebaseService.addChapter(dId, newItemName);
-            else if (type === 'unit' && dId && cId) await FirebaseService.addUnit(dId, cId, newItemName);
-            else if (type === 'topic' && dId && cId && uId) await FirebaseService.addTopic(dId, cId, uId, newItemName);
+            else if (type === 'unit' && cId) await FirebaseService.addUnit(cId, newItemName);
+            else if (type === 'topic' && uId) await FirebaseService.addTopic(uId, newItemName);
             setIsModalOpen(false);
             load();
         } catch (error) {
@@ -83,16 +95,16 @@ const HierarchyPage = () => {
         }
     };
 
-    const handleOpenShare = (d: Discipline) => {
-        setSharingDiscipline(d);
+    const handleOpenShare = (cc: CurricularComponent) => {
+        setSharingComponent(cc);
         setGeneratedToken(null);
         setIsShareModalOpen(true);
     };
 
     const handleGenerateToken = async (includeQuestions: boolean) => {
-        if (!sharingDiscipline) return;
+        if (!sharingComponent) return;
         try {
-            const code = await FirebaseService.generateCommercialToken(sharingDiscipline.id, includeQuestions);
+            const code = await FirebaseService.generateCommercialToken(sharingComponent.id, includeQuestions);
             setGeneratedToken(code);
         } catch (e) {
             alert("Erro ao gerar token.");
@@ -103,8 +115,8 @@ const HierarchyPage = () => {
         if (!redeemCode.trim() || !user) return;
         setRedeemLoading(true);
         try {
-            const discName = await FirebaseService.redeemCommercialToken(redeemCode, user);
-            alert(`Sucesso! A disciplina "${discName}" foi adicionada à sua conta.`);
+            await FirebaseService.redeemCommercialToken(redeemCode, user);
+            alert(`Sucesso! O conteúdo foi adicionado à sua conta.`);
             setIsRedeemModalOpen(false);
             setRedeemCode('');
             await refreshUser();
@@ -116,20 +128,15 @@ const HierarchyPage = () => {
         }
     };
 
-    const getDisciplineStats = (d: Discipline) => {
-        const chapters = d.chapters.length;
-        const units = d.chapters.reduce((acc, c) => acc + c.units.length, 0);
-        const topics = d.chapters.reduce((acc, c) => acc + c.units.reduce((accU, u) => accU + u.topics.length, 0), 0);
-        const questions = allQuestions.filter(q => q.disciplineId === d.id).length;
-        return { chapters, units, topics, questions };
+    const getComponentStats = (cc: CurricularComponent) => {
+        let disciplines = cc.disciplines.length;
+        let questions = allQuestions.filter(q => q.componentId === cc.id).length;
+        return { disciplines, questions };
     };
 
     const colorPalette = [
-        { header: 'bg-blue-600', body: 'bg-blue-50', chapter: 'bg-blue-300', unit: 'bg-blue-200', text: 'text-blue-900', border: 'border-blue-200' },
-        { header: 'bg-emerald-600', body: 'bg-emerald-50', chapter: 'bg-emerald-300', unit: 'bg-emerald-200', text: 'text-emerald-900', border: 'border-emerald-200' },
-        { header: 'bg-purple-600', body: 'bg-purple-50', chapter: 'bg-purple-300', unit: 'bg-purple-200', text: 'text-purple-900', border: 'border-purple-200' },
-        { header: 'bg-amber-600', body: 'bg-amber-50', chapter: 'bg-amber-300', unit: 'bg-amber-200', text: 'text-amber-900', border: 'border-amber-200' },
-        { header: 'bg-rose-600', body: 'bg-rose-50', chapter: 'bg-rose-300', unit: 'bg-rose-200', text: 'text-rose-900', border: 'border-rose-200' },
+        { header: 'bg-brand-dark', body: 'bg-slate-50', discipline: 'bg-blue-600', chapter: 'bg-blue-100', unit: 'bg-white', text: 'text-blue-900', border: 'border-blue-200' },
+        { header: 'bg-brand-dark', body: 'bg-slate-50', discipline: 'bg-emerald-600', chapter: 'bg-emerald-100', unit: 'bg-white', text: 'text-emerald-900', border: 'border-emerald-200' },
     ];
 
     if(loading) return <div className="p-8 flex items-center justify-center text-slate-500 font-bold animate-pulse">Carregando acervo...</div>;
@@ -141,62 +148,59 @@ const HierarchyPage = () => {
                     <h2 className="text-3xl font-display font-bold text-slate-800 flex items-center gap-2">
                         <Icons.BookOpen /> Gestão de Conteúdos
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Organize disciplinas e defina pacotes de licenciamento.</p>
+                    <p className="text-slate-500 text-sm mt-1">Organize componentes curriculares e suas sub-disciplinas.</p>
                 </div>
                 <div className="flex gap-2">
-                    {/* Botão Resgatar oculto para Admin */}
                     {user?.role !== UserRole.ADMIN && (
                         <Button variant="secondary" onClick={() => setIsRedeemModalOpen(true)} className="shadow-md">
                             <Icons.Download /> Resgatar Conteúdo
                         </Button>
                     )}
                     {user?.role === UserRole.ADMIN && (
-                        <Button onClick={() => handleOpenModal('discipline')} className="shadow-lg"><Icons.Plus /> Nova Disciplina</Button>
+                        <Button onClick={() => handleOpenModal('component')} className="shadow-lg"><Icons.Plus /> Novo Componente</Button>
                     )}
                 </div>
             </div>
 
             <div className="grid gap-6">
-                {hierarchy.length === 0 && (
+                {filteredHierarchy.length === 0 && (
                     <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200 text-slate-400">
                         <div className="mb-2"><Icons.BookOpen /></div>
-                        <p>Nenhuma disciplina cadastrada para seu perfil.</p>
+                        <p>Nenhum componente cadastrado para seu perfil.</p>
                     </div>
                 )}
 
-                {hierarchy.map((d, index) => {
-                    const isExpanded = expandedDisciplines[d.id] === true;
+                {filteredHierarchy.map((cc, index) => {
+                    const isExpanded = expandedComponents[cc.id] === true;
                     const colors = colorPalette[index % colorPalette.length];
-                    const stats = getDisciplineStats(d);
+                    const stats = getComponentStats(cc);
 
                     return (
-                        <div key={d.id} className={`bg-white border ${colors.border} rounded-xl shadow-sm overflow-hidden transition-all duration-200`}>
-                            <div className={`${colors.header} text-white p-4 flex justify-between items-center select-none cursor-pointer hover:opacity-95 transition-opacity`} onClick={() => setExpandedDisciplines(prev => ({ ...prev, [d.id]: !isExpanded }))}>
+                        <div key={cc.id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden transition-all duration-200">
+                            <div className="bg-slate-800 text-white p-4 flex justify-between items-center select-none cursor-pointer hover:bg-slate-900" onClick={() => setExpandedComponents(prev => ({ ...prev, [cc.id]: !isExpanded }))}>
                                 <div className="flex items-center gap-3">
                                     <div className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
                                     <div>
-                                        <h3 className="text-lg font-bold tracking-wide">{d.name}</h3>
+                                        <h3 className="text-lg font-bold tracking-wide uppercase">{cc.name}</h3>
                                         <div className="flex gap-2 mt-0.5">
-                                            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-black uppercase">{stats.chapters} Cap</span>
+                                            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-black uppercase">{stats.disciplines} Disciplinas</span>
                                             <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-black uppercase">{stats.questions} Questões</span>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                                     {user?.role === UserRole.ADMIN && (
-                                        <button 
-                                            onClick={() => handleOpenShare(d)}
-                                            className="bg-white/20 hover:bg-white text-white hover:text-brand-blue p-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold shadow-inner"
-                                            title="Gerar Token de Licenciamento"
-                                        >
+                                        <button onClick={() => handleOpenShare(cc)} className="bg-white/20 hover:bg-white text-white hover:text-brand-dark p-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold">
                                             <Icons.Bank /> Comercializar
                                         </button>
                                     )}
-                                    <Button variant="ghost" className="text-white/80 hover:text-white hover:bg-white/20 text-xs py-1 px-2 h-auto" onClick={() => handleOpenModal('chapter', { dId: d.id })}>
-                                        + Capítulo
-                                    </Button>
+                                    {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
+                                        <Button variant="ghost" className="text-white/80 hover:text-white hover:bg-white/20 text-xs py-1 px-2 h-auto" onClick={() => handleOpenModal('discipline', { ccId: cc.id })}>
+                                            + Disciplina
+                                        </Button>
+                                    )}
                                     {user?.role === UserRole.ADMIN && (
-                                        <button onClick={() => handleDelete('discipline', { dId: d.id })} className="text-white/70 hover:text-white p-1.5 rounded hover:bg-white/20 transition-colors">
+                                        <button onClick={() => handleDelete('component', { ccId: cc.id })} className="text-white/70 hover:text-white p-1.5 rounded hover:bg-white/20 transition-colors">
                                             <Icons.Trash />
                                         </button>
                                     )}
@@ -204,51 +208,65 @@ const HierarchyPage = () => {
                             </div>
 
                             {isExpanded && (
-                                <div className={`p-4 ${colors.body} space-y-4 animate-fade-in`}>
-                                    {d.chapters.length === 0 ? (
-                                        <p className="text-slate-500 text-sm italic text-center py-4">Nenhum capítulo cadastrado.</p>
+                                <div className="p-4 bg-slate-50 space-y-4 animate-fade-in">
+                                    {cc.disciplines.length === 0 ? (
+                                        <p className="text-slate-500 text-sm italic text-center py-4">Nenhuma disciplina cadastrada para este componente.</p>
                                     ) : (
-                                        d.chapters.map(c => {
-                                            const isChapExpanded = expandedChapters[c.id] === true;
+                                        cc.disciplines.map(d => {
+                                            const isDiscExpanded = expandedDisciplines[d.id] === true;
                                             return (
-                                                <div key={c.id} className={`${colors.chapter} border border-white/20 rounded-lg shadow-sm`}>
-                                                    <div className="p-3 flex justify-between items-center border-b border-black/5 cursor-pointer hover:bg-black/5 transition-colors" onClick={() => setExpandedChapters(prev => ({ ...prev, [c.id]: !isChapExpanded }))}>
+                                                <div key={d.id} className="border border-slate-200 rounded-lg bg-white shadow-sm overflow-hidden">
+                                                    <div className="p-3 flex justify-between items-center bg-blue-50 border-b border-blue-100 cursor-pointer" onClick={() => setExpandedDisciplines(prev => ({ ...prev, [d.id]: !isDiscExpanded }))}>
                                                         <div className="flex items-center gap-2">
-                                                            <div className={`transform transition-transform duration-200 text-slate-700 ${isChapExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
-                                                            <span className="font-semibold text-slate-800">{c.name}</span>
+                                                            <div className={`transform transition-transform duration-200 text-blue-600 ${isDiscExpanded ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div>
+                                                            <span className="font-bold text-blue-900">{d.name}</span>
                                                         </div>
                                                         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                                            <Button variant="ghost" className="text-xs h-7 px-2 bg-white/50 hover:bg-white" onClick={() => handleOpenModal('unit', { dId: d.id, cId: c.id })}>+ Unidade</Button>
-                                                            <button onClick={() => handleDelete('chapter', { dId: d.id, cId: c.id })} className="text-slate-600 hover:text-red-600 p-1"><Icons.Trash /></button>
+                                                            {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
+                                                                <button onClick={() => handleOpenModal('chapter', { dId: d.id })} className="text-[10px] font-black uppercase text-blue-600 bg-white border border-blue-200 px-2 py-1 rounded hover:bg-blue-600 hover:text-white transition-colors">
+                                                                    + Capítulo
+                                                                </button>
+                                                            )}
+                                                            {user?.role === UserRole.ADMIN && (
+                                                                <button onClick={() => handleDelete('discipline', { dId: d.id })} className="text-slate-400 hover:text-red-600"><Icons.Trash /></button>
+                                                            )}
                                                         </div>
                                                     </div>
 
-                                                    {isChapExpanded && (
-                                                        <div className="p-4 space-y-3">
-                                                            {c.units.length === 0 ? <p className="text-xs text-slate-600 italic ml-6">Nenhuma unidade.</p> : (
-                                                                c.units.map(u => (
-                                                                    <div key={u.id} className={`p-3 rounded-lg border ${colors.border} ${colors.unit}`}>
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className={`text-sm font-bold ${colors.text}`}>{u.name}</span>
-                                                                            <div className="flex gap-1">
-                                                                                <button onClick={() => handleOpenModal('topic', { dId: d.id, cId: c.id, uId: u.id })} className="text-slate-600 hover:text-brand-blue text-xs font-medium hover:underline px-2 py-1">+ Tópico</button>
-                                                                                <button onClick={() => handleDelete('unit', { dId: d.id, cId: c.id, uId: u.id })} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="flex flex-wrap gap-2">
-                                                                            {u.topics.length === 0 && <span className="text-xs text-slate-400 italic">Sem tópicos</span>}
-                                                                            {u.topics.map(t => (
-                                                                                <div key={t.id} className="group flex items-center gap-2 bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-medium hover:border-slate-300 transition-colors shadow-sm text-slate-700">
-                                                                                    {t.name}
-                                                                                    <button onClick={() => handleDelete('topic', { dId: d.id, cId: c.id, uId: u.id, tId: t.id })} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                        <Icons.X />
-                                                                                    </button>
-                                                                                </div>
-                                                                            ))}
+                                                    {isDiscExpanded && (
+                                                        <div className="p-4 space-y-4">
+                                                            {d.chapters.map(c => (
+                                                                <div key={c.id} className="border-l-4 border-blue-200 pl-4 py-1">
+                                                                    <div className="flex justify-between items-center mb-3">
+                                                                        <h5 className="font-bold text-slate-700">{c.name}</h5>
+                                                                        <div className="flex gap-1">
+                                                                            <button onClick={() => handleOpenModal('unit', { cId: c.id })} className="text-[10px] font-bold text-slate-500 hover:text-blue-600 px-2">+ Unidade</button>
+                                                                            {user?.role === UserRole.ADMIN && <button onClick={() => handleDelete('chapter', { cId: c.id })} className="text-slate-300 hover:text-red-500"><Icons.Trash /></button>}
                                                                         </div>
                                                                     </div>
-                                                                ))
-                                                            )}
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                        {c.units.map(u => (
+                                                                            <div key={u.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                                                                <div className="flex justify-between items-center mb-2">
+                                                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">{u.name}</span>
+                                                                                    <div className="flex gap-1">
+                                                                                        <button onClick={() => handleOpenModal('topic', { uId: u.id })} className="text-[10px] text-brand-blue font-bold hover:underline">+ Tópico</button>
+                                                                                        {user?.role === UserRole.ADMIN && <button onClick={() => handleDelete('unit', { uId: u.id })} className="text-slate-300 hover:text-red-500"><Icons.Trash /></button>}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex flex-wrap gap-1.5">
+                                                                                    {u.topics.map(t => (
+                                                                                        <div key={t.id} className="group bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px] font-medium text-slate-500 flex items-center gap-1">
+                                                                                            {t.name}
+                                                                                            {user?.role === UserRole.ADMIN && <button onClick={() => handleDelete('topic', { tId: t.id })} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Icons.X /></button>}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     )}
                                                 </div>
@@ -262,102 +280,52 @@ const HierarchyPage = () => {
                 })}
             </div>
 
-            {/* SHARE MODAL - COMERCIALIZAÇÃO */}
-            <Modal
-                isOpen={isShareModalOpen}
-                onClose={() => setIsShareModalOpen(false)}
-                title={`Licenciar Disciplina: ${sharingDiscipline?.name}`}
-                maxWidth="max-w-3xl"
-            >
-                {sharingDiscipline && (
+            {/* Modal de Token para Componente Curricular */}
+            <Modal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} title={`Licenciar Componente: ${sharingComponent?.name}`} maxWidth="max-w-2xl">
+                {sharingComponent && (
                     <div className="space-y-6">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
                             <div>
-                                <h4 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-1">Status do Ativo</h4>
-                                <p className="text-sm text-slate-500">Escolha o nível de acesso para o token de uso único.</p>
-                            </div>
-                            <div className="flex gap-4">
-                                <div className="text-center"><p className="text-lg font-black text-brand-blue leading-none">{getDisciplineStats(sharingDiscipline).topics}</p><p className="text-[10px] text-slate-400 uppercase font-bold">Tópicos</p></div>
-                                <div className="text-center"><p className="text-lg font-black text-emerald-600 leading-none">{getDisciplineStats(sharingDiscipline).questions}</p><p className="text-[10px] text-slate-400 uppercase font-bold">Questões</p></div>
+                                <h4 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-1">Impacto da Licença</h4>
+                                <p className="text-sm text-slate-500">Este token liberará o Componente e todas as suas Disciplinas vinculadas.</p>
                             </div>
                         </div>
 
                         {generatedToken ? (
-                            <div className="bg-emerald-50 border-2 border-emerald-200 p-8 rounded-2xl text-center animate-scale-in">
-                                <p className="text-emerald-800 font-bold mb-4 uppercase text-xs tracking-widest">Token de Uso Único Gerado!</p>
-                                <div className="bg-white border-2 border-emerald-500 text-emerald-600 font-mono text-4xl font-black py-4 rounded-xl mb-4 shadow-inner">
+                            <div className="bg-emerald-50 border-2 border-emerald-200 p-8 rounded-2xl text-center">
+                                <p className="text-emerald-800 font-bold mb-2">Token Gerado!</p>
+                                <div className="bg-white border-2 border-emerald-500 text-emerald-600 font-mono text-4xl font-black py-4 rounded-xl mb-4">
                                     {generatedToken}
                                 </div>
-                                <div className="bg-white/50 p-3 rounded-lg border border-emerald-200 mb-6 flex items-start gap-3 text-left">
-                                    <Icons.Shield />
-                                    <p className="text-xs text-emerald-700">Este código será invalidado assim que o primeiro cliente o resgatar. Mantenha em sigilo até a venda.</p>
-                                </div>
-                                <Button onClick={() => setGeneratedToken(null)} variant="outline" className="border-emerald-500 text-emerald-600">Gerar Novo Token</Button>
+                                <Button onClick={() => setGeneratedToken(null)} variant="outline">Gerar Novo</Button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* NÍVEL 1 */}
-                                <div className="border-2 border-slate-200 rounded-2xl p-6 hover:border-brand-blue transition-colors flex flex-col group">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-100 group-hover:text-brand-blue transition-colors">
-                                            <Icons.List />
-                                        </div>
-                                        <Badge color="blue">NÍVEL 1</Badge>
-                                    </div>
-                                    <h5 className="font-bold text-lg text-slate-800">Estrutura Curricular</h5>
-                                    <p className="text-sm text-slate-500 mb-6 flex-1">Compartilha o esqueleto pedagógico. Ideal para novos professores ou licenciamento básico.</p>
-                                    <div className="pt-4 border-t border-slate-100 mt-auto">
-                                        <Button variant="outline" className="w-full justify-center" onClick={() => handleGenerateToken(false)}>Gerar Token (Uso Único)</Button>
-                                    </div>
-                                </div>
-
-                                {/* NÍVEL 2 */}
-                                <div className="border-2 border-brand-blue bg-blue-50/30 rounded-2xl p-6 hover:shadow-lg transition-all flex flex-col relative overflow-hidden">
-                                    <div className="absolute -top-3 -right-8 bg-brand-orange text-white text-[10px] font-black px-10 py-4 rotate-45 shadow-sm">RECOMENDADO</div>
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center text-white shadow-md">
-                                            <Icons.Sparkles />
-                                        </div>
-                                        <Badge color="green">NÍVEL 2</Badge>
-                                    </div>
-                                    <h5 className="font-bold text-lg text-slate-800">Pacote Premium</h5>
-                                    <p className="text-sm text-slate-500 mb-6 flex-1">Acesso total à estrutura + todas as questões oficiais. O ativo intelectual completo para escolas parceiras.</p>
-                                    <div className="pt-4 border-t border-slate-200 mt-auto">
-                                        <Button className="w-full justify-center shadow-lg shadow-blue-200" onClick={() => handleGenerateToken(true)}>Gerar Token (Uso Único)</Button>
-                                    </div>
-                                </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Card className="p-6 border-2 border-slate-200 hover:border-brand-blue cursor-pointer" onClick={() => handleGenerateToken(false)}>
+                                    <h5 className="font-bold text-slate-800">Apenas Estrutura</h5>
+                                    <p className="text-xs text-slate-500 mt-1">Libera o currículo vazio para o usuário preencher.</p>
+                                </Card>
+                                <Card className="p-6 border-2 border-brand-blue bg-blue-50 cursor-pointer" onClick={() => handleGenerateToken(true)}>
+                                    <h5 className="font-bold text-brand-blue">Pacote Completo</h5>
+                                    <p className="text-xs text-blue-700 mt-1">Libera currículo + todas as questões já cadastradas.</p>
+                                </Card>
                             </div>
                         )}
                     </div>
                 )}
             </Modal>
 
-            {/* REDEEM MODAL - RESGATE DE CONTEÚDO */}
-            <Modal
-                isOpen={isRedeemModalOpen}
-                onClose={() => setIsRedeemModalOpen(false)}
-                title="Resgatar Conteúdo Licenciado"
-                maxWidth="max-w-md"
-                footer={<Button onClick={handleRedeem} disabled={redeemLoading}>{redeemLoading ? 'Validando...' : 'Resgatar Agora'}</Button>}
-            >
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalConfig.title} footer={<Button onClick={handleSave}>Salvar</Button>} maxWidth="max-w-md">
                 <div className="space-y-4">
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-800 text-sm">
-                        <p className="font-bold mb-1 flex items-center gap-2"><Icons.Sparkles /> Ativação de Licença</p>
-                        <p>Insira o código de uso único para desbloquear os conteúdos exclusivos da disciplina.</p>
-                    </div>
-                    <Input 
-                        label="Código do Token" 
-                        value={redeemCode} 
-                        onChange={e => setRedeemCode(e.target.value.toUpperCase())} 
-                        placeholder="EX: 4X9J2B7K" 
-                        autoFocus
-                        className="text-center font-mono text-2xl tracking-widest font-black text-brand-blue border-2"
-                    />
+                    <Input label="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Digite o nome..." autoFocus onKeyDown={e => e.key === 'Enter' && handleSave()}/>
                 </div>
             </Modal>
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalConfig.title} footer={<Button onClick={handleSave}>Salvar</Button>} maxWidth="max-w-md">
-                <div className="space-y-4"><Input label="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Digite o nome..." autoFocus onKeyDown={e => e.key === 'Enter' && handleSave()}/></div>
+            <Modal isOpen={isRedeemModalOpen} onClose={() => setIsRedeemModalOpen(false)} title="Resgatar Conteúdo" footer={<Button onClick={handleRedeem} disabled={redeemLoading}>{redeemLoading ? 'Processando...' : 'Ativar Agora'}</Button>} maxWidth="max-w-md">
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-600">Insira o código de ativação fornecido pela plataforma para liberar novas disciplinas.</p>
+                    <Input label="Código do Token" value={redeemCode} onChange={e => setRedeemCode(e.target.value.toUpperCase())} placeholder="EX: 4X9J2B7K" className="text-center font-mono text-xl" />
+                </div>
             </Modal>
         </div>
     );

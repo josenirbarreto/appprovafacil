@@ -86,7 +86,6 @@ const PublicExam = () => {
             const allowed = Number(exam.publicConfig?.allowedAttempts) || 1;
             if (previousAttempts.length >= allowed) return alert(`Limite atingido.`);
 
-            // SEGURANÇA: Garante que questions é array
             let questionsToUse = Array.isArray(exam.questions) ? [...exam.questions] : [];
             
             if (exam.publicConfig?.randomizeQuestions) {
@@ -140,7 +139,7 @@ const PublicExam = () => {
                     <h1 className="text-3xl font-black mb-4">{exam?.title || "Prova"}</h1>
                     <div className="bg-slate-50 p-4 rounded-xl mb-8 flex justify-around text-xs font-black uppercase">
                         <div><p className="text-slate-400">Tempo</p><p>{exam?.publicConfig?.timeLimitMinutes ? `${exam.publicConfig.timeLimitMinutes}m` : 'Livre'}</p></div>
-                        <div><p className="text-slate-400">Questões</p><p>{Array.isArray(exam?.questions) ? exam?.questions.length : 0}</p></div>
+                        <div><p className="text-slate-400">Questões</p><p>{Array.isArray(exam?.questions) ? exam.questions.length : 0}</p></div>
                     </div>
                     {classStudents.length > 0 ? (
                         <Select value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)} className="h-14 font-bold"><option value="">Selecione seu nome...</option>{classStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>

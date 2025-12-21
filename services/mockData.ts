@@ -1,4 +1,5 @@
 
+
 import { User, UserRole, Discipline, Question, QuestionType, Exam, Institution, SchoolClass } from '../types';
 
 // --- DADOS INICIAIS (MOCK) ---
@@ -27,7 +28,8 @@ let MOCK_CLASSES: SchoolClass[] = [
 
 let MOCK_HIERARCHY: Discipline[] = [
   {
-    id: 'd1', name: 'Matemática', chapters: [
+    // Fix: Added missing componentId to mock Discipline object
+    id: 'd1', name: 'Matemática', componentId: 'cc1', chapters: [
       {
         id: 'c1', name: 'Álgebra', disciplineId: 'd1', units: [
           {
@@ -41,7 +43,8 @@ let MOCK_HIERARCHY: Discipline[] = [
     ]
   },
   {
-    id: 'd2', name: 'História', chapters: [
+    // Fix: Added missing componentId to mock Discipline object
+    id: 'd2', name: 'História', componentId: 'cc2', chapters: [
       {
         id: 'c2', name: 'Brasil Colônia', disciplineId: 'd2', units: [
           {
@@ -59,7 +62,9 @@ const MOCK_QUESTIONS: Question[] = [
   {
     id: 'q1',
     enunciado: 'Qual é a raiz quadrada de 144?',
+    // Fix: added type and componentId which are required properties in type Question
     type: QuestionType.MULTIPLE_CHOICE,
+    componentId: 'cc1',
     disciplineId: 'd1', chapterId: 'c1', unitId: 'u1', topicId: 't1',
     difficulty: 'Easy',
     createdAt: '2024-01-01',
@@ -73,7 +78,9 @@ const MOCK_QUESTIONS: Question[] = [
   {
     id: 'q2',
     enunciado: 'Tiradentes foi o líder da Inconfidência Mineira.',
+    // Fix: added type and componentId which are required properties in type Question
     type: QuestionType.TRUE_FALSE,
+    componentId: 'cc2',
     disciplineId: 'd2', chapterId: 'c2', unitId: 'u2', topicId: 't3',
     difficulty: 'Medium',
     createdAt: '2024-01-02',
@@ -145,8 +152,9 @@ export const MockService = {
       }))
   })),
   
-  addDiscipline: async (name: string) => {
-    const newD: Discipline = { id: `d-${Date.now()}`, name, chapters: [] };
+  addDiscipline: async (componentId: string, name: string) => {
+    // Fix: Added missing componentId to Discipline object and updated signature to accept it
+    const newD: Discipline = { id: `d-${Date.now()}`, name, componentId, chapters: [] };
     MOCK_HIERARCHY.push(newD);
     return newD;
   },

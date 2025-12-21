@@ -1,11 +1,14 @@
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SchoolClass, Institution, Student, UserRole } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Select, Input, Card, Badge } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
+
+type SortField = 'name' | 'registration';
+type SortDirection = 'asc' | 'desc';
 
 const ClassesPage = () => {
     const { user } = useAuth();
@@ -26,6 +29,8 @@ const ClassesPage = () => {
     const [isStudentsModalOpen, setIsStudentsModalOpen] = useState(false);
     const [activeClass, setActiveClass] = useState<SchoolClass | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
+    const [sortConfig, setSortConfig] = useState<{ field: SortField, direction: SortDirection }>({ field: 'name', direction: 'asc' });
+    
     const [isImportMode, setIsImportMode] = useState(false);
     const [importMethod, setImportMethod] = useState<'PASTE' | 'FILE'>('PASTE');
     const [importText, setImportText] = useState('');
@@ -85,7 +90,6 @@ const ClassesPage = () => {
     
     // --- GESTÃO DE ALUNOS ---
     const openStudentsModal = async (cls: SchoolClass) => {
-        // Atualizações imediatas para garantir feedback visual rápido (INP)
         setActiveClass(cls);
         setLoadingStudents(true);
         setIsStudentsModalOpen(true);
@@ -96,10 +100,10 @@ const ClassesPage = () => {
         setImportFile(null);
         setImportText('');
         setNewStudent({ name: '', registration: '' });
+        setSortConfig({ field: 'name', direction: 'asc' });
 
         try {
             const data = await FirebaseService.getStudents(cls.id);
-            // Otimização INP: startTransition envolve apenas a atualização da lista (pesada para renderizar)
             startTransition(() => {
                 setStudents(Array.isArray(data) ? data : []);
             });
@@ -108,6 +112,27 @@ const ClassesPage = () => {
         } finally {
             setLoadingStudents(false);
         }
+    };
+
+    // Ordenação dos alunos memoizada
+    const sortedStudents = useMemo(() => {
+        const result = [...students];
+        result.sort((a, b) => {
+            const valA = (a[sortConfig.field] || '').toString().toLowerCase();
+            const valB = (b[sortConfig.field] || '').toString().toLowerCase();
+            
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return result;
+    }, [students, sortConfig]);
+
+    const handleSort = (field: SortField) => {
+        setSortConfig(prev => ({
+            field,
+            direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
     };
 
     const handleSaveStudent = async () => {
@@ -197,7 +222,6 @@ const ClassesPage = () => {
         }
     };
 
-    // Otimização INP: removeStudent agora usa confirmação inline (Custom UI) em vez de window.confirm
     const confirmRemoveStudent = async (id: string) => {
         setLoadingStudents(true);
         try {
@@ -211,6 +235,11 @@ const ClassesPage = () => {
         } finally {
             setLoadingStudents(false);
         }
+    };
+
+    const SortIndicator = ({ field }: { field: SortField }) => {
+        if (sortConfig.field !== field) return <span className="opacity-20 ml-1">⇅</span>;
+        return <span className="ml-1 text-brand-blue">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
     };
 
     return (
@@ -319,20 +348,24 @@ const ClassesPage = () => {
                                 <table className="w-full text-left text-sm">
                                     <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                                         <tr>
-                                            <th className="p-3 text-slate-500 font-bold">Nome</th>
-                                            <th className="p-3 text-slate-500 font-bold">Matrícula</th>
+                                            <th className="p-3 text-slate-500 font-bold cursor-pointer hover:bg-slate-100 select-none" onClick={() => handleSort('name')}>
+                                                <div className="flex items-center">Nome <SortIndicator field="name" /></div>
+                                            </th>
+                                            <th className="p-3 text-slate-500 font-bold cursor-pointer hover:bg-slate-100 select-none" onClick={() => handleSort('registration')}>
+                                                <div className="flex items-center">Matrícula <SortIndicator field="registration" /></div>
+                                            </th>
                                             <th className="p-3 text-right">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {!loadingStudents && students.length === 0 ? (
+                                        {!loadingStudents && sortedStudents.length === 0 ? (
                                             <tr>
                                                 <td colSpan={3} className="p-12 text-center text-slate-400 italic">
                                                     <div className="flex flex-col items-center gap-2 opacity-50"><Icons.UsersGroup /><p>Nenhum aluno cadastrado.</p></div>
                                                 </td>
                                             </tr>
                                         ) : (
-                                            students.map(s => (
+                                            sortedStudents.map(s => (
                                                 <tr key={s.id} className={`hover:bg-slate-50 group transition-colors ${editingStudentId === s.id ? 'bg-blue-50/50' : ''}`}>
                                                     <td className="p-3 font-medium text-slate-800">{s.name}</td>
                                                     <td className="p-3 font-mono text-xs text-slate-500">{s.registration}</td>

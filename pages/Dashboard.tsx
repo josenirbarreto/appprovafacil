@@ -33,7 +33,8 @@ const Dashboard = () => {
                     FirebaseService.getQuestions(user),
                     FirebaseService.getClasses(user),
                     FirebaseService.getInstitutions(user),
-                    FirebaseService.getHierarchy(user),
+                    // Fix: getHierarchy não aceita argumentos
+                    FirebaseService.getHierarchy(),
                     FirebaseService.getUsers(user)
                 ]);
 
