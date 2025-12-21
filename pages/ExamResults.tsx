@@ -31,10 +31,10 @@ const ExamResults = () => {
             const [e, a, h] = await Promise.all([
                 FirebaseService.getExamById(state.examId),
                 FirebaseService.getExamResults(state.examId),
-                FirebaseService.getHierarchy()
+                FirebaseService.getHierarchy() as Promise<CurricularComponent[]>
             ]);
             setExam(e);
-            setHierarchy(h);
+            setHierarchy(h || []);
             const sortedAttempts = (Array.isArray(a) ? a : []).sort((x, y) => 
                 (x.studentName || '').localeCompare(y.studentName || '', 'pt-BR')
             );
@@ -113,11 +113,11 @@ const ExamResults = () => {
         if (!exam || questions.length === 0 || attempts.length === 0) return [];
 
         const topicLookup: Record<string, { name: string, path: string }> = {};
-        hierarchy.forEach(cc => {
-            cc.disciplines?.forEach(d => {
-                d.chapters?.forEach(c => {
-                    c.units?.forEach(u => {
-                        u.topics?.forEach(t => {
+        (hierarchy || []).forEach(cc => {
+            (cc.disciplines || []).forEach(d => {
+                (d.chapters || []).forEach(c => {
+                    (c.units || []).forEach(u => {
+                        (u.topics || []).forEach(t => {
                             topicLookup[t.id] = { name: t.name, path: `${cc.name} > ${d.name}` };
                         });
                     });

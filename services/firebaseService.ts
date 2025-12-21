@@ -146,7 +146,7 @@ export const FirebaseService = {
         if (!snap.exists() || snap.data().used) throw new Error("Token inválido"); 
         
         const data = snap.data();
-        const currentGrants = user.accessGrants || [];
+        const currentGrants = Array.isArray(user.accessGrants) ? user.accessGrants : [];
         if (!currentGrants.includes(data.componentId)) {
             await updateDoc(doc(db, COLLECTIONS.USERS, user.id), { 
                 accessGrants: [...currentGrants, data.componentId] 
@@ -169,8 +169,8 @@ export const FirebaseService = {
         
         if (currentUser?.role === UserRole.TEACHER) {
             const authorizedComponents = [
-                ...(currentUser.subjects || []),
-                ...(currentUser.accessGrants || [])
+                ...(Array.isArray(currentUser.subjects) ? currentUser.subjects : []),
+                ...(Array.isArray(currentUser.accessGrants) ? currentUser.accessGrants : [])
             ];
             
             results = results.filter(q => {

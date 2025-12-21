@@ -39,22 +39,27 @@ const HierarchyPage = () => {
     useEffect(() => { if(user) load(); }, [user]);
     
     const load = async () => { 
-        const [hData, qData] = await Promise.all([
-            FirebaseService.getHierarchy(),
-            FirebaseService.getQuestions(user)
-        ]);
-        setHierarchy(hData); 
-        setAllQuestions(qData);
-        setLoading(false); 
+        setLoading(true);
+        try {
+            const [hData, qData] = await Promise.all([
+                FirebaseService.getHierarchy() as Promise<CurricularComponent[]>,
+                FirebaseService.getQuestions(user)
+            ]);
+            setHierarchy(hData || []); 
+            setAllQuestions(qData || []);
+        } catch (err) {
+            console.error("Erro ao carregar acervo:", err);
+        } finally {
+            setLoading(false); 
+        }
     };
 
     const filteredHierarchy = useMemo(() => {
-        if (!user || user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) return hierarchy;
-        const authorized = [
-            ...(user.subjects || []),
-            ...(user.accessGrants || [])
-        ];
-        return hierarchy.filter(cc => authorized.includes(cc.id));
+        if (!user || user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) return hierarchy || [];
+        const subjects = Array.isArray(user.subjects) ? user.subjects : [];
+        const grants = Array.isArray(user.accessGrants) ? user.accessGrants : [];
+        const authorized = [...subjects, ...grants];
+        return (hierarchy || []).filter(cc => authorized.includes(cc.id));
     }, [hierarchy, user]);
 
     const handleDelete = async (type: any, ids: any) => {
@@ -129,12 +134,12 @@ const HierarchyPage = () => {
     };
 
     const getComponentStats = (cc: CurricularComponent) => {
-        let disciplines = cc.disciplines?.length || 0;
+        let disciplines = (cc.disciplines || []).length;
         let questions = allQuestions.filter(q => q.componentId === cc.id).length;
         return { disciplines, questions };
     };
 
-    if(loading) return <div className="p-8 flex items-center justify-center text-slate-500 font-bold animate-pulse">Carregando acervo...</div>;
+    if(loading) return <div className="p-8 flex items-center justify-center text-slate-500 font-bold animate-pulse">Carregando acervo pedagógico...</div>;
 
     return (
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 bg-slate-50">
@@ -158,14 +163,14 @@ const HierarchyPage = () => {
             </div>
 
             <div className="grid gap-6">
-                {filteredHierarchy.length === 0 && (
+                {(filteredHierarchy || []).length === 0 && (
                     <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200 text-slate-400">
                         <div className="mb-2"><Icons.BookOpen /></div>
-                        <p>Nenhum componente curricular disponível.</p>
+                        <p>Nenhum componente curricular disponível para seu perfil.</p>
                     </div>
                 )}
 
-                {filteredHierarchy.map((cc) => {
+                {(filteredHierarchy || []).map((cc) => {
                     const isExpanded = expandedComponents[cc.id] === true;
                     const stats = getComponentStats(cc);
 
@@ -229,7 +234,7 @@ const HierarchyPage = () => {
 
                                                     {isDiscExpanded && (
                                                         <div className="p-4 space-y-4">
-                                                            {d.chapters?.map(c => (
+                                                            {(d.chapters || []).map(c => (
                                                                 <div key={c.id} className="border-l-4 border-blue-200 pl-4 py-1">
                                                                     <div className="flex justify-between items-center mb-3">
                                                                         <h5 className="font-bold text-slate-700">{c.name}</h5>
@@ -239,7 +244,7 @@ const HierarchyPage = () => {
                                                                         </div>
                                                                     </div>
                                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                                        {c.units?.map(u => (
+                                                                        {(c.units || []).map(u => (
                                                                             <div key={u.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                                                                                 <div className="flex justify-between items-center mb-2">
                                                                                     <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">{u.name}</span>
@@ -249,7 +254,7 @@ const HierarchyPage = () => {
                                                                                     </div>
                                                                                 </div>
                                                                                 <div className="flex flex-wrap gap-1.5">
-                                                                                    {u.topics?.map(t => (
+                                                                                    {(u.topics || []).map(t => (
                                                                                         <div key={t.id} className="group bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px] font-medium text-slate-500 flex items-center gap-1">
                                                                                             {t.name}
                                                                                             {user?.role === UserRole.ADMIN && <button onClick={() => handleDelete('topic', { tId: t.id })} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Icons.X /></button>}

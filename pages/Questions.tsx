@@ -45,8 +45,8 @@ const QuestionsPage = () => {
     
     const load = async () => {
         const [qs, hs] = await Promise.all([FirebaseService.getQuestions(user), FirebaseService.getHierarchy()]);
-        setAllQuestions(qs);
-        setHierarchy(hs);
+        setAllQuestions(qs || []);
+        setHierarchy(hs || []);
     };
 
     const filteredQuestions = useMemo(() => {
@@ -57,7 +57,7 @@ const QuestionsPage = () => {
             
             if (searchText) {
                 const term = searchText.toLowerCase();
-                if (!(q.enunciado.toLowerCase().includes(term) || q.tags?.some(t => t.toLowerCase().includes(term)))) return false;
+                if (!(q.enunciado.toLowerCase().includes(term) || (q.tags || []).some(t => t.toLowerCase().includes(term)))) return false;
             }
             
             if (visFilter === 'MINE') return q.authorId === user?.id;
@@ -69,9 +69,11 @@ const QuestionsPage = () => {
     }, [allQuestions, selComp, selDisc, selChap, searchText, visFilter, user?.id]);
 
     const availableComponents = useMemo(() => {
-        if (user?.role === UserRole.ADMIN) return hierarchy;
-        const authorized = [...(user?.subjects || []), ...(user?.accessGrants || [])];
-        return hierarchy.filter(cc => authorized.includes(cc.id));
+        if (user?.role === UserRole.ADMIN) return hierarchy || [];
+        const subjects = Array.isArray(user?.subjects) ? user.subjects : [];
+        const grants = Array.isArray(user?.accessGrants) ? user.accessGrants : [];
+        const authorized = [...subjects, ...grants];
+        return (hierarchy || []).filter(cc => authorized.includes(cc.id));
     }, [hierarchy, user]);
 
     const handleSave = async () => {
@@ -95,9 +97,9 @@ const QuestionsPage = () => {
     const selectedQuestion = allQuestions.find(q => q.id === selectedQuestionId);
 
     const activeComp = hierarchy.find(cc => cc.id === editing.componentId);
-    const activeDisc = activeComp?.disciplines.find(d => d.id === editing.disciplineId);
-    const activeChap = activeDisc?.chapters.find(c => c.id === editing.chapterId);
-    const activeUnit = activeChap?.units.find(u => u.id === editing.unitId);
+    const activeDisc = activeComp?.disciplines?.find(d => d.id === editing.disciplineId);
+    const activeChap = activeDisc?.chapters?.find(c => c.id === editing.chapterId);
+    const activeUnit = activeChap?.units?.find(u => u.id === editing.unitId);
 
     return (
         <div className="flex flex-col h-full bg-slate-50">
@@ -113,7 +115,7 @@ const QuestionsPage = () => {
                     </Select>
                     <Select value={selDisc} onChange={e => setSelDisc(e.target.value)} disabled={!selComp} className="w-48 text-sm">
                         <option value="">Disciplina</option>
-                        {hierarchy.find(cc => cc.id === selComp)?.disciplines.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        {hierarchy.find(cc => cc.id === selComp)?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </Select>
                     <div className="flex-1 min-w-[200px] relative">
                         <input type="text" className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded outline-none" placeholder="Buscar no enunciado..." value={searchText} onChange={e => setSearchText(e.target.value)} />
@@ -176,19 +178,19 @@ const QuestionsPage = () => {
                         </Select>
                         <Select label="Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})} disabled={!editing.componentId}>
                             <option value="">Selecione...</option>
-                            {activeComp?.disciplines.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                            {activeComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </Select>
                         <Select label="Capítulo" value={editing.chapterId || ''} onChange={e => setEditing({...editing, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!editing.disciplineId}>
                             <option value="">Selecione...</option>
-                            {activeDisc?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {activeDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </Select>
                         <Select label="Unidade" value={editing.unitId || ''} onChange={e => setEditing({...editing, unitId: e.target.value, topicId: ''})} disabled={!editing.chapterId}>
                             <option value="">Selecione...</option>
-                            {activeChap?.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            {activeChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </Select>
                         <Select label="Tópico" value={editing.topicId || ''} onChange={e => setEditing({...editing, topicId: e.target.value})} disabled={!editing.unitId}>
                             <option value="">Selecione...</option>
-                            {activeUnit?.topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            {activeUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </Select>
                     </div>
 

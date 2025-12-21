@@ -36,9 +36,9 @@ const UsersPage = () => {
                 FirebaseService.getPlans(),
                 FirebaseService.getHierarchy() 
             ]);
-            setUsers(u);
-            setAvailablePlans(p);
-            setHierarchy(h);
+            setUsers(u || []);
+            setAvailablePlans(p || []);
+            setHierarchy(h || []);
         } catch (e) { console.error(e); } finally { setLoading(false); }
     };
 
@@ -55,12 +55,12 @@ const UsersPage = () => {
     };
 
     const toggleGrant = (ccId: string) => {
-        const current = userData.accessGrants || [];
+        const current = Array.isArray(userData.accessGrants) ? userData.accessGrants : [];
         setUserData({ ...userData, accessGrants: current.includes(ccId) ? current.filter(id => id !== ccId) : [...current, ccId] });
     };
 
     const toggleSubject = (ccId: string) => {
-        const current = userData.subjects || [];
+        const current = Array.isArray(userData.subjects) ? userData.subjects : [];
         setUserData({ ...userData, subjects: current.includes(ccId) ? current.filter(id => id !== ccId) : [...current, ccId] });
     };
 
@@ -87,7 +87,7 @@ const UsersPage = () => {
                                 </td>
                                 <td className="p-4"><Badge>{u.role}</Badge></td>
                                 <td className="p-4"><Badge color={u.status === 'ACTIVE' ? 'green' : 'red'}>{u.status}</Badge></td>
-                                <td className="p-4 text-right"><button onClick={() => { setEditingUserId(u.id); setUserData({...u, accessGrants: u.accessGrants || [], subjects: u.subjects || []}); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue"><Icons.Edit /></button></td>
+                                <td className="p-4 text-right"><button onClick={() => { setEditingUserId(u.id); setUserData({...u, accessGrants: Array.isArray(u.accessGrants) ? u.accessGrants : [], subjects: Array.isArray(u.subjects) ? u.subjects : []}); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue"><Icons.Edit /></button></td>
                             </tr>
                         ))}
                     </tbody>
@@ -113,7 +113,7 @@ const UsersPage = () => {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 border p-4 rounded-xl bg-slate-50">
                             {hierarchy.map(cc => (
                                 <label key={cc.id} className="flex items-center gap-2 p-2 bg-white rounded border cursor-pointer hover:bg-blue-50">
-                                    <input type="checkbox" checked={userData.subjects?.includes(cc.id)} onChange={() => toggleSubject(cc.id)} />
+                                    <input type="checkbox" checked={Array.isArray(userData.subjects) && userData.subjects.includes(cc.id)} onChange={() => toggleSubject(cc.id)} />
                                     <span className="text-xs font-bold text-slate-700">{cc.name}</span>
                                 </label>
                             ))}

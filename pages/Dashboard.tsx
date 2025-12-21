@@ -33,7 +33,7 @@ const Dashboard = () => {
                     FirebaseService.getQuestions(user),
                     FirebaseService.getClasses(user),
                     FirebaseService.getInstitutions(user),
-                    FirebaseService.getHierarchy(),
+                    FirebaseService.getHierarchy() as Promise<CurricularComponent[]>,
                     FirebaseService.getUsers(user)
                 ]);
 
@@ -114,8 +114,8 @@ const Dashboard = () => {
         
         const topicLookup = new Map<string, { topicName: string, disciplineName: string }>();
         data.hierarchy.forEach(cc => {
-            cc.disciplines?.forEach(d => {
-                d.chapters?.forEach(c => c.units?.forEach(u => u.topics?.forEach(t => {
+            (cc.disciplines || []).forEach(d => {
+                (d.chapters || []).forEach(c => (c.units || []).forEach(u => (u.topics || []).forEach(t => {
                     topicLookup.set(t.id, { topicName: t.name, disciplineName: d.name });
                 })));
             });
