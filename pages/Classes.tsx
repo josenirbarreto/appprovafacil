@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SchoolClass, Institution, Student, UserRole } from '../types';
 import { FirebaseService } from '../services/firebaseService';
@@ -11,6 +11,7 @@ const ClassesPage = () => {
     const { user } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
+    const [isPending, startTransition] = useTransition();
     
     const filterInstitutionId = location.state?.institutionId;
 
@@ -31,6 +32,7 @@ const ClassesPage = () => {
     const [importFile, setImportFile] = useState<File | null>(null);
     const [newStudent, setNewStudent] = useState({ name: '', registration: '' });
     const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [loadingStudents, setLoadingStudents] = useState(false);
 
     useEffect(() => { if(user) load(); }, [user, filterInstitutionId]);
@@ -70,7 +72,7 @@ const ClassesPage = () => {
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (id: string) => { 
+    const handleDeleteClass = async (id: string) => { 
         if(confirm('Excluir turma?')) { 
             try {
                 await FirebaseService.deleteClass(id); 
@@ -82,24 +84,28 @@ const ClassesPage = () => {
     };
     
     // --- GESTÃO DE ALUNOS ---
-    const openStudentsModal = async (cls: SchoolClass) => {
-        setActiveClass(cls);
-        setLoadingStudents(true);
-        setIsStudentsModalOpen(true);
-        setIsImportMode(false);
-        setEditingStudentId(null);
-        setImportMethod('PASTE');
-        setImportFile(null);
-        setImportText('');
-        setNewStudent({ name: '', registration: '' });
-        try {
-            const data = await FirebaseService.getStudents(cls.id);
-            setStudents(Array.isArray(data) ? data : []);
-        } catch (e) {
-            setStudents([]);
-        } finally {
-            setLoadingStudents(false);
-        }
+    const openStudentsModal = (cls: SchoolClass) => {
+        // Otimização INP: startTransition permite que o clique no botão seja processado imediatamente
+        startTransition(async () => {
+            setActiveClass(cls);
+            setLoadingStudents(true);
+            setIsStudentsModalOpen(true);
+            setIsImportMode(false);
+            setEditingStudentId(null);
+            setDeleteConfirmId(null);
+            setImportMethod('PASTE');
+            setImportFile(null);
+            setImportText('');
+            setNewStudent({ name: '', registration: '' });
+            try {
+                const data = await FirebaseService.getStudents(cls.id);
+                setStudents(Array.isArray(data) ? data : []);
+            } catch (e) {
+                setStudents([]);
+            } finally {
+                setLoadingStudents(false);
+            }
+        });
     };
 
     const handleSaveStudent = async () => {
@@ -134,6 +140,7 @@ const ClassesPage = () => {
 
     const startEditStudent = (student: Student) => {
         setIsImportMode(false);
+        setDeleteConfirmId(null);
         setEditingStudentId(student.id);
         setNewStudent({ name: student.name, registration: student.registration });
     };
@@ -143,29 +150,29 @@ const ClassesPage = () => {
         setNewStudent({ name: '', registration: '' });
     };
 
-    const processImportList = (text: string) => {
-        const lines = text.split('\n');
-        return lines.map(line => {
-            const parts = line.split(/[;,\t]/);
-            const name = parts[0]?.trim() || '';
-            const reg = parts[1]?.trim() || `MAT-${Math.random().toString(36).slice(-6).toUpperCase()}`;
-            return { name, registration: reg };
-        }).filter(s => s.name.length > 2);
-    }
-
     const handleImportStudents = async () => {
         if (!activeClass) return;
         
         let toImport: { name: string, registration: string }[] = [];
 
+        const processList = (text: string) => {
+            const lines = text.split('\n');
+            return lines.map(line => {
+                const parts = line.split(/[;,\t]/);
+                const name = parts[0]?.trim() || '';
+                const reg = parts[1]?.trim() || `MAT-${Math.random().toString(36).slice(-6).toUpperCase()}`;
+                return { name, registration: reg };
+            }).filter(s => s.name.length > 2);
+        };
+
         if (importMethod === 'PASTE') {
             if (!importText.trim()) return alert("Cole a lista de alunos primeiro.");
-            toImport = processImportList(importText);
+            toImport = processList(importText);
         } else {
             if (!importFile) return alert("Selecione um arquivo CSV primeiro.");
             try {
                 const text = await importFile.text();
-                toImport = processImportList(text);
+                toImport = processList(text);
             } catch (e) {
                 return alert("Erro ao ler o arquivo.");
             }
@@ -188,21 +195,17 @@ const ClassesPage = () => {
         }
     };
 
-    // Otimização INP: removeStudent agora é assíncrona e não bloqueia a UI
-    const removeStudent = async (id: string) => {
-        // Yielding to next frame to avoid blocking the main thread during click event handling
-        // O confirm nativo ainda bloqueia, mas envolver em async/await e setTimeout ajuda o INP em alguns casos
-        if (!window.confirm("Deseja realmente remover este aluno?")) return;
-        
+    // Otimização INP: removeStudent agora usa confirmação inline (Custom UI) em vez de window.confirm
+    const confirmRemoveStudent = async (id: string) => {
         setLoadingStudents(true);
         try {
             await FirebaseService.deleteStudent(id);
-            // Atualização de estado funcional para garantir consistência
             setStudents(prev => prev.filter(s => s.id !== id));
             if (editingStudentId === id) cancelEditStudent();
+            setDeleteConfirmId(null);
         } catch (e) {
             console.error("Falha ao deletar aluno:", e);
-            alert("Não foi possível remover o aluno. Verifique sua conexão.");
+            alert("Erro ao remover: Aluno não encontrado ou erro de rede.");
         } finally {
             setLoadingStudents(false);
         }
@@ -235,7 +238,7 @@ const ClassesPage = () => {
                                 </div>
                                 <Badge color="blue">{instClasses.length} turmas</Badge>
                             </div>
-                            {isExpandedInst && (<div className="bg-slate-50 p-4 border-t border-slate-200 space-y-3 animate-fade-in">{years.map(year => { const yearId = `${inst.id}-${year}`; const isExpandedYear = expandedYears[yearId]; const yearClasses = instClasses.filter(c => c.year === year); return (<div key={yearId} className="bg-white border border-slate-200 rounded-lg overflow-hidden"><div className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 select-none pl-6" onClick={() => setExpandedYears(prev => ({ ...prev, [yearId]: !prev[yearId] }))}><div className="flex items-center gap-3"><div className={`transform transition-transform text-slate-400 ${isExpandedYear ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div><span className="font-semibold text-slate-700">Ano Letivo {year}</span></div><span className="text-xs text-slate-400 mr-2">{yearClasses.length} turmas</span></div>{isExpandedYear && (<div className="border-t border-slate-100 animate-fade-in"><table className="w-full text-left"><tbody className="divide-y divide-slate-50">{yearClasses.map(c => (<tr key={c.id} className="hover:bg-blue-50/50 transition-colors group"><td className="p-3 pl-12 text-sm text-slate-700 font-bold">{c.name}</td><td className="p-3 text-right"><div className="flex justify-end gap-3"><button onClick={() => openStudentsModal(c)} className="flex items-center gap-1.5 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:text-brand-blue hover:border-brand-blue transition-all"><Icons.UsersGroup /> Alunos</button><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue p-1"><Icons.Edit /></button><button onClick={() => handleDelete(c.id)} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button></div></div></td></tr>))}</tbody></table></div>)}</div>); })}</div>)}
+                            {isExpandedInst && (<div className="bg-slate-50 p-4 border-t border-slate-200 space-y-3 animate-fade-in">{years.map(year => { const yearId = `${inst.id}-${year}`; const isExpandedYear = expandedYears[yearId]; const yearClasses = instClasses.filter(c => c.year === year); return (<div key={yearId} className="bg-white border border-slate-200 rounded-lg overflow-hidden"><div className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 select-none pl-6" onClick={() => setExpandedYears(prev => ({ ...prev, [yearId]: !prev[yearId] }))}><div className="flex items-center gap-3"><div className={`transform transition-transform text-slate-400 ${isExpandedYear ? 'rotate-180' : ''}`}><Icons.ChevronDown /></div><span className="font-semibold text-slate-700">Ano Letivo {year}</span></div><span className="text-xs text-slate-400 mr-2">{yearClasses.length} turmas</span></div>{isExpandedYear && (<div className="border-t border-slate-100 animate-fade-in"><table className="w-full text-left"><tbody className="divide-y divide-slate-50">{yearClasses.map(c => (<tr key={c.id} className="hover:bg-blue-50/50 transition-colors group"><td className="p-3 pl-12 text-sm text-slate-700 font-bold">{c.name}</td><td className="p-3 text-right"><div className="flex justify-end gap-3"><button onClick={() => openStudentsModal(c)} className="flex items-center gap-1.5 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:text-brand-blue hover:border-brand-blue transition-all shadow-sm active:scale-95"><Icons.UsersGroup /> Alunos</button><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setEditing(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-brand-blue p-1"><Icons.Edit /></button><button onClick={() => handleDeleteClass(c.id)} className="text-slate-400 hover:text-red-500 p-1"><Icons.Trash /></button></div></div></td></tr>))}</tbody></table></div>)}</div>); })}</div>)}
                         </div>
                     );
                 })}
@@ -306,7 +309,7 @@ const ClassesPage = () => {
                             </div>
 
                             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white max-h-80 overflow-y-auto custom-scrollbar relative">
-                                {loadingStudents && (
+                                {loadingStudents && !deleteConfirmId && (
                                     <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
                                         <div className="w-6 h-6 border-2 border-slate-300 border-t-brand-blue rounded-full animate-spin"></div>
                                     </div>
@@ -316,7 +319,7 @@ const ClassesPage = () => {
                                         <tr>
                                             <th className="p-3 text-slate-500 font-bold">Nome</th>
                                             <th className="p-3 text-slate-500 font-bold">Matrícula</th>
-                                            <th className="p-3 text-right"></th>
+                                            <th className="p-3 text-right">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -331,24 +334,33 @@ const ClassesPage = () => {
                                                 <tr key={s.id} className={`hover:bg-slate-50 group transition-colors ${editingStudentId === s.id ? 'bg-blue-50/50' : ''}`}>
                                                     <td className="p-3 font-medium text-slate-800">{s.name}</td>
                                                     <td className="p-3 font-mono text-xs text-slate-500">{s.registration}</td>
-                                                    <td className="p-3 text-right">
+                                                    <td className="p-3 text-right min-w-[120px]">
                                                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button 
-                                                                onClick={() => startEditStudent(s)} 
-                                                                className={`p-1.5 rounded transition-colors ${editingStudentId === s.id ? 'text-brand-blue bg-blue-100' : 'text-slate-400 hover:text-brand-blue hover:bg-white border border-transparent hover:border-slate-200 shadow-sm'}`} 
-                                                                title="Editar Aluno"
-                                                                disabled={loadingStudents}
-                                                            >
-                                                                <Icons.Edit />
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => removeStudent(s.id)} 
-                                                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm rounded" 
-                                                                title="Remover Aluno"
-                                                                disabled={loadingStudents}
-                                                            >
-                                                                <Icons.Trash />
-                                                            </button>
+                                                            {deleteConfirmId === s.id ? (
+                                                                <div className="flex gap-1 animate-scale-in">
+                                                                    <button onClick={() => confirmRemoveStudent(s.id)} className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded shadow-sm hover:bg-red-600">CONFIRMAR</button>
+                                                                    <button onClick={() => setDeleteConfirmId(null)} className="bg-slate-200 text-slate-600 text-[10px] font-black px-2 py-1 rounded shadow-sm">X</button>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <button 
+                                                                        onClick={() => startEditStudent(s)} 
+                                                                        className={`p-1.5 rounded transition-colors ${editingStudentId === s.id ? 'text-brand-blue bg-blue-100' : 'text-slate-400 hover:text-brand-blue hover:bg-white border border-transparent hover:border-slate-200 shadow-sm'}`} 
+                                                                        title="Editar Aluno"
+                                                                        disabled={loadingStudents}
+                                                                    >
+                                                                        <Icons.Edit />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => setDeleteConfirmId(s.id)} 
+                                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm rounded" 
+                                                                        title="Remover Aluno"
+                                                                        disabled={loadingStudents}
+                                                                    >
+                                                                        <Icons.Trash />
+                                                                    </button>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
