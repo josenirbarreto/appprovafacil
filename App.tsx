@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { User, UserRole, SystemSettings, ContractTemplate } from './types';
 import { FirebaseService } from './services/firebaseService';
@@ -89,7 +89,10 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     
     const [globalSettings, setGlobalSettings] = useState<SystemSettings | null>(null);
     
-    useEffect(() => { setSidebarOpen(false); }, [location]);
+    // Otimização INP: Fecha o sidebar apenas se ele estiver aberto
+    useEffect(() => { 
+        if (isSidebarOpen) setSidebarOpen(false); 
+    }, [location.pathname]);
 
     useEffect(() => {
         const fetchGlobals = async () => {
@@ -110,7 +113,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         fetchGlobals();
         const interval = setInterval(fetchGlobals, 60000);
         return () => clearInterval(interval);
-    }, [user]);
+    }, [user?.id, user?.role]);
 
     useEffect(() => {
         if (globalSettings?.whiteLabel?.logoUrl) {
@@ -122,12 +125,13 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
             }
             link.href = globalSettings.whiteLabel.logoUrl;
         }
-    }, [globalSettings]);
+    }, [globalSettings?.whiteLabel?.logoUrl]);
 
     const isAdmin = user?.role === UserRole.ADMIN;
     const isManager = user?.role === UserRole.MANAGER;
 
-    const menuGroups = [
+    // Otimização INP: Memoiza o menu para evitar reconstrução em cada render
+    const menuGroups = useMemo(() => [
         {
             title: null, 
             items: [
@@ -170,7 +174,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                 },
             ]
         }
-    ];
+    ], [isAdmin, isManager, openTicketsCount, pendingQuestionsCount]);
 
     const appName = globalSettings?.whiteLabel?.appName || 'Prova Fácil';
     const logoUrl = globalSettings?.whiteLabel?.logoUrl;
@@ -281,7 +285,7 @@ const AppContent = () => {
         } else {
             setPendingContract(null);
         }
-    }, [user]);
+    }, [user?.id, user?.plan, user?.lastSignedContractId]);
 
     if (loading) {
         return (
