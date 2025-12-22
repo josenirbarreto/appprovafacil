@@ -37,75 +37,98 @@
           size: A4;
         }
 
-        /* 1. Reset Global e Remoção de Fundos Cinzas */
+        /* 1. Reset Total de Cores e Sombras da Interface */
         * {
-          background-color: transparent !important;
+          background: transparent !important;
+          color: #000 !important;
           box-shadow: none !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
+          text-shadow: none !important;
         }
 
+        /* 2. Forçar fluxo contínuo para múltiplas páginas */
         html, body {
           height: auto !important;
+          min-height: 0 !important;
           overflow: visible !important;
-          background: white !important;
+          position: static !important;
+          background: #fff !important;
           margin: 0 !important;
           padding: 0 !important;
-          -webkit-print-color-adjust: exact;
         }
 
-        /* 2. Isolamento do Conteúdo de Impressão */
-        /* Esconde toda a interface do sistema (menus, botões, overlays) */
+        /* 3. Esconde toda a UI do Sistema */
         #root > div:not(#exam-print-container),
-        nav, aside, button, footer, header, .no-print, 
-        .fixed, .absolute:not(#exam-print-container *) { 
+        nav, aside, button, footer, header, .no-print,
+        [role="dialog"] > div:first-child { 
           display: none !important; 
         }
 
-        /* 3. Garantia de Fluxo para Múltiplas Páginas */
-        #root, main, [role="dialog"], div {
+        /* 4. Neutraliza o Modal e Containers de Layout */
+        /* Isso faz com que o conteúdo "saia" de dentro do modal fixo */
+        #root, main, [role="dialog"], 
+        div[class*="overflow-y-auto"], 
+        div[class*="max-h-"],
+        .relative, .fixed, .absolute {
           position: static !important;
+          display: block !important;
           height: auto !important;
+          min-height: 0 !important;
           overflow: visible !important;
-          display: block !important;
-        }
-
-        #exam-print-container {
-          display: block !important;
           width: 100% !important;
-          position: relative !important;
-          background: white !important;
+          max-width: none !important;
+          border: none !important;
           padding: 0 !important;
           margin: 0 !important;
+          transform: none !important;
+        }
+
+        /* 5. Container Principal da Prova */
+        #exam-print-container {
+          display: block !important;
+          visibility: visible !important;
+          background: #fff !important;
+          color: #000 !important;
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+
+        #exam-print-container * {
           visibility: visible !important;
         }
 
-        /* 4. Controle de Quebra de Página */
-        .break-inside-avoid {
-          break-inside: avoid !important;
-          page-break-inside: avoid !important;
-          margin-bottom: 1rem;
-        }
-
-        .page-break {
-          page-break-before: always !important;
-          break-before: page !important;
-          display: block;
-          height: 0;
-        }
-
-        /* 5. Colunas com Linha Divisória nítida */
+        /* 6. Controle de Colunas e Quebras */
         .print-columns-2 {
+          display: block !important;
           column-count: 2 !important;
           column-gap: 15mm !important;
           column-rule: 1px solid #000 !important;
-          height: auto !important;
           overflow: visible !important;
+          height: auto !important;
+        }
+
+        .break-inside-avoid {
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+        }
+
+        .page-break {
           display: block !important;
+          page-break-before: always !important;
+          break-before: page !important;
+        }
+
+        /* Ajuste fino nas bolinhas do cartão para impressão */
+        .answer-bubble {
+          border: 1.5px solid #000 !important;
+          background: #fff !important;
+          color: #000 !important;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
         }
       }
 
-      /* Estilos para visualização em tela */
+      /* Estilos de preview (Navegador) */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
@@ -118,7 +141,6 @@
           column-count: 2;
           column-gap: 15mm;
           column-rule: 1px solid #cbd5e1;
-          height: auto;
       }
       
       .answer-bubble {
@@ -131,31 +153,32 @@
           justify-content: center;
           font-size: 10px;
           font-weight: bold;
+          background-color: white;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react/": "https://esm.sh/react@18.2.0/",
-    "react-dom": "https://esm.sh/react-dom@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.2.0,react-dom@18.2.0",
-    "@google/genai": "https://esm.sh/@google/genai",
-    "@emailjs/browser": "https://esm.sh/@emailjs/browser@3.12.1",
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
-    "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
-    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
-    "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.0.379",
-    "pdfjs-dist/": "https://esm.sh/pdfjs-dist@4.0.379/",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
-    "vite": "https://aistudiocdn.com/vite@^7.2.7",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react/": "https://esm.sh/react@18.2.0/",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.2.0,react-dom@18.2.0",
+        "@google/genai": "https://esm.sh/@google/genai",
+        "@emailjs/browser": "https://esm.sh/@emailjs/browser@3.12.1",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+        "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.0.379",
+        "pdfjs-dist/": "https://esm.sh/pdfjs-dist@4.0.379/",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+        "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+        "vite": "https://aistudiocdn.com/vite@^7.2.7",
+        "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2"
+      }
+    }
+    </script>
+  <link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-slate-50 text-slate-800 antialiased h-screen overflow-hidden">
     <div id="root" class="h-full"></div>
