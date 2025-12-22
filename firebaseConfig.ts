@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 // Configuração do Web App do Firebase (app-provafacil)
 export const firebaseConfig = {
@@ -16,6 +16,11 @@ export const firebaseConfig = {
 // Inicializa o Firebase
 const app = initializeApp(firebaseConfig);
 
-// Exporta os serviços de Autenticação e Banco de Dados para uso no app
+// Inicializa o Firestore com detecção automática de Long Polling para evitar erros de conexão
+// e habilita cache persistente para funcionamento offline.
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+
 export const auth = getAuth(app);
-export const db = getFirestore(app);

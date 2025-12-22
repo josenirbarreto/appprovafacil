@@ -33,7 +33,7 @@
     <style>
       @media print {
         @page {
-          margin: 10mm;
+          margin: 15mm;
           size: auto;
         }
 
@@ -75,11 +75,16 @@
           page-break-inside: avoid !important;
         }
 
-        /* Linha divisória entre colunas */
+        .page-break {
+          page-break-before: always !important;
+          break-before: page !important;
+        }
+
+        /* Linha divisória entre colunas na impressão */
         .print-columns-2 {
-          column-count: 2;
-          column-gap: 12mm;
-          column-rule: 1px solid #cbd5e1;
+          column-count: 2 !important;
+          column-gap: 15mm !important;
+          column-rule: 1px solid #000 !important;
         }
       }
 
@@ -101,6 +106,13 @@
       .rich-text-content img { max-width: 100%; height: auto; }
       .rich-text-content table { border-collapse: collapse; }
       .rich-text-content td, .rich-text-content th { border: 1px solid #cbd5e1; padding: 4px 8px; }
+
+      /* Fix para visualização de 2 colunas no navegador */
+      .preview-columns-2 {
+          column-count: 2;
+          column-gap: 15mm;
+          column-rule: 1px solid #cbd5e1;
+      }
     </style>
   <script type="importmap">
 {
