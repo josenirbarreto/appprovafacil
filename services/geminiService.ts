@@ -4,7 +4,6 @@ import { Question, QuestionType } from "../types";
 import { FirebaseService } from "./firebaseService";
 
 const getClient = () => {
-    // Fix: Using process.env.API_KEY directly as per guidelines
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
 }
 
@@ -31,7 +30,6 @@ export const GeminiService = {
                 prompt += `Type: Association/Matching. Provide pairs to match (e.g. Term A - Definition B).`;
             }
 
-            // Fix: responseSchema uses Type enum and object structure directly, removed Schema type import
             const schema = {
                 type: Type.OBJECT,
                 properties: {
@@ -51,7 +49,6 @@ export const GeminiService = {
             };
 
             const response = await ai.models.generateContent({
-                // Fix: Using recommended gemini-3-flash-preview model
                 model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: {
@@ -62,7 +59,6 @@ export const GeminiService = {
                 }
             });
 
-            // TRACK USAGE
             FirebaseService.trackAiUsage();
 
             if (response.text) {
@@ -71,11 +67,11 @@ export const GeminiService = {
                     enunciado: data.enunciado,
                     type: type,
                     difficulty: difficulty as any,
-                    options: data.options?.map((opt: any, idx: number) => ({
+                    options: Array.isArray(data.options) ? data.options.map((opt: any, idx: number) => ({
                         id: `gen-${Date.now()}-${idx}`,
                         text: opt.text,
                         isCorrect: opt.isCorrect
-                    })) || []
+                    })) : []
                 };
             }
             return null;
@@ -114,7 +110,7 @@ export const GeminiService = {
 
             const prompt = `
                 Analise o texto abaixo extraído de um arquivo PDF de prova.
-                Identifique todas as questões, suas alternativas e, se possível, a resposta correta (gabarito).
+                Identifique TODAS as questões contidas no texto, suas alternativas e, se possível, a resposta correta (gabarito).
                 Se não encontrar a resposta correta explicitamente, marque todas as isCorrect como false.
                 Tente inferir o tipo da questão (MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER).
                 
@@ -130,8 +126,8 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    systemInstruction: "Você é um especialista em estruturar dados de provas escolares. Extraia as questões com precisão.",
-                    temperature: 0.4 
+                    systemInstruction: "Você é um especialista em estruturar dados de provas escolares. Extraia todas as questões com máxima precisão.",
+                    temperature: 0.3 
                 }
             });
 
@@ -139,14 +135,16 @@ export const GeminiService = {
 
             if (response.text) {
                 const data = JSON.parse(response.text);
+                if (!Array.isArray(data)) return [];
+                
                 return data.map((q: any) => ({
                     ...q,
                     difficulty: 'Medium', 
-                    options: q.options?.map((opt: any, idx: number) => ({
+                    options: Array.isArray(q.options) ? q.options.map((opt: any, idx: number) => ({
                         id: `imp-${Date.now()}-${Math.random()}-${idx}`,
                         text: opt.text,
                         isCorrect: opt.isCorrect
-                    })) || []
+                    })) : []
                 }));
             }
             return [];
@@ -223,25 +221,14 @@ export const GeminiService = {
                 ESTRUTURA DA IMAGEM:
                 1. Quatro quadrados pretos nos cantos (âncoras). Use-os para alinhar a perspectiva.
                 2. Layout de questões em 2 COLUNAS VERTICAIS (Lado a Lado).
-                3. Algumas linhas de questão podem conter o texto '[ DISSERTATIVA ]' em vez de bolhas de marcação.
                 
                 SUA MISSÃO:
                 1. Identificar o NOME do aluno escrito no campo superior.
                 2. Para cada questão de 1 até ${totalQuestions}:
                    - Se houver bolhas (A, B, C, D, E), identifique qual está pintada.
                    - Se a linha contiver '[ DISSERTATIVA ]', retorne null para essa resposta.
-                   - Ignore borrões e considere o preenchimento mais escuro e centralizado.
                 
-                Retorne APENAS um JSON:
-                {
-                    "studentName": "Nome Extraído",
-                    "answers": {
-                        "1": "A",
-                        "2": null,
-                        "3": "C"
-                        ... (até ${totalQuestions})
-                    }
-                }
+                Retorne APENAS um JSON.
             `;
 
             const schema = {
@@ -258,7 +245,6 @@ export const GeminiService = {
 
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                // Fix: Corrected multi-part contents structure to use { parts: [...] }
                 contents: {
                     parts: [
                         { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
