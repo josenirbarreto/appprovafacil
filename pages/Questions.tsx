@@ -22,7 +22,7 @@ const DifficultyLabels: Record<string, string> = {
     'Hard': 'Difícil'
 };
 
-// --- COMPONENTE DE GABARITO (FORA PARA MANTER FOCO) ---
+// --- COMPONENTE DE GABARITO ---
 const GabaritoUI = ({ q, onChange, questionIndex = 0 }: { q: Partial<Question>, onChange: (data: Partial<Question>) => void, questionIndex?: number }) => {
     if (q.type === QuestionType.MULTIPLE_CHOICE || q.type === QuestionType.TRUE_FALSE) {
         const radioGroupName = `correct_group_${q.id || 'new'}_${questionIndex}`;
@@ -144,7 +144,7 @@ const QuestionsPage = () => {
     const [batchSaving, setBatchSaving] = useState(false);
     const [isAiLoading, setIsAiLoading] = useState(false);
 
-    // Filtros de busca na tela principal (5 Níveis)
+    // Filtros
     const [selComp, setSelComp] = useState('');
     const [selDisc, setSelDisc] = useState('');
     const [selChap, setSelChap] = useState('');
@@ -178,13 +178,13 @@ const QuestionsPage = () => {
         return hierarchy.filter(cc => authorized.includes(cc.id));
     }, [hierarchy, user]);
 
-    // Helpers para Filtragem Hierárquica na Lista Principal
+    // Helpers para Filtragem Hierárquica
     const filterComp = useMemo(() => hierarchy.find(cc => cc.id === selComp), [hierarchy, selComp]);
     const filterDisc = useMemo(() => filterComp?.disciplines?.find(d => d.id === selDisc), [filterComp, selDisc]);
     const filterChap = useMemo(() => filterDisc?.chapters?.find(c => c.id === selChap), [filterDisc, selChap]);
     const filterUnit = useMemo(() => filterChap?.units?.find(u => u.id === selUnit), [filterChap, selUnit]);
 
-    // Helpers para Hierarquia Dinâmica no Modal Individual
+    // Helpers para Hierarquia Dinâmica no Modal
     const activeComp = useMemo(() => hierarchy.find(cc => cc.id === editing.componentId), [hierarchy, editing.componentId]);
     const activeDisc = useMemo(() => activeComp?.disciplines?.find(d => d.id === editing.disciplineId), [activeComp, editing.disciplineId]);
     const activeChap = useMemo(() => activeDisc?.chapters?.find(c => c.id === editing.chapterId), [activeDisc, editing.chapterId]);
@@ -216,11 +216,10 @@ const QuestionsPage = () => {
                 ...editing, 
                 authorId: editing.authorId || user?.id, 
                 institutionId: user?.institutionId, 
-                createdAt: editing.createdAt || new Date().toISOString(), 
-                reviewStatus: editing.reviewStatus || 'PENDING' 
+                createdAt: editing.createdAt || new Date().toISOString()
             };
             if (q.id) await FirebaseService.updateQuestion(q);
-            else await FirebaseService.addQuestion(q);
+            else await FirebaseService.addQuestion({ ...q, reviewStatus: q.visibility === 'PUBLIC' ? 'PENDING' : 'APPROVED' });
             setIsModalOpen(false); load();
         } catch (e) { alert("Erro ao salvar a questão."); }
     };
@@ -334,7 +333,7 @@ const QuestionsPage = () => {
                     </div>
                 </div>
 
-                {/* FILTROS HIERÁRQUICOS (5 NÍVEIS) */}
+                {/* FILTROS HIERÁRQUICOS */}
                 <div className="grid grid-cols-5 gap-2 mb-3">
                     <Select value={selComp} onChange={e => { setSelComp(e.target.value); setSelDisc(''); setSelChap(''); setSelUnit(''); setSelTopic(''); }} className="text-[9px] font-bold h-9">
                         <option value="">1. Área</option>
@@ -404,6 +403,21 @@ const QuestionsPage = () => {
                 <div className="flex-1 bg-slate-50 p-10 overflow-y-auto custom-scrollbar">
                     {selectedQuestion ? (
                         <Card className="max-w-4xl mx-auto shadow-2xl border-none p-10 rounded-[32px]">
+                            {/* ALERTA DE REPROVAÇÃO */}
+                            {selectedQuestion.reviewStatus === 'REJECTED' && selectedQuestion.authorId === user?.id && (
+                                <div className="mb-8 p-6 bg-red-50 border-2 border-red-200 rounded-[30px] animate-scale-in">
+                                    <div className="flex items-center gap-3 text-red-700 font-black mb-3 uppercase text-xs tracking-widest">
+                                        <Icons.Shield className="w-5 h-5" /> ⚠️ QUESTÃO REPROVADA PELO MODERADOR
+                                    </div>
+                                    <p className="text-sm text-red-900 font-bold mb-4 bg-white/50 p-4 rounded-2xl border border-red-100">
+                                        Motivo: <span className="font-medium italic">"{selectedQuestion.reviewComment || 'O moderador não forneceu um motivo detalhado.'}"</span>
+                                    </p>
+                                    <p className="text-xs text-red-600 font-medium leading-relaxed">
+                                        A questão foi alterada para <b>Privada</b>. Para torná-la pública novamente, clique em <b>Editar</b>, realize as correções necessárias e salve. Ela será enviada para uma nova rodada de moderação.
+                                    </p>
+                                </div>
+                            )}
+
                             <div className="flex justify-between items-start mb-8 border-b border-slate-100 pb-8">
                                 <div>
                                     <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Nível Pedagógico (5 Níveis)</p>
@@ -449,7 +463,7 @@ const QuestionsPage = () => {
                 </div>
             </div>
 
-            {/* MODAL IMPORTAÇÃO EM LOTE - HIERARQUIA COMPLETA */}
+            {/* MODAL IMPORTAÇÃO EM LOTE */}
             <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Importação em Lote" maxWidth="max-w-7xl" footer={
                 <div className="flex justify-between w-full items-center p-2">
                     <Button onClick={handleRepeatHierarchy} variant="outline" className="text-xs font-black border-slate-300 px-6 h-12 shadow-sm">
@@ -520,7 +534,7 @@ const QuestionsPage = () => {
                 </div>
             </Modal>
 
-            {/* MODAL EDIÇÃO/CRIAÇÃO INDIVIDUAL - HIERARQUIA COMPLETA */}
+            {/* MODAL EDIÇÃO/CRIAÇÃO INDIVIDUAL */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Modificar Questão" : "Cadastrar Nova Questão"} maxWidth="max-w-6xl" footer={<Button onClick={handleSave} className="px-12 h-14 text-lg shadow-2xl font-black rounded-2xl">SALVAR NO BANCO DE DADOS</Button>}>
                 <div className="space-y-8 py-2">
                     <div className="grid grid-cols-5 gap-3">

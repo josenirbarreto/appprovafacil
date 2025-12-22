@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGER = 'MANAGER', 
@@ -70,6 +71,7 @@ export interface Question {
   institutionId?: string; 
   visibility?: 'PRIVATE' | 'INSTITUTION' | 'PUBLIC'; 
   reviewStatus?: 'PENDING' | 'APPROVED' | 'REJECTED'; 
+  reviewComment?: string;
   type: QuestionType;
   enunciado: string; 
   componentId: string;
@@ -160,6 +162,8 @@ export interface Institution {
 }
 
 export interface SchoolClass { id: string; name: string; year: number; institutionId: string; }
+/* Adicionado interface Student para suportar gestão de alunos e corrigir erros de exportação */
+export interface Student { id: string; name: string; registration: string; classId: string; institutionId: string; createdAt?: string; }
 export interface Payment { id: string; userId: string; userName: string; planName: string; amount: number; date: string; method: string; periodMonths: number; status: string; }
 export interface Campaign { id: string; title: string; channel: string; status: string; segmentation: any; content: any; stats: any; createdAt: string; sentAt?: string; }
 export interface Coupon { id: string; code: string; type: string; value: number; maxUses: number; usedCount: number; expiresAt?: string; isActive: boolean; createdAt: string; }
@@ -168,6 +172,5 @@ export interface Ticket { id: string; authorId: string; authorName: string; auth
 export interface TicketMessage { id: string; ticketId: string; authorId: string; authorName: string; message: string; createdAt: string; isAdminReply: boolean; }
 export interface SystemSettings { banner: { active: boolean; message: string; type: 'INFO' | 'WARNING' | 'ERROR'; }; aiConfig: { totalGenerations: number; monthlyLimit: number; costPerRequestEst: number; }; whiteLabel: { appName: string; logoUrl?: string; primaryColor?: string; }; }
 export interface Tutorial { id: string; title: string; description: string; category: string; type: 'VIDEO' | 'ARTICLE'; contentUrl?: string; contentBody?: string; videoDuration?: string; attachmentUrl?: string; attachmentLabel?: string; createdAt: string; }
-export interface Student { id: string; name: string; registration: string; classId: string; institutionId: string; email?: string; createdAt: string; }
 export interface ContractTemplate { id: string; planId: string; title: string; content: string; version: number; isActive: boolean; createdAt: string; updatedAt: string; }
 export interface SignatureLog { id: string; userId: string; userName: string; templateId: string; version: number; timestamp: string; ipAddress: string; userAgent: string; contentHash: string; typedName: string; }

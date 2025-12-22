@@ -1,4 +1,5 @@
 
+
 import { 
     collection, 
     getDocs, 
@@ -56,53 +57,23 @@ const COLLECTIONS = {
 
 /**
  * Limpa o payload para o Firestore.
- * - Remove funções e valores undefined.
- * - Converte Datas para ISO strings.
- * - Detecta circularidade para evitar erros de JSON.
- * - Preserva Arrays corretamente (importante para questões/opções).
  */
 const cleanPayload = (data: any, seen = new WeakSet()): any => {
     if (data === null || data === undefined) return null;
-    
-    // Tipos primitivos: retorna direto
     if (typeof data !== 'object') return data;
-    
-    // Datas: converte para string
     if (data instanceof Date) return data.toISOString();
-
-    // Prevenção de circularidade (objetos já processados nesta pilha)
     if (seen.has(data)) return undefined;
     seen.add(data);
-
-    // Tratamento de Arrays: processa cada item recursivamente
     if (Array.isArray(data)) {
-        return data
-            .map(item => cleanPayload(item, seen))
-            .filter(i => i !== undefined); // Remove nulos gerados por circularidade ou funções
+        return data.map(item => cleanPayload(item, seen)).filter(i => i !== undefined);
     }
-
-    // Objetos Planos
     const cleaned: any = {};
     Object.keys(data).forEach(key => {
         const value = data[key];
-
-        // Regras de exclusão de propriedades
-        if (
-            value === undefined || 
-            typeof value === 'function' || 
-            key.startsWith('_') || 
-            key === 'i' || // Chave interna comum de circularidade em Firebase
-            key === 'src'  // Chave interna comum de circularidade em DOM/Firebase
-        ) {
-            return;
-        }
-
+        if (value === undefined || typeof value === 'function' || key.startsWith('_') || key === 'i' || key === 'src') return;
         const cleanedValue = cleanPayload(value, seen);
-        if (cleanedValue !== undefined) {
-            cleaned[key] = cleanedValue;
-        }
+        if (cleanedValue !== undefined) cleaned[key] = cleanedValue;
     });
-
     return cleaned;
 };
 
@@ -112,14 +83,10 @@ export const FirebaseService = {
     logout: async () => { await signOut(auth); },
     getCurrentUserData: async () => { const user = auth.currentUser; if (!user) return null; const snap = await getDoc(doc(db, COLLECTIONS.USERS, user.uid)); return snap.exists() ? snap.data() as User : null; },
     
-    // Novo: Listener para o perfil do usuário logado
     listenToCurrentUser: (uid: string, callback: (u: User | null) => void) => {
         return onSnapshot(doc(db, COLLECTIONS.USERS, uid), (snap) => {
-            if (snap.exists()) {
-                callback({ ...snap.data(), id: snap.id } as User);
-            } else {
-                callback(null);
-            }
+            if (snap.exists()) callback({ ...snap.data(), id: snap.id } as User);
+            else callback(null);
         });
     },
 
@@ -138,7 +105,7 @@ export const FirebaseService = {
     changeUserPassword: async (newPassword: string) => { if (auth.currentUser) { await updatePassword(auth.currentUser, newPassword); await updateDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid), { requiresPasswordChange: false }); } },
     resetPassword: async (email: string) => { await sendPasswordResetEmail(auth, email); },
 
-    // Hierarchy (Componente > Disciplina > Capítulo > Unidade > Tópico)
+    // Hierarchy
     getHierarchy: async () => { 
         const [cc, d, c, u, t] = await Promise.all([
             getDocs(collection(db, COLLECTIONS.COMPONENTS)),
@@ -147,21 +114,17 @@ export const FirebaseService = {
             getDocs(collection(db, COLLECTIONS.UNITS)), 
             getDocs(collection(db, COLLECTIONS.TOPICS))
         ]); 
-        
         const components = cc.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, disciplines: [] } as CurricularComponent));
         const disciplines = d.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, chapters: [] } as Discipline)); 
         const chapters = c.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, units: [] } as Chapter)); 
         const units = u.docs.map(doc => ({ ...(doc.data() as object), id: doc.id, topics: [] } as Unit)); 
         const topics = t.docs.map(doc => ({ ...(doc.data() as object), id: doc.id } as Topic)); 
-        
         units.forEach(un => un.topics = topics.filter(to => to.unitId === un.id)); 
         chapters.forEach(ch => ch.units = units.filter(un => un.chapterId === ch.id)); 
         disciplines.forEach(di => di.chapters = chapters.filter(ch => ch.disciplineId === di.id)); 
         components.forEach(comp => comp.disciplines = disciplines.filter(di => di.componentId === comp.id));
-
         return components; 
     },
-    
     getFullHierarchyString: (q: Question, hierarchy: CurricularComponent[]) => { 
         const comp = hierarchy.find(cc => cc.id === q.componentId);
         const disc = comp?.disciplines.find(d => d.id === q.disciplineId); 
@@ -170,13 +133,11 @@ export const FirebaseService = {
         const topic = unit?.topics.find(t => t.id === q.topicId); 
         return `${comp?.name || '?'} > ${disc?.name || '?'} > ${chap?.name || '?'} > ${unit?.name || '?'} > ${topic?.name || '?'}`; 
     },
-
     addComponent: async (name: string) => { await addDoc(collection(db, COLLECTIONS.COMPONENTS), { name }); },
     addDiscipline: async (componentId: string, name: string) => { await addDoc(collection(db, COLLECTIONS.DISCIPLINES), { componentId, name }); },
     addChapter: async (disciplineId: string, name: string) => { await addDoc(collection(db, COLLECTIONS.CHAPTERS), { disciplineId, name }); },
     addUnit: async (chapterId: string, name: string) => { await addDoc(collection(db, COLLECTIONS.UNITS), { chapterId, name }); },
     addTopic: async (unitId: string, name: string) => { await addDoc(collection(db, COLLECTIONS.TOPICS), { unitId, name }); },
-    
     deleteItem: async (type: string, ids: any) => { 
         if (ids.tId) await deleteDoc(doc(db, COLLECTIONS.TOPICS, ids.tId)); 
         else if (ids.uId) await deleteDoc(doc(db, COLLECTIONS.UNITS, ids.uId)); 
@@ -185,50 +146,22 @@ export const FirebaseService = {
         else if (ids.ccId) await deleteDoc(doc(db, COLLECTIONS.COMPONENTS, ids.ccId)); 
     },
 
-    generateCommercialToken: async (componentId: string, includeQuestions: boolean) => { 
-        const token = Math.random().toString(36).substring(2, 10).toUpperCase(); 
-        await setDoc(doc(db, COLLECTIONS.TOKENS, token), { componentId, includeQuestions, createdAt: new Date().toISOString(), used: false }); 
-        return token; 
-    },
-    redeemCommercialToken: async (token: string, user: User) => { 
-        const docRef = doc(db, COLLECTIONS.TOKENS, token); 
-        const snap = await getDoc(docRef); 
-        if (!snap.exists() || snap.data().used) throw new Error("Token inválido"); 
-        
-        const data = snap.data();
-        const currentGrants = Array.isArray(user.accessGrants) ? user.accessGrants : [];
-        if (!currentGrants.includes(data.componentId)) {
-            await updateDoc(doc(db, COLLECTIONS.USERS, user.id), { 
-                accessGrants: [...currentGrants, data.componentId] 
-            });
-        }
-        
-        await updateDoc(docRef, { used: true, usedBy: user.id }); 
-        return "Conteúdo Resgatado"; 
-    },
-
     // Questions
     getQuestions: async (currentUser?: User | null) => { 
         let constraints: QueryConstraint[] = [];
         if (currentUser?.role === UserRole.TEACHER) constraints.push(where("visibility", "in", ["PUBLIC", "INSTITUTION", "PRIVATE"]));
         else if (currentUser?.role === UserRole.MANAGER) constraints.push(where("institutionId", "==", currentUser.institutionId));
-        
         const q = constraints.length > 0 ? query(collection(db, COLLECTIONS.QUESTIONS), ...constraints) : collection(db, COLLECTIONS.QUESTIONS);
         const snap = await getDocs(q);
         let results = snap.docs.map(d => ({...(d.data() as object), id: d.id} as Question));
-        
         if (currentUser?.role === UserRole.TEACHER) {
-            const authorizedComponents = [
-                ...(Array.isArray(currentUser.subjects) ? currentUser.subjects : []),
-                ...(Array.isArray(currentUser.accessGrants) ? currentUser.accessGrants : [])
-            ];
-            
+            const authorizedComponents = [...(Array.isArray(currentUser.subjects) ? currentUser.subjects : []), ...(Array.isArray(currentUser.accessGrants) ? currentUser.accessGrants : [])];
             results = results.filter(q => {
                 const isAuthor = q.authorId === currentUser.id;
                 const isAuthorizedComponent = authorizedComponents.includes(q.componentId);
                 const isPublicApproved = q.visibility === 'PUBLIC' && q.reviewStatus === 'APPROVED';
                 const isOfficialSchool = q.visibility === 'INSTITUTION' && q.institutionId === currentUser.institutionId;
-
+                const isRejectedSelf = q.reviewStatus === 'REJECTED' && q.authorId === currentUser.id; // Permite ver as próprias rejeitadas
                 return isAuthor || (isAuthorizedComponent && (isPublicApproved || isOfficialSchool));
             });
         }
@@ -236,10 +169,15 @@ export const FirebaseService = {
     },
     getPendingQuestions: async () => { const q = query(collection(db, COLLECTIONS.QUESTIONS), where("visibility", "==", "PUBLIC"), where("reviewStatus", "==", "PENDING")); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Question)); },
     addQuestion: async (q: Question) => { const { id, ...data } = q; const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), cleanPayload(data)); return { ...q, id: docRef.id }; },
-    updateQuestion: async (q: Question) => { const { id, ...data } = q; await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), cleanPayload(data)); },
+    updateQuestion: async (q: Question) => { 
+        const { id, ...data } = q; 
+        // Quando o autor atualiza, resetamos o status para Pendente se for Pública
+        const payload = { ...data, reviewStatus: q.visibility === 'PUBLIC' ? 'PENDING' : q.reviewStatus, reviewComment: null };
+        await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), cleanPayload(payload)); 
+    },
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },
-    approveQuestion: async (id: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'APPROVED' }); },
-    rejectQuestion: async (id: string, reason: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'REJECTED', visibility: 'PRIVATE' }); },
+    approveQuestion: async (id: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'APPROVED', reviewComment: null }); },
+    rejectQuestion: async (id: string, reason: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { reviewStatus: 'REJECTED', visibility: 'PRIVATE', reviewComment: reason }); },
     approveInstitutionalQuestion: async (id: string, adminId: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { isInstitutional: true, institutionalApprovedById: adminId }); },
     removeInstitutionalSeal: async (id: string) => { await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), { isInstitutional: false }); },
 
@@ -262,18 +200,12 @@ export const FirebaseService = {
     submitAttempt: async (id: string, answers: any, score: number, total: number) => { await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { answers, score, totalQuestions: total, submittedAt: new Date().toISOString(), status: 'COMPLETED' }); },
     getStudentAttempts: async (eId: string, ident: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", eId), where("studentIdentifier", "==", ident)); const snap = await getDocs(q); return snap.docs.map(d => d.data()); },
 
-    // Institutions & Classes & Students
+    // Institutions & Classes
     getInstitutions: async (currentUser?: User | null) => { 
         if (!currentUser) return [];
-        if (currentUser.role === UserRole.ADMIN) {
-            const snap = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS));
-            return snap.docs.map(d => ({...(d.data() as object), id: d.id} as Institution));
-        }
+        if (currentUser.role === UserRole.ADMIN) { const snap = await getDocs(collection(db, COLLECTIONS.INSTITUTIONS)); return snap.docs.map(d => ({...(d.data() as object), id: d.id} as Institution)); }
         const qOwner = query(collection(db, COLLECTIONS.INSTITUTIONS), where("ownerId", "==", currentUser.id));
-        const [singleSnap, ownerSnap] = await Promise.all([
-            currentUser.institutionId ? getDoc(doc(db, COLLECTIONS.INSTITUTIONS, currentUser.institutionId)) : null,
-            getDocs(qOwner)
-        ]);
+        const [singleSnap, ownerSnap] = await Promise.all([currentUser.institutionId ? getDoc(doc(db, COLLECTIONS.INSTITUTIONS, currentUser.institutionId)) : null, getDocs(qOwner)]);
         const results: Map<string, Institution> = new Map();
         if (singleSnap?.exists()) results.set(singleSnap.id, { ...(singleSnap.data() as object), id: singleSnap.id } as Institution);
         ownerSnap.docs.forEach(d => results.set(d.id, { ...(d.data() as object), id: d.id } as Institution));
@@ -335,21 +267,42 @@ export const FirebaseService = {
     updateTicketStatus: async (id: string, status: TicketStatus) => { await updateDoc(doc(db, COLLECTIONS.TICKETS, id), { status, updatedAt: new Date().toISOString() }); },
     getAdminOpenTicketsCount: async () => { const q = query(collection(db, COLLECTIONS.TICKETS), where("status", "!=", "CLOSED")); const snap = await getDocs(q); return snap.size; },
 
-    // Tutorials
+    // Tutorials & Contracts
     getTutorials: async () => { const snap = await getDocs(collection(db, COLLECTIONS.TUTORIALS)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Tutorial)); },
     addTutorial: async (t: Tutorial) => { await addDoc(collection(db, COLLECTIONS.TUTORIALS), { ...cleanPayload(t), createdAt: new Date().toISOString() }); },
     deleteTutorial: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.TUTORIALS, id)); },
-
-    // Contracts
-    getActiveContractForPlan: async (plan: string) => { 
-        const q = query(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), where("isActive", "==", true)); 
-        const snap = await getDocs(q); 
-        const all = snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ContractTemplate)); 
-        all.sort((a, b) => (b.version || 0) - (a.version || 0));
-        return all.find(t => t.planId === plan || t.planId === 'ALL') || null; 
-    },
+    getActiveContractForPlan: async (plan: string) => { const q = query(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), where("isActive", "==", true)); const snap = await getDocs(q); const all = snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ContractTemplate)); all.sort((a, b) => (b.version || 0) - (a.version || 0)); return all.find(t => t.planId === plan || t.planId === 'ALL') || null; },
     getContractTemplates: async () => { const snap = await getDocs(collection(db, COLLECTIONS.CONTRACT_TEMPLATES)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ContractTemplate)); },
     saveContractTemplate: async (t: any, forceNewVersion: boolean = false) => { if (!forceNewVersion && t.id) { await updateDoc(doc(db, COLLECTIONS.CONTRACT_TEMPLATES, t.id), { ...cleanPayload(t), updatedAt: new Date().toISOString() }); } else { const { id, ...data } = t; await addDoc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), { ...cleanPayload(data), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); } },
     signContract: async (user: User, template: ContractTemplate, typedName: string) => { await addDoc(collection(db, COLLECTIONS.SIGNATURES), { userId: user.id, userName: user.name, templateId: template.id, version: template.version, timestamp: new Date().toISOString(), typedName }); await updateDoc(doc(db, COLLECTIONS.USERS, user.id), { lastSignedContractId: template.id }); },
-    seedDefaultContracts: async () => { /* Seed implementation */ },
+    
+    /* Adicionado generateCommercialToken para suportar licenciamento de componentes curriculares */
+    generateCommercialToken: async (componentId: string, includeQuestions: boolean) => {
+        const code = (Math.random().toString(36).substring(2, 6) + '-' + Math.random().toString(36).substring(2, 6)).toUpperCase();
+        await setDoc(doc(db, COLLECTIONS.TOKENS, code), cleanPayload({
+            code,
+            componentId,
+            includeQuestions,
+            redeemed: false,
+            createdAt: new Date().toISOString()
+        }));
+        return code;
+    },
+
+    /* Adicionado redeemCommercialToken para permitir que usuários ativem conteúdos licenciados */
+    redeemCommercialToken: async (code: string, user: User) => {
+        const tokenRef = doc(db, COLLECTIONS.TOKENS, code);
+        const tokenSnap = await getDoc(tokenRef);
+        if (!tokenSnap.exists()) throw new Error("Código inválido.");
+        const tokenData = tokenSnap.data();
+        if (tokenData.redeemed) throw new Error("Este código já foi utilizado.");
+        const currentGrants = Array.isArray(user.accessGrants) ? user.accessGrants : [];
+        if (currentGrants.includes(tokenData.componentId)) throw new Error("Você já possui acesso a este conteúdo.");
+        await updateDoc(doc(db, COLLECTIONS.USERS, user.id), cleanPayload({
+            accessGrants: [...currentGrants, tokenData.componentId]
+        }));
+        await updateDoc(tokenRef, cleanPayload({ redeemed: true, redeemedBy: user.id, redeemedAt: new Date().toISOString() }));
+    },
+    
+    seedDefaultContracts: async () => { },
 };

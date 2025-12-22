@@ -95,7 +95,7 @@ const ModerationPage = () => {
         if (!selectedQuestion || !rejectReason.trim() || isActionLoading) return;
         setIsActionLoading(true);
         try {
-            await FirebaseService.rejectQuestion(selectedQuestion.id, rejectReason);
+            await FirebaseService.rejectQuestion(selectedQuestion.id, rejectReason.trim());
             setIsRejectModalOpen(false);
             setRejectReason('');
             setPendingQuestions(prev => prev.filter(q => q.id !== selectedQuestion.id));
@@ -263,7 +263,7 @@ const ModerationPage = () => {
                     </div>
                     <Input label="Motivo da Reprovação" value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Ex: Contém erros gramaticais graves ou é duplicada." autoFocus />
                     <div className="flex flex-wrap gap-2">
-                        {['Duplicidade', 'Erro Gramatical', 'Incorreta', 'Incompleta', 'Imprópria'].map(reason => (
+                        {['Duplicidade', 'Falta de Gabarito', 'Erro Gramatical', 'Incorreta', 'Incompleta', 'Imprópria'].map(reason => (
                             <button key={reason} onClick={() => setRejectReason(reason)} className="text-[10px] font-black uppercase bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">{reason}</button>
                         ))}
                     </div>
