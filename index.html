@@ -34,59 +34,42 @@
       /* --- ESTILOS DE IMPRESSÃO --- */
       @media print {
         @page {
-          margin: 12mm 10mm 12mm 10mm;
+          margin: 10mm 10mm 10mm 10mm;
           size: A4;
         }
 
-        /* 1. Reset Radical para Fluxo Contínuo */
+        /* 1. Esconder TUDO por padrão para evitar páginas em branco de elementos da UI */
         html, body {
           background: white !important;
           margin: 0 !important;
           padding: 0 !important;
           height: auto !important;
-          min-height: 100% !important;
           overflow: visible !important;
-          width: 100% !important;
         }
 
-        /* 2. Esconder toda a interface do sistema (incluindo headers mobiles e overlays) */
-        nav, aside, header, footer, button, .no-print,
-        div[class*="fixed"], 
-        div[class*="bg-slate-900/60"],
-        div[class*="backdrop-blur"],
-        div[class*="bg-brand-dark"] {
-          display: none !important;
+        body * {
+          visibility: hidden;
         }
 
-        /* 3. Forçar o container da prova a ser o único elemento visível e estático */
-        #root, main {
-          display: block !important;
-          height: auto !important;
-          overflow: visible !important;
-          position: static !important;
+        /* 2. Mostrar APENAS o container da prova e seus filhos */
+        #exam-print-container, 
+        #exam-print-container * {
+          visibility: visible;
         }
 
-        /* 4. Neutralizar o Modal para agir como uma página comum */
-        div[role="dialog"], 
-        div[role="dialog"] > div,
+        /* 3. Forçar o container para o topo real da página impressa */
         #exam-print-container {
           position: absolute !important;
-          top: 0 !important;
           left: 0 !important;
+          top: 0 !important;
           width: 100% !important;
           display: block !important;
-          height: auto !important;
-          overflow: visible !important;
           margin: 0 !important;
           padding: 0 !important;
-          border: none !important;
-          box-shadow: none !important;
           background: white !important;
-          visibility: visible !important;
-          z-index: 9999 !important;
         }
 
-        /* 5. Motor de Colunas Robusto */
+        /* 4. Motor de Colunas */
         .print-columns-2 {
           display: block !important;
           column-count: 2 !important;
@@ -95,12 +78,12 @@
           width: 100% !important;
         }
 
-        /* 6. Controle de Quebra de Conteúdo */
+        /* 5. Prevenção de quebra de questões no meio */
         .break-inside-avoid {
           break-inside: avoid-column !important;
           page-break-inside: avoid !important;
           display: block !important;
-          margin-bottom: 5mm !important;
+          margin-bottom: 6mm !important;
         }
 
         .page-break {
@@ -108,15 +91,15 @@
           page-break-before: always !important;
           break-before: page !important;
           height: 0 !important;
+          margin: 0 !important;
         }
 
-        /* Reset de Cores */
+        /* Garantir contraste do texto */
         * {
           -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
           color: black !important;
-          text-shadow: none !important;
           box-shadow: none !important;
+          text-shadow: none !important;
         }
         
         .answer-bubble {
