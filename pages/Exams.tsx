@@ -421,9 +421,10 @@ const ExamsPage = () => {
 
                     <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200 overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
                         {/* 
-                            O ID 'exam-print-container' é alvo do CSS de impressão para garantir fluxo contínuo.
+                            O ID 'exam-print-container' agora é estritamente um display:block
+                            Removidos paddings que quebram o motor de colunas em modo print.
                         */}
-                        <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:p-0`}>
+                        <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full`}>
                             {viewingMode === 'EXAM' ? (
                                 <div className="animate-fade-in bg-white w-full">
                                     {renderHeaderPrint()}
@@ -432,11 +433,15 @@ const ExamsPage = () => {
                                         <div className="mb-4 p-3 bg-white border-l-4 border-black italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
                                     )}
 
+                                    {/* 
+                                        A classe print-columns-2 só terá efeito se o pai 
+                                        não for flex ou grid. Forçamos isso no index.html.
+                                    */}
                                     <div 
-                                        className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'w-full'}`}
+                                        className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'w-full block'}`}
                                     >
                                         {currentQs.map((q, idx) => (
-                                            <div key={q.id || idx} className="mb-6 break-inside-avoid bg-white">
+                                            <div key={q.id || idx} className="break-inside-avoid bg-white">
                                                 <div className="flex gap-2">
                                                     <span className="font-bold">{idx + 1}.</span>
                                                     <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
