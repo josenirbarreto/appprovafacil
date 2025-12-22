@@ -185,7 +185,7 @@ const ExamsPage = () => {
     };
 
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="border-2 border-black p-4 mb-4 break-inside-avoid bg-white">
+        <div className="border-2 border-black p-4 mb-4 break-inside-avoid bg-white block">
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-black/10">
                 {selectedInstitution?.logoUrl && (
                     <img src={selectedInstitution.logoUrl} alt="Logo" className="h-10 w-auto object-contain shrink-0" />
@@ -413,20 +413,20 @@ const ExamsPage = () => {
                                 </div>
                             </div>
 
-                            <Button onClick={() => window.print()} className="w-full h-14 bg-slate-900 text-white shadow-xl mt-4">
+                            <Button onClick={() => window.print()} className="w-full h-14 bg-slate-900 text-white shadow-xl mt-4 no-print">
                                 <Icons.Printer /> Imprimir {viewingMode === 'EXAM' ? 'Prova' : 'Cartão'}
                             </Button>
                         </div>
                     </div>
 
-                    <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200 overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
+                    <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200 overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0 print:overflow-visible">
                         {/* 
-                            O ID 'exam-print-container' agora é estritamente um display:block
-                            Removidos paddings que quebram o motor de colunas em modo print.
+                            O ID 'exam-print-container' agora é alvo principal do CSS de impressão.
+                            Garante que o conteúdo interno seja tratado como bloco simples para o motor de colunas.
                         */}
-                        <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full`}>
+                        <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block print:static`}>
                             {viewingMode === 'EXAM' ? (
-                                <div className="animate-fade-in bg-white w-full">
+                                <div className="animate-fade-in bg-white w-full block">
                                     {renderHeaderPrint()}
 
                                     {editing.instructions && (
@@ -434,22 +434,22 @@ const ExamsPage = () => {
                                     )}
 
                                     {/* 
-                                        A classe print-columns-2 só terá efeito se o pai 
-                                        não for flex ou grid. Forçamos isso no index.html.
+                                        Importante: A classe print-columns-2 força o container a ignorar
+                                        paddings e outros layouts que interferem nas colunas A4.
                                     */}
                                     <div 
                                         className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'w-full block'}`}
                                     >
                                         {currentQs.map((q, idx) => (
-                                            <div key={q.id || idx} className="break-inside-avoid bg-white">
+                                            <div key={q.id || idx} className="break-inside-avoid bg-white block">
                                                 <div className="flex gap-2">
                                                     <span className="font-bold">{idx + 1}.</span>
                                                     <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                                 </div>
                                                 {Array.isArray(q.options) && q.options.length > 0 && (
-                                                    <div className="mt-2 ml-6 space-y-1">
+                                                    <div className="mt-2 ml-6 space-y-1 block">
                                                         {q.options.map((opt, i) => (
-                                                            <div key={i} className="flex gap-2">
+                                                            <div key={i} className="flex gap-2 py-0.5">
                                                                 <span className="w-5 h-5 border border-black rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{String.fromCharCode(65+i)}</span>
                                                                 <span className="text-sm">{opt.text}</span>
                                                             </div>
@@ -461,11 +461,11 @@ const ExamsPage = () => {
                                     </div>
 
                                     {editing.showAnswerKey && (
-                                        <div className="page-break mt-10 pt-10 border-t-2 border-dashed border-black bg-white w-full">
+                                        <div className="page-break mt-10 pt-10 border-t-2 border-dashed border-black bg-white w-full block">
                                             {renderHeaderPrint('(GABARITO)')}
-                                            <div className="mt-6 bg-white">
+                                            <div className="mt-6 bg-white block">
                                                 <h3 className="font-black text-center text-lg mb-6 uppercase border-b-2 border-black pb-2">Folha de Respostas Oficiais</h3>
-                                                <div className="grid grid-cols-2 gap-x-12 gap-y-4">
+                                                <div className="grid grid-cols-2 gap-x-12 gap-y-4 print:block">
                                                     {currentQs.map((q, idx) => {
                                                         const correctOptIndex = q.options?.findIndex(o => o.isCorrect);
                                                         const correctLetter = correctOptIndex !== undefined && correctOptIndex !== -1 
@@ -473,7 +473,7 @@ const ExamsPage = () => {
                                                             : '---';
 
                                                         return (
-                                                            <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-black pb-1 break-inside-avoid">
+                                                            <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-black pb-1 break-inside-avoid mb-2">
                                                                 <span className="font-bold text-sm">Questão {idx + 1}:</span>
                                                                 <span className="font-black text-lg">
                                                                     {correctLetter}
@@ -487,11 +487,11 @@ const ExamsPage = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div className="animate-fade-in bg-white w-full">
+                                <div className="animate-fade-in bg-white w-full block">
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
-                                    <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6 bg-white">
+                                    <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6 bg-white print:block">
                                         {currentQs.map((q, idx) => (
-                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-black pb-3 break-inside-avoid bg-white">
+                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-black pb-3 break-inside-avoid bg-white mb-4">
                                                 <span className="font-black text-slate-600 w-8">{idx + 1}</span>
                                                 <div className="flex gap-2">
                                                     {['A', 'B', 'C', 'D', 'E'].map(letter => (
@@ -501,7 +501,7 @@ const ExamsPage = () => {
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="mt-12 p-6 border-2 border-black border-dashed rounded-xl break-inside-avoid bg-white">
+                                    <div className="mt-12 p-6 border-2 border-black border-dashed rounded-xl break-inside-avoid bg-white block">
                                         <p className="text-[10px] font-black uppercase mb-4 tracking-widest">Instruções para o Cartão</p>
                                         <ul className="text-[10px] space-y-1">
                                             <li>• Utilize apenas caneta azul ou preta.</li>
@@ -526,7 +526,7 @@ const ExamsPage = () => {
     };
 
     return (
-        <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar print:p-0 print:bg-white">
+        <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar print:block print:p-0 print:bg-white print:overflow-visible">
             <div className="flex justify-between items-center mb-8 no-print">
                 <div>
                     <h2 className="text-3xl font-display font-bold text-slate-800">Minhas Provas</h2>
@@ -598,7 +598,12 @@ const ExamsPage = () => {
                         </React.Fragment>
                     ))}
                 </div>
-                <div className="animate-fade-in min-h-[400px]">{renderStepContent()}</div>
+                <div className="animate-fade-in min-h-[400px] no-print">{renderStepContent()}</div>
+                {/* 
+                    Repetimos o conteúdo de impressão fora do wizard apenas para o motor de impressão 
+                    se o passo atual for o 4. Isso garante que o navegador tenha um alvo limpo.
+                */}
+                <div className="hidden print:block">{currentStep === 4 && renderStepContent()}</div>
             </Modal>
         </div>
     );

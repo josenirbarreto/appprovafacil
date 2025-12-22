@@ -31,14 +31,14 @@
       }
     </script>
     <style>
-      /* --- MOTOR DE IMPRESSÃO PROFISSIONAL --- */
+      /* --- MOTOR DE IMPRESSÃO DEFINITIVO --- */
       @media print {
         @page {
-          margin: 15mm 10mm 15mm 10mm;
+          margin: 15mm 12mm 15mm 12mm;
           size: A4;
         }
 
-        /* 1. Neutralização de Hierarquia: Força fluxo natural de páginas */
+        /* 1. Reset Global de Altura: Permite que o conteúdo vaze para outras páginas */
         html, body {
           background: white !important;
           margin: 0 !important;
@@ -46,62 +46,67 @@
           height: auto !important;
           min-height: 0 !important;
           overflow: visible !important;
-          width: 100% !important;
           position: static !important;
+          width: 100% !important;
         }
 
-        /* 2. Esconder toda a UI do Sistema */
-        #root > *:not(main), 
+        /* 2. Esconder TUDO que não é a prova usando display:none */
+        #root > *:not(main),
         nav, aside, header, footer, button, .no-print,
         .fixed, .absolute:not(#exam-print-container *) {
           display: none !important;
         }
 
-        /* 3. "Achatar" o Modal: Transforma o overlay em uma página normal */
-        /* O React Modal geralmente cria um div no final do body */
-        #root, main, div[role="dialog"], div[role="dialog"] > div {
+        /* 3. "Desmontar" o Modal: Transforma o container fixo em um bloco de fluxo */
+        /* Isso resolve o problema da 'página em branco' por overflow:hidden */
+        div[role="dialog"], 
+        div[role="dialog"] > div,
+        main, #root {
           display: block !important;
           position: static !important;
+          overflow: visible !important;
           height: auto !important;
           min-height: 0 !important;
-          overflow: visible !important;
+          max-height: none !important;
+          width: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
-          width: 100% !important;
+          border: none !important;
           box-shadow: none !important;
-          transform: none !important;
           background: transparent !important;
+          transform: none !important;
         }
 
-        /* 4. Container da Prova: Ocupa o topo e permite quebra de página */
+        /* 4. Container Alvo da Prova */
         #exam-print-container {
           display: block !important;
           position: relative !important;
-          visibility: visible !important;
+          top: 0 !important;
+          left: 0 !important;
           width: 100% !important;
+          height: auto !important;
           margin: 0 !important;
           padding: 0 !important;
-          height: auto !important;
           background: white !important;
+          visibility: visible !important;
         }
 
-        /* 5. Motor de Multi-Colunas (Corrigido) */
+        /* 5. Motor de Colunas (Corrigido para evitar quebras estranhas) */
         .print-columns-2 {
           display: block !important;
           width: 100% !important;
           column-count: 2 !important;
           column-gap: 12mm !important;
-          column-rule: 0.2pt solid #eee !important;
-          /* Previne que as colunas tentem se equilibrar sozinhas e quebrem a ordem */
-          column-fill: auto !important; 
+          column-rule: 0.1pt solid #eee !important;
+          column-fill: auto !important;
           height: auto !important;
         }
 
-        /* 6. Garantia de Unidade da Questão */
+        /* 6. Integridade da Questão */
         .break-inside-avoid {
           display: block !important;
           width: 100% !important;
-          break-inside: avoid-column !important;
+          break-inside: avoid !important;
           page-break-inside: avoid !important;
           margin-bottom: 8mm !important;
           position: relative !important;
@@ -112,19 +117,18 @@
           page-break-before: always !important;
           break-before: page !important;
           height: 0 !important;
+          margin: 0 !important;
         }
 
-        /* Reset de Visibilidade Seletiva */
+        /* Reset de Visibilidade Binária */
         body * { visibility: hidden; }
         #exam-print-container, #exam-print-container * { visibility: visible; }
 
-        /* Cores e Nitidez */
+        /* Ajustes Finais de Cor */
         * {
           -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
           color: black !important;
-          text-shadow: none !important;
-          box-shadow: none !important;
+          background-color: transparent !important;
         }
         
         .answer-bubble {
@@ -134,7 +138,7 @@
         }
       }
 
-      /* Preview e UI (Navegador) */
+      /* Estilos Navegador (Preview) */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
