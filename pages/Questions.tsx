@@ -98,7 +98,6 @@ const QuestionsPage = () => {
     }, [allQuestions, selComp, selDisc, selChap, selUnit, selTopic, searchText, visFilter, user?.id]);
 
     const handleSave = async () => {
-        // Tópico e Unidade não são mais obrigatórios para salvar
         if(!editing.enunciado || !editing.componentId) { 
             alert('Preencha os campos obrigatórios: Área e Enunciado.'); 
             return; 
@@ -123,6 +122,8 @@ const QuestionsPage = () => {
         setIsImportLoading(true);
         try {
             const text = await PdfService.extractText(file);
+            if (!text || text.trim().length < 10) throw new Error("Texto do PDF insuficiente.");
+            
             const parsed = await GeminiService.parseQuestionsFromText(text);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 const enriched: Partial<Question>[] = parsed.map(q => ({
@@ -136,12 +137,34 @@ const QuestionsPage = () => {
                 }));
                 setBatchQuestions(enriched);
                 setIsBatchPreviewOpen(true);
-            } else alert("Nenhuma questão encontrada.");
-        } catch (error) { alert("Erro ao ler PDF."); } finally { setIsImportLoading(false); e.target.value = ''; }
+            } else alert("Nenhuma questão estruturada encontrada no arquivo.");
+        } catch (error: any) { 
+            console.error(error);
+            alert("Erro ao ler PDF: " + (error.message || "Tente novamente.")); 
+        } finally { 
+            setIsImportLoading(false); 
+            e.target.value = ''; 
+        }
+    };
+
+    const handleRepeatHierarchy = () => {
+        if (batchQuestions.length < 2) return;
+        const first = batchQuestions[0];
+        const updated = batchQuestions.map((q, idx) => {
+            if (idx === 0) return q;
+            return {
+                ...q,
+                componentId: first.componentId,
+                disciplineId: first.disciplineId,
+                chapterId: first.chapterId,
+                unitId: first.unitId,
+                topicId: first.topicId
+            };
+        });
+        setBatchQuestions(updated);
     };
 
     const handleSaveBatch = async () => {
-        // Agora permite salvar se tiver Enunciado e Área (componentId)
         const validQuestions = batchQuestions.filter(q => q.enunciado && q.componentId);
         
         if (validQuestions.length === 0) {
@@ -149,7 +172,7 @@ const QuestionsPage = () => {
         }
 
         if (validQuestions.length < batchQuestions.length) {
-            if (!confirm(`Apenas ${validQuestions.length} de ${batchQuestions.length} questões possuem os dados mínimos (Área e Enunciado) e serão salvas. Deseja continuar?`)) return;
+            if (!confirm(`Apenas ${validQuestions.length} de ${batchQuestions.length} questões possuem os dados mínimos e serão salvas. Continuar?`)) return;
         }
         
         setBatchSaving(true);
@@ -170,12 +193,10 @@ const QuestionsPage = () => {
     };
 
     const handleAiGenerate = async () => {
-        if (!editing.topicId) return alert("Selecione um tópico primeiro.");
-        const topic = activeUnit?.topics.find(t => t.id === editing.topicId);
-        if (!topic) return;
+        if (!editing.componentId) return alert("Selecione uma área primeiro.");
         setIsAiLoading(true);
         try {
-            const generated = await GeminiService.generateQuestion(topic.name, editing.type || QuestionType.MULTIPLE_CHOICE, editing.difficulty || 'Medium');
+            const generated = await GeminiService.generateQuestion("Geral", editing.type || QuestionType.MULTIPLE_CHOICE, editing.difficulty || 'Medium');
             if (generated) setEditing(prev => ({ ...prev, enunciado: generated.enunciado, options: generated.options }));
         } catch (e) { alert("Erro na IA."); } finally { setIsAiLoading(false); }
     };
@@ -203,10 +224,10 @@ const QuestionsPage = () => {
                     </div>
                     <div className="flex gap-2">
                         <div className="relative">
-                            <Button disabled={isImportLoading} variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-black h-10 px-4">
-                                {isImportLoading ? 'Lendo...' : <><Icons.Download className="w-4 h-4" /> Importar PDF</>}
+                            <Button disabled={isImportLoading} variant="outline" className={`bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-black h-10 px-4 transition-all ${isImportLoading ? 'animate-pulse' : ''}`}>
+                                {isImportLoading ? 'Processando...' : <><Icons.Download className="w-4 h-4" /> Importar PDF</>}
                             </Button>
-                            <input type="file" accept=".pdf" onChange={handlePdfImport} className="absolute inset-0 opacity-0 cursor-pointer" />
+                            {!isImportLoading && <input type="file" accept=".pdf" onChange={handlePdfImport} className="absolute inset-0 opacity-0 cursor-pointer" />}
                         </div>
                         <Button onClick={() => { setEditing({ type: QuestionType.MULTIPLE_CHOICE, difficulty: 'Medium', visibility: 'PUBLIC', options: [] }); setIsModalOpen(true); }} className="shadow-lg shadow-blue-100 h-10">
                             <Icons.Plus /> Nova Questão
@@ -227,14 +248,6 @@ const QuestionsPage = () => {
                     <Select value={selChap} onChange={e => { setSelChap(e.target.value); setSelUnit(''); setSelTopic(''); }} className="min-w-[140px] text-[10px] font-bold h-9" disabled={!selDisc}>
                         <option value="">Capítulo</option>
                         {filterDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </Select>
-                    <Select value={selUnit} onChange={e => { setSelUnit(e.target.value); setSelTopic(''); }} className="min-w-[140px] text-[10px] font-bold h-9" disabled={!selChap}>
-                        <option value="">Unidade</option>
-                        {filterChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </Select>
-                    <Select value={selTopic} onChange={e => setSelTopic(e.target.value)} className="min-w-[140px] text-[10px] font-bold h-9" disabled={!selUnit}>
-                        <option value="">Tópico</option>
-                        {filterUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </Select>
                     <div className="relative min-w-[200px] flex-1">
                         <input type="text" className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue bg-white h-9 font-medium" placeholder="Buscar no texto..." value={searchText} onChange={e => setSearchText(e.target.value)} />
@@ -284,7 +297,7 @@ const QuestionsPage = () => {
                                 </div>
                             </div>
                             <div className="prose prose-slate max-w-none mb-10 rich-text-content font-medium text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{__html: selectedQuestion.enunciado}} />
-                            {selectedQuestion.options && selectedQuestion.options.length > 0 && selectedQuestion.type !== QuestionType.SHORT_ANSWER && (
+                            {selectedQuestion.type !== QuestionType.SHORT_ANSWER && selectedQuestion.options && selectedQuestion.options.length > 0 && (
                                 <div className="space-y-3">
                                     {selectedQuestion.options.map((opt, i) => (
                                         <div key={opt.id} className={`p-4 rounded-2xl border-2 flex items-center gap-4 ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
@@ -307,14 +320,21 @@ const QuestionsPage = () => {
 
             {/* MODAL DE PREVIEW DA IMPORTAÇÃO EM LOTE */}
             <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Revisar Lote do PDF" maxWidth="max-w-7xl" footer={
-                <Button onClick={handleSaveBatch} disabled={batchSaving} className="px-10 bg-emerald-600 hover:bg-emerald-700 font-bold h-12 shadow-xl shadow-emerald-100">
-                    {batchSaving ? 'Salvando Lote...' : `Salvar Questões Validadas`}
-                </Button>
+                <div className="flex justify-between w-full items-center">
+                    <Button onClick={handleRepeatHierarchy} variant="outline" className="text-xs font-black border-slate-300">
+                        <Icons.Refresh className="w-3 h-3" /> REPETIR HIERARQUIA DA QUESTÃO 1 PARA TODAS
+                    </Button>
+                    <Button onClick={handleSaveBatch} disabled={batchSaving} className="px-10 bg-emerald-600 hover:bg-emerald-700 font-bold h-12 shadow-xl shadow-emerald-100">
+                        {batchSaving ? 'Salvando Lote...' : `Salvar ${batchQuestions.length} Questões Validadas`}
+                    </Button>
+                </div>
             }>
                 <div className="space-y-8 pb-10">
-                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 text-xs text-amber-800 rounded-r-xl">
-                        <p className="font-black uppercase tracking-tighter mb-1">Ação Requerida:</p>
-                        <p>Defina a hierarquia individual para cada questão abaixo e edite o texto se necessário. Unidades e Tópicos não deverão ser obrigatórios.</p>
+                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 text-xs text-amber-800 rounded-r-xl flex justify-between items-center">
+                        <div>
+                            <p className="font-black uppercase tracking-tighter mb-1">Ação Requerida:</p>
+                            <p>Defina a área individualmente ou configure a primeira e clique em "Repetir".</p>
+                        </div>
                     </div>
                     
                     <div className="space-y-12">
@@ -333,7 +353,7 @@ const QuestionsPage = () => {
                                     <div className="flex justify-between items-center mb-6">
                                         <Badge color="blue">QUESTÃO {idx + 1}</Badge>
                                         <div className="flex gap-2">
-                                            <Select value={bq.type} onChange={e => updateBatchQuestion(idx, { type: e.target.value as any })} className="w-40 text-[10px] h-8 font-black">
+                                            <Select value={bq.type} onChange={e => updateBatchQuestion(idx, { type: e.target.value as any, options: e.target.value === 'SHORT_ANSWER' ? [] : (bq.options?.length ? bq.options : []) })} className="w-40 text-[10px] h-8 font-black">
                                                 {Object.entries(QuestionTypeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                                             </Select>
                                             <Select value={bq.difficulty} onChange={e => updateBatchQuestion(idx, { difficulty: e.target.value as any })} className="w-32 text-[10px] h-8 font-black">
@@ -346,7 +366,7 @@ const QuestionsPage = () => {
 
                                     {/* HIERARQUIA INDIVIDUAL */}
                                     <div className="grid grid-cols-5 gap-2 mb-6">
-                                        <Select value={bq.componentId || ''} onChange={e => updateBatchQuestion(idx, { componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: '' })} className="text-[10px] font-bold h-8">
+                                        <Select value={bq.componentId || ''} onChange={e => updateBatchQuestion(idx, { componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: '' })} className={`text-[10px] font-bold h-8 ${!bq.componentId ? 'border-red-300 ring-1 ring-red-50' : ''}`}>
                                             <option value="">Área...</option>
                                             {availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
                                         </Select>
@@ -368,7 +388,7 @@ const QuestionsPage = () => {
                                         </Select>
                                     </div>
 
-                                    {/* EDITOR ENUNCIADO NO LOTE COM RICHTEXT */}
+                                    {/* EDITOR ENUNCIADO NO LOTE */}
                                     <div className="mb-6">
                                         <RichTextEditor label="Enunciado" value={bq.enunciado || ''} onChange={html => updateBatchQuestion(idx, { enunciado: html })} />
                                     </div>
@@ -399,7 +419,7 @@ const QuestionsPage = () => {
                             <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-white"><Icons.Sparkles /></div>
                             <div><h4 className="text-white text-sm font-black uppercase tracking-tight">Criador Assistido</h4><p className="text-slate-400 text-[10px]">Gerado pelo Gemini com base no tópico selecionado</p></div>
                         </div>
-                        <Button onClick={handleAiGenerate} disabled={isAiLoading || !editing.topicId} className="bg-gradient-to-r from-purple-600 to-indigo-600 border-none text-white font-black text-xs px-8 py-3">{isAiLoading ? 'Escrevendo...' : <><Icons.Sparkles className="w-4 h-4" /> Gerar com IA</>}</Button>
+                        <Button onClick={handleAiGenerate} disabled={isAiLoading || !editing.componentId} className="bg-gradient-to-r from-purple-600 to-indigo-600 border-none text-white font-black text-xs px-8 py-3">{isAiLoading ? 'Escrevendo...' : <><Icons.Sparkles className="w-4 h-4" /> Gerar com IA</>}</Button>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -426,7 +446,7 @@ const QuestionsPage = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-6">
-                        <Select label="Tipo" value={editing.type} onChange={e => setEditing({...editing, type: e.target.value as any})}>
+                        <Select label="Tipo" value={editing.type} onChange={e => setEditing({...editing, type: e.target.value as any, options: e.target.value === 'SHORT_ANSWER' ? [] : (editing.options?.length ? editing.options : []) })}>
                             {Object.entries(QuestionTypeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </Select>
                         <Select label="Dificuldade" value={editing.difficulty} onChange={e => setEditing({...editing, difficulty: e.target.value as any})}>
@@ -438,7 +458,6 @@ const QuestionsPage = () => {
 
                     <RichTextEditor label="Enunciado" value={editing.enunciado || ''} onChange={html => setEditing({...editing, enunciado: html})} />
                     
-                    {/* ALTERNATIVAS INDIVIDUAIS (Ocultas se dissertativa) */}
                     {editing.type !== QuestionType.SHORT_ANSWER && (
                         <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
                             <div className="flex justify-between items-center mb-2"><h4 className="font-black text-slate-700 uppercase text-xs tracking-widest">Alternativas</h4><Button variant="outline" className="text-[10px] h-7 px-3 font-bold" onClick={() => setEditing({...editing, options: [...(editing.options || []), { id: Date.now().toString(), text: '', isCorrect: false }]})}>+ Nova Opção</Button></div>

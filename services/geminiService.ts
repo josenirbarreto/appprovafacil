@@ -16,24 +16,20 @@ export const GeminiService = {
         try {
             const ai = getClient();
             
-            let prompt = `Create a rigorous academic question about "${topicName}". Difficulty: ${difficulty}. `;
+            let prompt = `Crie uma questão acadêmica rigorosa sobre "${topicName}". Dificuldade: ${difficulty}. `;
             
             if (type === QuestionType.MULTIPLE_CHOICE) {
-                prompt += `Type: Multiple Choice. Provide 4 options, one correct.`;
+                prompt += `Tipo: Múltipla Escolha. Forneça 4 ou 5 alternativas, uma correta.`;
             } else if (type === QuestionType.TRUE_FALSE) {
-                prompt += `Type: True/False statement.`;
+                prompt += `Tipo: Verdadeiro ou Falso.`;
             } else if (type === QuestionType.SHORT_ANSWER) {
-                prompt += `Type: Short Answer. Provide the expected answer key text.`;
-            } else if (type === QuestionType.NUMERIC) {
-                prompt += `Type: Numeric Problem. The answer must be a number. Provide the correct number as the answer key.`;
-            } else if (type === QuestionType.ASSOCIATION) {
-                prompt += `Type: Association/Matching. Provide pairs to match (e.g. Term A - Definition B).`;
+                prompt += `Tipo: Dissertativa/Aberta. Não forneça alternativas, apenas o enunciado.`;
             }
 
             const schema = {
                 type: Type.OBJECT,
                 properties: {
-                    enunciado: { type: Type.STRING, description: "The question text/statement (in Portuguese)" },
+                    enunciado: { type: Type.STRING, description: "O texto da questão em HTML formatado (pode usar <p>, <b>, <i>, <ul>, <li>)" },
                     options: {
                         type: Type.ARRAY,
                         items: {
@@ -42,7 +38,8 @@ export const GeminiService = {
                                 text: { type: Type.STRING },
                                 isCorrect: { type: Type.BOOLEAN }
                             }
-                        }
+                        },
+                        description: "Obrigatório apenas para questões objetivas. Deixe vazio [] para dissertativas."
                     }
                 },
                 required: ["enunciado", "options"]
@@ -54,7 +51,7 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    systemInstruction: "You are an assistant for teachers creating exams in Brazil. Respond strictly in Portuguese.",
+                    systemInstruction: "Você é um assistente pedagógico de elite. Responda sempre em Português do Brasil.",
                     temperature: 0.7
                 }
             });
@@ -91,8 +88,8 @@ export const GeminiService = {
                 items: {
                     type: Type.OBJECT,
                     properties: {
-                        enunciado: { type: Type.STRING },
-                        type: { type: Type.STRING, enum: [QuestionType.MULTIPLE_CHOICE, QuestionType.TRUE_FALSE, QuestionType.SHORT_ANSWER, QuestionType.NUMERIC] },
+                        enunciado: { type: Type.STRING, description: "Texto completo da questão. Se houver comandos 'Assinale', inclua no enunciado." },
+                        type: { type: Type.STRING, enum: ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] },
                         options: {
                             type: Type.ARRAY,
                             items: {
@@ -109,14 +106,17 @@ export const GeminiService = {
             };
 
             const prompt = `
-                Analise o texto abaixo extraído de um arquivo PDF de prova.
-                Identifique TODAS as questões contidas no texto, suas alternativas e, se possível, a resposta correta (gabarito).
-                Se não encontrar a resposta correta explicitamente, marque todas as isCorrect como false.
-                Tente inferir o tipo da questão (MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER).
+                Analise o texto de uma prova e extraia todas as questões.
                 
-                Texto do PDF:
+                REGRAS:
+                1. Se a questão tiver alternativas (A, B, C...), marque como MULTIPLE_CHOICE.
+                2. Se a questão for de Verdadeiro/Falso, marque como TRUE_FALSE.
+                3. Se a questão não tiver alternativas e pedir para explicar/dissertar, marque como SHORT_ANSWER e deixe options como [].
+                4. Converta o enunciado para HTML básico (<p>, <b>, <i>, <ul>).
+                
+                Texto:
                 """
-                ${text.substring(0, 30000)} 
+                ${text.substring(0, 25000)} 
                 """
             `;
 
@@ -126,8 +126,8 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    systemInstruction: "Você é um especialista em estruturar dados de provas escolares. Extraia todas as questões com máxima precisão.",
-                    temperature: 0.3 
+                    systemInstruction: "Você é um especialista em OCR e estruturação de avaliações.",
+                    temperature: 0.2
                 }
             });
 
@@ -140,11 +140,11 @@ export const GeminiService = {
                 return data.map((q: any) => ({
                     ...q,
                     difficulty: 'Medium', 
-                    options: Array.isArray(q.options) ? q.options.map((opt: any, idx: number) => ({
+                    options: (q.type === 'SHORT_ANSWER') ? [] : (Array.isArray(q.options) ? q.options.map((opt: any, idx: number) => ({
                         id: `imp-${Date.now()}-${Math.random()}-${idx}`,
                         text: opt.text,
-                        isCorrect: opt.isCorrect
-                    })) : []
+                        isCorrect: opt.isCorrect || false
+                    })) : [])
                 }));
             }
             return [];
@@ -217,16 +217,10 @@ export const GeminiService = {
 
             const prompt = `
                 VOCÊ É UM SCANNER DE GABARITOS DE ALTA PRECISÃO.
-                
-                ESTRUTURA DA IMAGEM:
-                1. Quatro quadrados pretos nos cantos (âncoras). Use-os para alinhar a perspectiva.
-                2. Layout de questões em 2 COLUNAS VERTICAIS (Lado a Lado).
-                
                 SUA MISSÃO:
                 1. Identificar o NOME do aluno escrito no campo superior.
                 2. Para cada questão de 1 até ${totalQuestions}:
                    - Se houver bolhas (A, B, C, D, E), identifique qual está pintada.
-                   - Se a linha contiver '[ DISSERTATIVA ]', retorne null para essa resposta.
                 
                 Retorne APENAS um JSON.
             `;
