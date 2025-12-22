@@ -421,10 +421,9 @@ const ExamsPage = () => {
 
                     <div className="lg:col-span-2 bg-white rounded-2xl p-8 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
                         {/* 
-                            CRÍTICO: O ID 'exam-print-container' é usado pelo CSS de impressão. 
-                            Garantimos que o conteúdo aqui seja o que queremos imprimir.
+                            CRÍTICO: O ID 'exam-print-container' deve estar limpo de margens superiores para a impressão começar no topo.
                         */}
-                        <div id="exam-print-container" className={`${printFontSize} text-slate-800 p-4 bg-white`}>
+                        <div id="exam-print-container" className={`print-active-container ${printFontSize} text-slate-800 bg-white`}>
                             {viewingMode === 'EXAM' ? (
                                 <div className="animate-fade-in bg-white">
                                     {renderHeaderPrint()}

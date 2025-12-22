@@ -33,51 +33,68 @@
     <style>
       @media print {
         @page {
-          margin: 15mm;
+          margin: 10mm;
           size: A4;
         }
 
-        /* 1. Reset de visibilidade: esconde tudo */
-        body * {
-          visibility: hidden;
-          background: transparent !important;
-          box-shadow: none !important;
-        }
-
-        /* 2. Força o container de impressão e seus filhos a ficarem visíveis */
-        #exam-print-container, 
-        #exam-print-container * {
-          visibility: visible;
-        }
-
-        /* 3. Posicionamento Crítico: tira o conteúdo de dentro do Modal travado */
-        #exam-print-container {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          display: block !important;
-          background: white !important;
-          color: black !important;
-        }
-
-        /* 4. Remove travas de scroll do body/html */
+        /* 1. Reset Radical de Margens e Altura */
         html, body {
+          margin: 0 !important;
+          padding: 0 !important;
           height: auto !important;
           overflow: visible !important;
           background: white !important;
+          width: 100% !important;
+        }
+
+        /* 2. Ocultar TUDO exceto o container de impressão */
+        /* Usamos display: none para que os elementos não ocupem espaço no topo */
+        #root > div:not(.print-active-container),
+        nav, aside, button, footer, header, .no-print,
+        [role="dialog"] > div:not(:has(#exam-print-container)) { 
+          display: none !important; 
+        }
+
+        /* 3. Forçar o container a ocupar o topo */
+        #root, main, [role="dialog"], 
+        div[class*="overflow-y-auto"], 
+        div[class*="max-h-"] {
+          position: static !important;
+          display: block !important;
+          height: auto !important;
+          overflow: visible !important;
+          width: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
         }
 
-        /* 5. Estilo das colunas e quebras */
-        .print-columns-2 {
+        #exam-print-container {
           display: block !important;
-          column-count: 2 !important;
-          column-gap: 15mm !important;
-          column-rule: 1px solid #000 !important;
+          position: relative !important;
+          top: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          visibility: visible !important;
         }
 
+        #exam-print-container * {
+          visibility: visible !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        /* 4. Controle de Colunas */
+        .print-columns-2 {
+          column-count: 2 !important;
+          column-gap: 12mm !important;
+          column-rule: 1px solid #000 !important;
+          display: block !important;
+        }
+
+        /* 5. Quebras de Página */
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
@@ -85,13 +102,12 @@
         }
 
         .page-break {
+          display: block !important;
           page-break-before: always !important;
           break-before: page !important;
-          display: block;
           height: 0;
+          margin: 0;
         }
-
-        .no-print { display: none !important; }
       }
 
       /* Estilos de preview (Navegador) */
