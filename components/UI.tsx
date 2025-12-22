@@ -65,7 +65,7 @@ export const Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { title?: str
     </div>
 );
 
-export const Badge: React.FC<{ color?: 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'orange' | 'slate', children: React.ReactNode }> = ({ color = 'blue', children }) => {
+export const Badge: React.FC<{ color?: 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'orange' | 'slate', children: React.ReactNode, className?: string }> = ({ color = 'blue', children, className = '' }) => {
     const colors = {
         blue: "bg-blue-100 text-blue-700 border-blue-200",
         green: "bg-green-100 text-green-700 border-green-200",
@@ -76,7 +76,7 @@ export const Badge: React.FC<{ color?: 'blue' | 'green' | 'red' | 'yellow' | 'pu
         slate: "bg-slate-100 text-slate-700 border-slate-200"
     };
     return (
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border whitespace-nowrap ${colors[color]}`}>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border whitespace-nowrap ${colors[color]} ${className}`}>
             {children}
         </span>
     );

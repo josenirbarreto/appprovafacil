@@ -184,7 +184,7 @@ const ExamsPage = () => {
     };
 
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="border-2 border-black p-4 mb-6">
+        <div className="border-2 border-black p-4 mb-6 break-inside-avoid">
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-black/10">
                 {selectedInstitution?.logoUrl && (
                     <img src={selectedInstitution.logoUrl} alt="Logo" className="h-12 w-auto object-contain shrink-0" />
@@ -324,11 +324,13 @@ const ExamsPage = () => {
                     </div>
 
                     {selectionMode === 'AUTO' ? (
-                        <div className="text-center py-12 flex flex-col items-center justify-center">
+                        <div className="text-center py-12 flex flex-col items-center justify-center w-full">
                             <div className="w-20 h-20 bg-blue-50 text-brand-blue rounded-full flex items-center justify-center mb-6"><Icons.Sparkles className="w-10 h-10" /></div>
                             <h3 className="text-xl font-bold text-slate-800 mb-2">Pronto para o Sorteio?</h3>
                             <p className="text-slate-500 mb-8 max-w-sm mx-auto">O sistema selecionará questões aleatórias baseadas no escopo definido.</p>
-                            <Button onClick={handleAutoGenerate} className="h-14 px-10 text-lg shadow-xl shadow-blue-100">Sortear Agora</Button>
+                            <div className="flex justify-center">
+                                <Button onClick={handleAutoGenerate} className="h-14 px-10 text-lg shadow-xl shadow-blue-100 font-black">Sortear Agora</Button>
+                            </div>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-6 max-h-[600px] overflow-y-auto custom-scrollbar pr-2 pb-10">
@@ -414,7 +416,7 @@ const ExamsPage = () => {
                             {renderHeaderPrint()}
 
                             {editing.instructions && (
-                                <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-800 italic rich-text-content" dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-800 italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
                             )}
 
                             <div 
@@ -454,7 +456,7 @@ const ExamsPage = () => {
                                                     : '---';
 
                                                 return (
-                                                    <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-slate-100 pb-1">
+                                                    <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-slate-100 pb-1 break-inside-avoid">
                                                         <span className="font-bold text-sm">Questão {idx + 1}:</span>
                                                         <span className="font-black text-brand-blue bg-blue-50 px-3 py-1 rounded border border-blue-200">
                                                             {correctLetter}
@@ -463,7 +465,7 @@ const ExamsPage = () => {
                                                 );
                                             })}
                                         </div>
-                                        <div className="mt-12 p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                        <div className="mt-12 p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest break-inside-avoid">
                                             Fim do Gabarito - Versão {activeVersion}
                                         </div>
                                     </div>
