@@ -14,6 +14,14 @@ export const Icons = {
   Trash: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
   Menu: ({ className = "w-6 h-6" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
   X: ({ className = "w-6 h-6" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+  Image: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  Table: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+  List: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>,
+  OrderedList: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h13M7 12h13M7 16h13M4 8h.01M4 12h.01M4 16h.01" /></svg>,
+  AlignLeft: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h16" /></svg>,
+  AlignCenter: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M7 12h10M4 18h16" /></svg>,
+  AlignRight: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M10 12h10M4 18h16" /></svg>,
+  AlignJustify: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
 };
 
 export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' }> = ({ className = '', variant = 'primary', ...props }) => {
@@ -99,7 +107,9 @@ export const Modal: React.FC<{ isOpen: boolean, onClose: () => void, title: stri
 
 export const RichTextEditor: React.FC<{ label?: string, value: string, onChange: (html: string) => void }> = ({ label, value, onChange }) => {
     const editorRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [activeTab, setActiveTab] = useState<'FORMAT' | 'MATH' | 'CHEM'>('FORMAT');
+    const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
 
     useEffect(() => {
         if (editorRef.current && editorRef.current.innerHTML !== value) {
@@ -129,6 +139,66 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         }
     };
 
+    const handleInsertTable = () => {
+        const rowsIn = prompt("Número de linhas:", "3") || "0";
+        const colsIn = prompt("Número de colunas:", "3") || "0";
+        const rows = parseInt(rowsIn);
+        const cols = parseInt(colsIn);
+        
+        if (rows > 0 && cols > 0) {
+            let tableHtml = '<table style="border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1; margin: 10px 0;">';
+            for (let i = 0; i < rows; i++) {
+                tableHtml += '<tr>';
+                for (let j = 0; j < cols; j++) {
+                    tableHtml += '<td style="border: 1px solid #cbd5e1; padding: 8px; min-width: 40px;">&nbsp;</td>';
+                }
+                tableHtml += '</tr>';
+            }
+            tableHtml += '</table><p>&nbsp;</p>';
+            insertHTML(tableHtml);
+        }
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const imgHtml = `<img src="${event.target?.result}" style="max-width: 100%; height: auto; display: block; margin: 10px auto;" />`;
+                insertHTML(imgHtml);
+            };
+            reader.readAsDataURL(file);
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleEditorClick = (e: React.MouseEvent) => {
+        if (e.target instanceof HTMLImageElement) {
+            setSelectedImage(e.target);
+        } else {
+            setSelectedImage(null);
+        }
+    };
+
+    const resizeImage = (change: number) => {
+        if (selectedImage) {
+            const currentWidth = selectedImage.offsetWidth;
+            const newWidth = Math.max(50, currentWidth + change);
+            selectedImage.style.width = `${newWidth}px`;
+            selectedImage.style.height = 'auto';
+            if (editorRef.current) onChange(editorRef.current.innerHTML);
+        }
+    };
+
+    const alignImage = (align: 'left' | 'center' | 'right') => {
+        if (selectedImage) {
+            selectedImage.style.marginLeft = align === 'left' ? '0' : align === 'center' ? 'auto' : 'auto';
+            selectedImage.style.marginRight = align === 'right' ? '0' : align === 'center' ? 'auto' : 'auto';
+            selectedImage.style.display = 'block';
+            if (editorRef.current) onChange(editorRef.current.innerHTML);
+        }
+    };
+
     const SYMBOLS = {
         MATH: ['π', '√', '∛', '±', '≠', '≈', '∞', '∫', '∑', 'Δ', 'α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'λ', 'μ', 'ξ', 'ρ', 'σ', 'τ', 'φ', 'χ', 'ψ', 'ω', 'Ω', '∈', '∉', '⊂', '⊆', '∪', '∩', '∀', '∃', '∠', '°'],
         CHEM: ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Fe', 'Cu', 'Zn', 'Ag', 'Au', 'Hg', 'Pb', '→', '⇄', '↑', '↓', 'Δ', '°C']
@@ -146,22 +216,46 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                         <button type="button" onClick={() => setActiveTab('MATH')} className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all rounded-t-lg mx-0.5 ${activeTab === 'MATH' ? 'bg-white text-[#4a6b8a]' : 'text-white hover:bg-white/10'}`}>Matemática</button>
                         <button type="button" onClick={() => setActiveTab('CHEM')} className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all rounded-t-lg mx-0.5 ${activeTab === 'CHEM' ? 'bg-white text-[#4a6b8a]' : 'text-white hover:bg-white/10'}`}>Química</button>
                     </div>
-                    <span className="text-[9px] text-white/50 font-mono pr-3 hidden sm:block">{activeTab}TYPE ACADEMIC v4.0</span>
+                    <span className="text-[9px] text-white/50 font-mono pr-3 hidden sm:block">ACADEMIC v7.0</span>
                 </div>
 
-                {/* Toolbar */}
+                {/* Toolbar Dinâmica */}
                 <div className="flex flex-wrap gap-1 p-2 bg-[#f0f4f7] border-b border-slate-200 min-h-[50px]">
                     {activeTab === 'FORMAT' && (
                         <div className="flex flex-wrap gap-1 items-center">
-                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('bold'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded font-bold border border-transparent hover:border-slate-300">B</button>
-                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('italic'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded italic border border-transparent hover:border-slate-300">I</button>
-                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('underline'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded underline border border-transparent hover:border-slate-300">U</button>
+                            <div className="flex gap-0.5 bg-white border border-slate-200 p-0.5 rounded shadow-sm">
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('bold'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded font-bold" title="Negrito">B</button>
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('italic'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded italic" title="Itálico">I</button>
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('underline'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded underline" title="Sublinhado">U</button>
+                            </div>
                             <div className="w-px h-6 bg-slate-300 mx-1"></div>
-                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('insertUnorderedList'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300">•</button>
-                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('insertOrderedList'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300 text-[10px]">1.</button>
+                            <div className="flex gap-0.5 bg-white border border-slate-200 p-0.5 rounded shadow-sm">
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyLeft'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded" title="Alinhar Esquerda"><Icons.AlignLeft /></button>
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyCenter'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded" title="Centralizar"><Icons.AlignCenter /></button>
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyRight'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded" title="Alinhar Direita"><Icons.AlignRight /></button>
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyFull'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded" title="Justificar"><Icons.AlignJustify /></button>
+                            </div>
                             <div className="w-px h-6 bg-slate-300 mx-1"></div>
-                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyLeft'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300"><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V7H3v2zm0-6v2h18V3H3z"/></svg></button>
-                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyCenter'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300"><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm2-4h14v-2H5v2zm-2-4h18v-2H3v2zm2-4h14V7H5v2zm-2-6v2h18V3H3z"/></svg></button>
+                            <div className="flex gap-0.5 bg-white border border-slate-200 p-0.5 rounded shadow-sm">
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('insertUnorderedList'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded" title="Marcadores"><Icons.List /></button>
+                                <button type="button" onMouseDown={e => { e.preventDefault(); exec('insertOrderedList'); }} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded" title="Numeração"><Icons.OrderedList /></button>
+                            </div>
+                            <div className="w-px h-6 bg-slate-300 mx-1"></div>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); handleInsertTable(); }} className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-slate-600" title="Inserir Tabela"><Icons.Table /></button>
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-slate-600" title="Inserir Imagem"><Icons.Image /></button>
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                            
+                            {selectedImage && (
+                                <div className="flex gap-1 items-center bg-brand-blue/10 p-1 rounded-lg border border-brand-blue/20 animate-fade-in ml-2">
+                                    <span className="text-[10px] font-black text-brand-blue uppercase px-1">Img:</span>
+                                    <button type="button" onClick={() => resizeImage(20)} className="w-7 h-7 flex items-center justify-center bg-white border rounded hover:bg-slate-50 font-bold" title="Aumentar Zoom">+</button>
+                                    <button type="button" onClick={() => resizeImage(-20)} className="w-7 h-7 flex items-center justify-center bg-white border rounded hover:bg-slate-50 font-bold" title="Diminuir Zoom">-</button>
+                                    <div className="w-px h-4 bg-brand-blue/20 mx-1"></div>
+                                    <button type="button" onClick={() => alignImage('left')} className="w-7 h-7 flex items-center justify-center bg-white border rounded hover:bg-slate-50 text-[10px] font-black">L</button>
+                                    <button type="button" onClick={() => alignImage('center')} className="w-7 h-7 flex items-center justify-center bg-white border rounded hover:bg-slate-50 text-[10px] font-black">C</button>
+                                    <button type="button" onClick={() => alignImage('right')} className="w-7 h-7 flex items-center justify-center bg-white border rounded hover:bg-slate-50 text-[10px] font-black">R</button>
+                                </div>
+                            )}
                         </div>
                     )}
                     {activeTab === 'MATH' && (
@@ -191,12 +285,12 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
                 <div 
                     ref={editorRef}
                     contentEditable
-                    className="p-5 min-h-[220px] outline-none prose prose-slate max-w-none rich-text-content font-medium text-slate-800 bg-[#fdfdfd]"
+                    onClick={handleEditorClick}
+                    className="p-5 min-h-[300px] outline-none prose prose-slate max-w-none rich-text-content font-medium text-slate-800 bg-[#fdfdfd]"
                     onBlur={(e) => onChange(e.currentTarget.innerHTML)}
                     onInput={(e) => onChange(e.currentTarget.innerHTML)}
                 />
             </div>
-            <p className="text-[10px] text-slate-400 italic">Use as abas para alternar entre formatação textual e símbolos científicos.</p>
         </div>
     );
 };
