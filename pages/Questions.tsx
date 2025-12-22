@@ -32,7 +32,8 @@ const QuestionsPage = () => {
     const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const [isImportLoading, setIsImportLoading] = useState(false);
+    // Estados de Importação
+    const [importStep, setImportStep] = useState<string | null>(null);
     const [isBatchPreviewOpen, setIsBatchPreviewOpen] = useState(false);
     const [batchQuestions, setBatchQuestions] = useState<Partial<Question>[]>([]);
     const [batchSaving, setBatchSaving] = useState(false);
@@ -119,12 +120,17 @@ const QuestionsPage = () => {
     const handlePdfImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        setIsImportLoading(true);
+        
+        setImportStep("Lendo arquivo PDF...");
         try {
             const text = await PdfService.extractText(file);
-            if (!text || text.trim().length < 10) throw new Error("Texto do PDF insuficiente.");
-            
+            if (!text || text.trim().length < 50) {
+                throw new Error("O PDF parece estar vazio ou não contém texto legível.");
+            }
+
+            setImportStep("IA analisando e estruturando questões...");
             const parsed = await GeminiService.parseQuestionsFromText(text);
+            
             if (Array.isArray(parsed) && parsed.length > 0) {
                 const enriched: Partial<Question>[] = parsed.map(q => ({
                     ...q,
@@ -137,12 +143,13 @@ const QuestionsPage = () => {
                 }));
                 setBatchQuestions(enriched);
                 setIsBatchPreviewOpen(true);
-            } else alert("Nenhuma questão estruturada encontrada no arquivo.");
+            } else {
+                alert("O sistema não conseguiu identificar questões estruturadas neste arquivo. Tente um PDF com texto mais claro.");
+            }
         } catch (error: any) { 
-            console.error(error);
-            alert("Erro ao ler PDF: " + (error.message || "Tente novamente.")); 
+            alert("Erro na importação: " + (error.message || "Tente novamente.")); 
         } finally { 
-            setIsImportLoading(false); 
+            setImportStep(null); 
             e.target.value = ''; 
         }
     };
@@ -150,7 +157,7 @@ const QuestionsPage = () => {
     const handleRepeatHierarchy = () => {
         if (batchQuestions.length < 2) return;
         const first = batchQuestions[0];
-        const updated = batchQuestions.map((q, idx) => {
+        setBatchQuestions(prev => prev.map((q, idx) => {
             if (idx === 0) return q;
             return {
                 ...q,
@@ -160,21 +167,16 @@ const QuestionsPage = () => {
                 unitId: first.unitId,
                 topicId: first.topicId
             };
-        });
-        setBatchQuestions(updated);
+        }));
     };
 
     const handleSaveBatch = async () => {
         const validQuestions = batchQuestions.filter(q => q.enunciado && q.componentId);
         
         if (validQuestions.length === 0) {
-            return alert("Nenhuma das questões listadas possui Área e Enunciado definidos.");
+            return alert("Nenhuma questão válida para salvar. Certifique-se de que a Área e o Enunciado estejam preenchidos.");
         }
 
-        if (validQuestions.length < batchQuestions.length) {
-            if (!confirm(`Apenas ${validQuestions.length} de ${batchQuestions.length} questões possuem os dados mínimos e serão salvas. Continuar?`)) return;
-        }
-        
         setBatchSaving(true);
         try {
             for (const qData of validQuestions) {
@@ -210,7 +212,20 @@ const QuestionsPage = () => {
     const selectedQuestion = allQuestions.find(q => q.id === selectedQuestionId);
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+        <div className="flex flex-col h-full bg-slate-50 overflow-hidden relative">
+            
+            {/* OVERLAY DE PROCESSAMENTO */}
+            {importStep && (
+                <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center">
+                    <div className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm text-center animate-scale-in">
+                        <div className="w-20 h-20 border-8 border-slate-100 border-t-brand-blue rounded-full animate-spin mb-6"></div>
+                        <h3 className="text-xl font-black text-slate-800 mb-2">Trabalhando no PDF</h3>
+                        <p className="text-slate-500 font-medium leading-relaxed">{importStep}</p>
+                        <p className="text-[10px] text-slate-400 mt-6 uppercase font-black tracking-widest animate-pulse">Por favor, não feche esta aba</p>
+                    </div>
+                </div>
+            )}
+
             {/* HEADER */}
             <div className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm z-10">
                 <div className="flex justify-between items-center mb-4">
@@ -224,10 +239,10 @@ const QuestionsPage = () => {
                     </div>
                     <div className="flex gap-2">
                         <div className="relative">
-                            <Button disabled={isImportLoading} variant="outline" className={`bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-black h-10 px-4 transition-all ${isImportLoading ? 'animate-pulse' : ''}`}>
-                                {isImportLoading ? 'Processando...' : <><Icons.Download className="w-4 h-4" /> Importar PDF</>}
+                            <Button variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-black h-10 px-4">
+                                <Icons.Download className="w-4 h-4" /> Importar PDF
                             </Button>
-                            {!isImportLoading && <input type="file" accept=".pdf" onChange={handlePdfImport} className="absolute inset-0 opacity-0 cursor-pointer" />}
+                            <input type="file" accept=".pdf" onChange={handlePdfImport} className="absolute inset-0 opacity-0 cursor-pointer" />
                         </div>
                         <Button onClick={() => { setEditing({ type: QuestionType.MULTIPLE_CHOICE, difficulty: 'Medium', visibility: 'PUBLIC', options: [] }); setIsModalOpen(true); }} className="shadow-lg shadow-blue-100 h-10">
                             <Icons.Plus /> Nova Questão
@@ -319,22 +334,20 @@ const QuestionsPage = () => {
             </div>
 
             {/* MODAL DE PREVIEW DA IMPORTAÇÃO EM LOTE */}
-            <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Revisar Lote do PDF" maxWidth="max-w-7xl" footer={
+            <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Revisar Questões do PDF" maxWidth="max-w-7xl" footer={
                 <div className="flex justify-between w-full items-center">
-                    <Button onClick={handleRepeatHierarchy} variant="outline" className="text-xs font-black border-slate-300">
-                        <Icons.Refresh className="w-3 h-3" /> REPETIR HIERARQUIA DA QUESTÃO 1 PARA TODAS
+                    <Button onClick={handleRepeatHierarchy} variant="outline" className="text-xs font-black border-slate-300 h-10 px-6">
+                        <Icons.Refresh className="w-3 h-3" /> REPETIR ÁREA DA 1ª PARA TODAS
                     </Button>
                     <Button onClick={handleSaveBatch} disabled={batchSaving} className="px-10 bg-emerald-600 hover:bg-emerald-700 font-bold h-12 shadow-xl shadow-emerald-100">
-                        {batchSaving ? 'Salvando Lote...' : `Salvar ${batchQuestions.length} Questões Validadas`}
+                        {batchSaving ? 'Salvando Lote...' : `Salvar ${batchQuestions.length} Questões`}
                     </Button>
                 </div>
             }>
                 <div className="space-y-8 pb-10">
-                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 text-xs text-amber-800 rounded-r-xl flex justify-between items-center">
-                        <div>
-                            <p className="font-black uppercase tracking-tighter mb-1">Ação Requerida:</p>
-                            <p>Defina a área individualmente ou configure a primeira e clique em "Repetir".</p>
-                        </div>
+                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 text-xs text-amber-800 rounded-r-xl">
+                        <p className="font-black uppercase tracking-tighter mb-1">Ação Requerida:</p>
+                        <p>Defina a área para cada questão. Você pode preencher a primeira e clicar em <b>"Repetir"</b>. Unidade e Tópico são opcionais.</p>
                     </div>
                     
                     <div className="space-y-12">
@@ -382,7 +395,7 @@ const QuestionsPage = () => {
                                             <option value="">Unidade...</option>
                                             {bChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                                         </Select>
-                                        <Select value={bq.topicId || ''} onChange={e => updateBatchQuestion(idx, { topicId: e.target.value })} disabled={!bq.unitId} className="text-[10px] font-bold h-8 border-brand-blue ring-1 ring-brand-blue/20">
+                                        <Select value={bq.topicId || ''} onChange={e => updateBatchQuestion(idx, { topicId: e.target.value })} disabled={!bq.unitId} className="text-[10px] font-bold h-8 border-slate-200">
                                             <option value="">Tópico</option>
                                             {bUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                         </Select>
@@ -458,6 +471,7 @@ const QuestionsPage = () => {
 
                     <RichTextEditor label="Enunciado" value={editing.enunciado || ''} onChange={html => setEditing({...editing, enunciado: html})} />
                     
+                    {/* ALTERNATIVAS INDIVIDUAIS (Ocultas se dissertativa) */}
                     {editing.type !== QuestionType.SHORT_ANSWER && (
                         <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
                             <div className="flex justify-between items-center mb-2"><h4 className="font-black text-slate-700 uppercase text-xs tracking-widest">Alternativas</h4><Button variant="outline" className="text-[10px] h-7 px-3 font-bold" onClick={() => setEditing({...editing, options: [...(editing.options || []), { id: Date.now().toString(), text: '', isCorrect: false }]})}>+ Nova Opção</Button></div>

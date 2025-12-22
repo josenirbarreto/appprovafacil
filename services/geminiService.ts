@@ -106,17 +106,18 @@ export const GeminiService = {
             };
 
             const prompt = `
-                Analise o texto de uma prova e extraia todas as questões.
+                Analise o texto de uma prova e extraia TODAS as questões encontradas.
                 
-                REGRAS:
-                1. Se a questão tiver alternativas (A, B, C...), marque como MULTIPLE_CHOICE.
-                2. Se a questão for de Verdadeiro/Falso, marque como TRUE_FALSE.
-                3. Se a questão não tiver alternativas e pedir para explicar/dissertar, marque como SHORT_ANSWER e deixe options como [].
-                4. Converta o enunciado para HTML básico (<p>, <b>, <i>, <ul>).
+                REGRAS CRÍTICAS:
+                1. Múltipla Escolha: Se houver letras (A, B, C...) seguidas de texto, identifique como MULTIPLE_CHOICE. Tente identificar a correta pelo contexto ou marque a primeira como false por padrão.
+                2. Verdadeiro/Falso: Identifique como TRUE_FALSE.
+                3. Dissertativa: Se não houver alternativas claras e for uma pergunta direta ou pedido de explicação, marque como SHORT_ANSWER e deixe options como [].
+                4. Converta o enunciado para HTML básico (<p>, <b>, <i>).
+                5. Se o texto estiver confuso, tente extrair o máximo possível que pareça uma pergunta acadêmica.
                 
-                Texto:
+                Texto extraído do PDF:
                 """
-                ${text.substring(0, 25000)} 
+                ${text.substring(0, 30000)} 
                 """
             `;
 
@@ -126,8 +127,8 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    systemInstruction: "Você é um especialista em OCR e estruturação de avaliações.",
-                    temperature: 0.2
+                    systemInstruction: "Você é um especialista em OCR e estruturação de avaliações. Sua missão é não deixar nenhuma questão para trás.",
+                    temperature: 0.1
                 }
             });
 
