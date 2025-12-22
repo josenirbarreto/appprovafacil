@@ -40,7 +40,7 @@ const GabaritoUI = ({ q, onChange, questionIndex = 0 }: { q: Partial<Question>, 
                 </div>
                 <div className="space-y-3">
                     {q.options?.map((opt, idx) => (
-                        <div key={idx} className="flex gap-3 items-center group">
+                        <div key={opt.id} className="flex gap-3 items-center group">
                             <div className="flex flex-col items-center">
                                 <input 
                                     type="radio" 
@@ -81,7 +81,14 @@ const GabaritoUI = ({ q, onChange, questionIndex = 0 }: { q: Partial<Question>, 
         return (
             <div className="bg-blue-50 p-6 rounded-2xl border-2 border-blue-100">
                 <label className="block text-[10px] font-black text-blue-800 uppercase mb-2 tracking-widest">Resultado Esperado</label>
-                <Input type="number" step="any" placeholder="Digite o valor numérico" value={q.options?.[0]?.text || ''} onChange={e => onChange({ options: [{ id: 'num', text: e.target.value, isCorrect: true }] })} className="font-black text-2xl h-14" />
+                <Input 
+                    type="number" 
+                    step="any" 
+                    placeholder="Digite o valor numérico" 
+                    value={q.options?.[0]?.text || ''} 
+                    onChange={e => onChange({ options: [{ id: 'num', text: e.target.value, isCorrect: true }] })} 
+                    className="font-black text-2xl h-14" 
+                />
             </div>
         );
     }
@@ -94,7 +101,7 @@ const GabaritoUI = ({ q, onChange, questionIndex = 0 }: { q: Partial<Question>, 
                     <Button variant="outline" className="text-[10px] h-7 px-3" onClick={() => onChange({ pairs: [...(q.pairs || []), { id: Date.now().toString(), left: '', right: '' }] })}>+ Novo Par</Button>
                 </div>
                 {q.pairs?.map((p, idx) => (
-                    <div key={idx} className="grid grid-cols-2 gap-4 items-center bg-white p-3 rounded-2xl border-2 border-slate-100 relative">
+                    <div key={p.id} className="grid grid-cols-2 gap-4 items-center bg-white p-3 rounded-2xl border-2 border-slate-100 relative">
                         <Input placeholder="Coluna A" value={p.left} onChange={e => { const ps = [...(q.pairs || [])]; ps[idx].left = e.target.value; onChange({ pairs: ps }); }} className="text-xs" />
                         <Input placeholder="Coluna B" value={p.right} onChange={e => { const ps = [...(q.pairs || [])]; ps[idx].right = e.target.value; onChange({ pairs: ps }); }} className="text-xs" />
                         <button onClick={() => onChange({ pairs: q.pairs?.filter((_, i) => i !== idx) })} className="absolute -right-2 -top-2 bg-red-500 text-white rounded-full p-1 shadow-lg"><Icons.X className="w-3 h-3" /></button>
@@ -137,9 +144,13 @@ const QuestionsPage = () => {
     const [batchSaving, setBatchSaving] = useState(false);
     const [isAiLoading, setIsAiLoading] = useState(false);
 
-    // Filtros de busca na tela principal
+    // Filtros de busca na tela principal (5 Níveis)
     const [selComp, setSelComp] = useState('');
     const [selDisc, setSelDisc] = useState('');
+    const [selChap, setSelChap] = useState('');
+    const [selUnit, setSelUnit] = useState('');
+    const [selTopic, setSelTopic] = useState('');
+    
     const [searchText, setSearchText] = useState('');
     const [visFilter, setVisFilter] = useState<'ALL' | 'MINE'>('ALL');
 
@@ -167,8 +178,12 @@ const QuestionsPage = () => {
         return hierarchy.filter(cc => authorized.includes(cc.id));
     }, [hierarchy, user]);
 
+    // Helpers para Filtragem Hierárquica na Lista Principal
     const filterComp = useMemo(() => hierarchy.find(cc => cc.id === selComp), [hierarchy, selComp]);
-    
+    const filterDisc = useMemo(() => filterComp?.disciplines?.find(d => d.id === selDisc), [filterComp, selDisc]);
+    const filterChap = useMemo(() => filterDisc?.chapters?.find(c => c.id === selChap), [filterDisc, selChap]);
+    const filterUnit = useMemo(() => filterChap?.units?.find(u => u.id === selUnit), [filterChap, selUnit]);
+
     // Helpers para Hierarquia Dinâmica no Modal Individual
     const activeComp = useMemo(() => hierarchy.find(cc => cc.id === editing.componentId), [hierarchy, editing.componentId]);
     const activeDisc = useMemo(() => activeComp?.disciplines?.find(d => d.id === editing.disciplineId), [activeComp, editing.disciplineId]);
@@ -179,6 +194,9 @@ const QuestionsPage = () => {
         return allQuestions.filter(q => {
             if (selComp && q.componentId !== selComp) return false;
             if (selDisc && q.disciplineId !== selDisc) return false;
+            if (selChap && q.chapterId !== selChap) return false;
+            if (selUnit && q.unitId !== selUnit) return false;
+            if (selTopic && q.topicId !== selTopic) return false;
             if (searchText) {
                 const term = searchText.toLowerCase();
                 if (!q.enunciado.toLowerCase().includes(term)) return false;
@@ -186,7 +204,7 @@ const QuestionsPage = () => {
             if (visFilter === 'MINE') return q.authorId === user?.id;
             return true;
         });
-    }, [allQuestions, selComp, selDisc, searchText, visFilter, user?.id]);
+    }, [allQuestions, selComp, selDisc, selChap, selUnit, selTopic, searchText, visFilter, user?.id]);
 
     const handleSave = async () => {
         if(!editing.enunciado || !editing.componentId) { 
@@ -220,9 +238,9 @@ const QuestionsPage = () => {
                     ...q,
                     componentId: selComp || '',
                     disciplineId: selDisc || '',
-                    chapterId: '',
-                    unitId: '',
-                    topicId: '',
+                    chapterId: selChap || '',
+                    unitId: selUnit || '',
+                    topicId: selTopic || '',
                     difficulty: 'Medium' as const
                 })));
                 setIsBatchPreviewOpen(true);
@@ -255,15 +273,6 @@ const QuestionsPage = () => {
         } catch (error) { alert("Erro no salvamento."); } finally { setBatchSaving(false); }
     };
 
-    const handleAiGenerate = async () => {
-        if (!editing.componentId) return alert("Escolha uma área.");
-        setIsAiLoading(true);
-        try {
-            const generated = await GeminiService.generateQuestion("Geral", editing.type || QuestionType.MULTIPLE_CHOICE, editing.difficulty || 'Medium');
-            if (generated) setEditing(prev => ({ ...prev, enunciado: generated.enunciado, options: generated.options }));
-        } catch (e) { alert("Erro IA."); } finally { setIsAiLoading(false); }
-    };
-
     const updateBatchQuestion = (idx: number, data: Partial<Question>) => {
         const updated = [...batchQuestions];
         updated[idx] = { ...updated[idx], ...data };
@@ -271,6 +280,27 @@ const QuestionsPage = () => {
     };
 
     const selectedQuestion = allQuestions.find(q => q.id === selectedQuestionId);
+
+    const getReviewStatusBadge = (status?: string) => {
+        const base = "px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ";
+        switch (status) {
+            case 'APPROVED': return <span className={`${base} bg-green-500 text-white border-green-600`}>Aprovada</span>;
+            case 'REJECTED': return <span className={`${base} bg-red-500 text-white border-red-600`}>Reprovada</span>;
+            default: return <span className={`${base} bg-amber-500 text-white border-amber-600`}>Pendente</span>;
+        }
+    };
+
+    const getQuestionTypeBadge = (type: QuestionType) => {
+        const base = "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tight text-white ";
+        switch (type) {
+            case QuestionType.MULTIPLE_CHOICE: return <span className={`${base} bg-blue-700`}>Obj: Múltipla</span>;
+            case QuestionType.TRUE_FALSE: return <span className={`${base} bg-emerald-700`}>Obj: V/F</span>;
+            case QuestionType.SHORT_ANSWER: return <span className={`${base} bg-purple-700`}>Discursiva</span>;
+            case QuestionType.NUMERIC: return <span className={`${base} bg-orange-700`}>Numérica</span>;
+            case QuestionType.ASSOCIATION: return <span className={`${base} bg-cyan-700`}>Associação</span>;
+            default: return <span className={`${base} bg-slate-700`}>Outro</span>;
+        }
+    };
 
     return (
         <div className="flex flex-col h-full bg-slate-50 overflow-hidden relative">
@@ -284,12 +314,12 @@ const QuestionsPage = () => {
                 </div>
             )}
 
-            {/* HEADER DA PÁGINA */}
+            {/* HEADER DA PÁGINA COM FILTROS DE 5 NÍVEIS */}
             <div className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm z-10">
                 <div className="flex justify-between items-center mb-4">
                     <div>
                         <h2 className="text-2xl font-black font-display text-slate-800 flex items-center gap-2">Banco de Questões</h2>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">{filteredQuestions.length} questões disponíveis</p>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Acervo Pedagógico Centralizado</p>
                     </div>
                     <div className="flex gap-2">
                         <div className="relative">
@@ -304,21 +334,36 @@ const QuestionsPage = () => {
                     </div>
                 </div>
 
-                {/* FILTROS DA LISTAGEM */}
-                <div className="flex items-end gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                    <Select value={selComp} onChange={e => { setSelComp(e.target.value); setSelDisc(''); }} className="min-w-[140px] text-[10px] font-bold h-10">
-                        <option value="">Área (Todas)</option>
+                {/* FILTROS HIERÁRQUICOS (5 NÍVEIS) */}
+                <div className="grid grid-cols-5 gap-2 mb-3">
+                    <Select value={selComp} onChange={e => { setSelComp(e.target.value); setSelDisc(''); setSelChap(''); setSelUnit(''); setSelTopic(''); }} className="text-[9px] font-bold h-9">
+                        <option value="">1. Área</option>
                         {availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
                     </Select>
-                    <Select value={selDisc} onChange={e => setSelDisc(e.target.value)} className="min-w-[140px] text-[10px] font-bold h-10" disabled={!selComp}>
-                        <option value="">Disciplina</option>
+                    <Select value={selDisc} onChange={e => { setSelDisc(e.target.value); setSelChap(''); setSelUnit(''); setSelTopic(''); }} className="text-[9px] font-bold h-9" disabled={!selComp}>
+                        <option value="">2. Disciplina</option>
                         {filterComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </Select>
-                    <div className="relative min-w-[300px] flex-1">
+                    <Select value={selChap} onChange={e => { setSelChap(e.target.value); setSelUnit(''); setSelTopic(''); }} className="text-[9px] font-bold h-9" disabled={!selDisc}>
+                        <option value="">3. Capítulo</option>
+                        {filterDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </Select>
+                    <Select value={selUnit} onChange={e => { setSelUnit(e.target.value); setSelTopic(''); }} className="text-[9px] font-bold h-9" disabled={!selChap}>
+                        <option value="">4. Unidade</option>
+                        {filterChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </Select>
+                    <Select value={selTopic} onChange={e => setSelTopic(e.target.value)} className="text-[9px] font-bold h-9" disabled={!selUnit}>
+                        <option value="">5. Tópico</option>
+                        {filterUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </Select>
+                </div>
+                
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
                         <input type="text" className="w-full pl-10 pr-4 py-2 text-sm border-2 border-slate-200 rounded-xl outline-none focus:border-brand-blue bg-white h-10 font-medium" placeholder="Buscar enunciado..." value={searchText} onChange={e => setSearchText(e.target.value)} />
                         <div className="absolute left-3.5 top-3 text-slate-400"><Icons.Search className="w-4 h-4" /></div>
                     </div>
-                    <Select value={visFilter} onChange={e => setVisFilter(e.target.value as any)} className="w-32 text-[10px] font-bold h-10">
+                    <Select value={visFilter} onChange={e => setVisFilter(e.target.value as any)} className="w-40 text-[10px] font-bold h-10">
                         <option value="ALL">Todo o Acervo</option>
                         <option value="MINE">Minhas Questões</option>
                     </Select>
@@ -327,30 +372,47 @@ const QuestionsPage = () => {
 
             {/* LISTAGEM E PREVIEW */}
             <div className="flex flex-1 overflow-hidden">
-                <div className="w-1/3 min-w-[350px] border-r border-slate-200 bg-white overflow-y-auto custom-scrollbar">
-                    {loading ? <div className="p-10 text-center animate-pulse font-black text-slate-300 uppercase text-[11px]">Sincronizando...</div> : (
-                        <div className="divide-y divide-slate-100">
-                            {filteredQuestions.map(q => (
-                                <div key={q.id} onClick={() => setSelectedQuestionId(q.id)} className={`p-6 cursor-pointer hover:bg-slate-50 transition-all border-l-4 ${selectedQuestionId === q.id ? 'bg-blue-50 border-brand-blue' : 'border-transparent'}`}>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <Badge color={q.difficulty === 'Hard' ? 'red' : q.difficulty === 'Medium' ? 'orange' : 'green'}>{DifficultyLabels[q.difficulty]}</Badge>
-                                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-tight">{QuestionTypeLabels[q.type]}</span>
+                <div className="w-1/3 min-w-[350px] border-r border-slate-200 bg-white flex flex-col">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0 shadow-sm z-10">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Barra de Seleção</span>
+                        <span className="bg-brand-blue text-white px-4 py-1.5 rounded-full text-[11px] font-black shadow-lg shadow-blue-200">
+                            QUESTÕES: {filteredQuestions.length} de {allQuestions.length}
+                        </span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {loading ? <div className="p-10 text-center animate-pulse font-black text-slate-300 uppercase text-[11px]">Sincronizando...</div> : (
+                            <div className="divide-y divide-slate-100">
+                                {filteredQuestions.map(q => (
+                                    <div key={q.id} onClick={() => setSelectedQuestionId(q.id)} className={`p-4 cursor-pointer hover:bg-slate-50 transition-all border-l-4 ${selectedQuestionId === q.id ? 'border-brand-blue bg-blue-50' : 'border-transparent'}`}>
+                                        <div className="flex justify-between items-start mb-2 gap-2">
+                                            <div className="flex flex-wrap gap-1">
+                                                {getQuestionTypeBadge(q.type)}
+                                                <Badge color={q.difficulty === 'Hard' ? 'red' : q.difficulty === 'Medium' ? 'orange' : 'green'}>{DifficultyLabels[q.difficulty]}</Badge>
+                                            </div>
+                                            {getReviewStatusBadge(q.reviewStatus)}
+                                        </div>
+                                        <div className="text-sm text-slate-700 line-clamp-2 font-medium rich-text-content mb-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">{FirebaseService.getFullHierarchyString(q, hierarchy)}</div>
                                     </div>
-                                    <div className="text-sm text-slate-700 line-clamp-2 font-medium rich-text-content mb-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">{FirebaseService.getFullHierarchyString(q, hierarchy)}</div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                ))}
+                                {filteredQuestions.length === 0 && <div className="p-10 text-center text-slate-400 italic text-sm">Nenhuma questão encontrada.</div>}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex-1 bg-slate-50 p-10 overflow-y-auto custom-scrollbar">
                     {selectedQuestion ? (
-                        <Card className="max-w-4xl mx-auto shadow-2xl border-none p-10">
+                        <Card className="max-w-4xl mx-auto shadow-2xl border-none p-10 rounded-[32px]">
                             <div className="flex justify-between items-start mb-8 border-b border-slate-100 pb-8">
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Nível Pedagógico</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Nível Pedagógico (5 Níveis)</p>
                                     <h3 className="text-sm font-black text-slate-800 leading-relaxed">{FirebaseService.getFullHierarchyString(selectedQuestion, hierarchy)}</h3>
+                                    <div className="mt-4 flex gap-2">
+                                        {getReviewStatusBadge(selectedQuestion.reviewStatus)}
+                                        {selectedQuestion.visibility === 'PUBLIC' && <Badge color="blue">Público (Global)</Badge>}
+                                        <Badge color="slate">Criado em {new Date(selectedQuestion.createdAt).toLocaleDateString()}</Badge>
+                                    </div>
                                 </div>
                                 <div className="flex gap-2">
                                     <Button variant="outline" className="text-xs h-9 font-black" onClick={() => { setEditing(selectedQuestion); setIsModalOpen(true); }}><Icons.Edit /> Editar</Button>
@@ -358,11 +420,30 @@ const QuestionsPage = () => {
                                 </div>
                             </div>
                             <div className="prose prose-slate max-w-none mb-12 rich-text-content font-medium text-slate-700 leading-relaxed text-lg" dangerouslySetInnerHTML={{__html: selectedQuestion.enunciado}} />
+                            
+                            {/* Visualização de Resposta correta */}
+                            <div className="space-y-4">
+                                {selectedQuestion.type === QuestionType.MULTIPLE_CHOICE || selectedQuestion.type === QuestionType.TRUE_FALSE ? (
+                                    selectedQuestion.options?.map((opt, i) => (
+                                        <div key={opt.id} className={`p-5 rounded-3xl border-2 flex items-center gap-5 transition-all ${opt.isCorrect ? 'bg-green-50 border-green-300 shadow-md shadow-green-100' : 'bg-white border-slate-100 opacity-80'}`}>
+                                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-lg ${opt.isCorrect ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'}`}>{String.fromCharCode(65+i)}</div>
+                                            <span className={`flex-1 font-bold text-base ${opt.isCorrect ? 'text-green-900' : 'text-slate-700'}`}>{opt.text}</span>
+                                            {opt.isCorrect && <div className="bg-green-500 text-white rounded-full p-1"><Icons.Check /></div>}
+                                        </div>
+                                    ))
+                                ) : selectedQuestion.type === QuestionType.SHORT_ANSWER || selectedQuestion.type === QuestionType.NUMERIC ? (
+                                    <div className="bg-blue-50 border-2 border-blue-100 p-8 rounded-[40px]">
+                                        <p className="text-[10px] font-black text-blue-400 uppercase mb-2 tracking-widest">Gabarito / Critérios</p>
+                                        <div className="text-blue-900 font-bold text-lg whitespace-pre-wrap">{selectedQuestion.options?.[0]?.text || '(Sem critérios definidos)'}</div>
+                                    </div>
+                                ) : null}
+                            </div>
                         </Card>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-300">
                             <Icons.Questions className="w-10 h-10 mb-4" />
-                            <p className="text-xl font-black uppercase tracking-widest">Banco de Dados</p>
+                            <p className="text-xl font-black uppercase tracking-widest">Visualização</p>
+                            <p className="text-sm">Selecione uma questão para ver os detalhes.</p>
                         </div>
                     )}
                 </div>
@@ -372,7 +453,7 @@ const QuestionsPage = () => {
             <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Importação em Lote" maxWidth="max-w-7xl" footer={
                 <div className="flex justify-between w-full items-center p-2">
                     <Button onClick={handleRepeatHierarchy} variant="outline" className="text-xs font-black border-slate-300 px-6 h-12 shadow-sm">
-                        <Icons.Refresh className="w-4 h-4" /> APLICAR ÁREA DA 1ª PARA TODAS
+                        <Icons.Refresh className="w-4 h-4" /> REPETIR HIERARQUIA DA 1ª PARA TODAS
                     </Button>
                     <Button onClick={handleSaveBatch} disabled={batchSaving} className="px-12 bg-emerald-600 hover:bg-emerald-700 font-black h-12 shadow-2xl text-base">
                         {batchSaving ? 'Salvando...' : `Salvar ${batchQuestions.length} Questões`}
@@ -390,7 +471,10 @@ const QuestionsPage = () => {
                             <div key={idx} className="p-8 border-2 border-slate-200 rounded-[40px] bg-white shadow-lg relative">
                                 <button onClick={() => setBatchQuestions(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-3 -right-3 w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center shadow-xl hover:bg-red-600 transition-transform hover:scale-110"><Icons.Trash /></button>
                                 <div className="flex justify-between items-center mb-8">
-                                    <Badge color="blue">QUESTÃO {idx + 1}</Badge>
+                                    <div className="flex items-center gap-4">
+                                        <Badge color="blue">QUESTÃO {idx + 1}</Badge>
+                                        <div className="flex gap-1">{getQuestionTypeBadge(bq.type as any)}</div>
+                                    </div>
                                     <div className="flex gap-3">
                                         <Select value={bq.type} onChange={e => updateBatchQuestion(idx, { type: e.target.value as any, options: [] })} className="w-44 text-[11px] h-10 font-black">
                                             {Object.entries(QuestionTypeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -401,13 +485,27 @@ const QuestionsPage = () => {
                                     </div>
                                 </div>
                                 
-                                {/* HIERARQUIA COMPLETA EM LOTE */}
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
-                                    <Select value={bq.componentId || ''} onChange={e => updateBatchQuestion(idx, { componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: '' })} className="text-[10px] font-black h-10"><option value="">Área...</option>{availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}</Select>
-                                    <Select value={bq.disciplineId || ''} onChange={e => updateBatchQuestion(idx, { disciplineId: e.target.value, chapterId: '', unitId: '', topicId: '' })} disabled={!bq.componentId} className="text-[10px] font-black h-10"><option value="">Disc...</option>{bComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
-                                    <Select value={bq.chapterId || ''} onChange={e => updateBatchQuestion(idx, { chapterId: e.target.value, unitId: '', topicId: '' })} disabled={!bq.disciplineId} className="text-[10px] font-black h-10"><option value="">Cap...</option>{bDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
-                                    <Select value={bq.unitId || ''} onChange={e => updateBatchQuestion(idx, { unitId: e.target.value, topicId: '' })} disabled={!bq.chapterId} className="text-[10px] font-black h-10"><option value="">Unid...</option>{bChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
-                                    <Select value={bq.topicId || ''} onChange={e => updateBatchQuestion(idx, { topicId: e.target.value })} disabled={!bq.unitId} className="text-[10px] font-black h-10"><option value="">Tópico...</option>{bUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+                                <div className="grid grid-cols-5 gap-2 mb-8">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase px-1">1. Área</label>
+                                        <Select value={bq.componentId || ''} onChange={e => updateBatchQuestion(idx, { componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: '' })} className="text-[10px] font-black h-9"><option value="">Selecione...</option>{availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}</Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase px-1">2. Disciplina</label>
+                                        <Select value={bq.disciplineId || ''} onChange={e => updateBatchQuestion(idx, { disciplineId: e.target.value, chapterId: '', unitId: '', topicId: '' })} disabled={!bq.componentId} className="text-[10px] font-black h-9"><option value="">Selecione...</option>{bComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase px-1">3. Capítulo</label>
+                                        <Select value={bq.chapterId || ''} onChange={e => updateBatchQuestion(idx, { chapterId: e.target.value, unitId: '', topicId: '' })} disabled={!bq.disciplineId} className="text-[10px] font-black h-9"><option value="">Selecione...</option>{bDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase px-1">4. Unidade</label>
+                                        <Select value={bq.unitId || ''} onChange={e => updateBatchQuestion(idx, { unitId: e.target.value, topicId: '' })} disabled={!bq.chapterId} className="text-[10px] font-black h-9"><option value="">Selecione...</option>{bChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase px-1">5. Tópico</label>
+                                        <Select value={bq.topicId || ''} onChange={e => updateBatchQuestion(idx, { topicId: e.target.value })} disabled={!bq.unitId} className="text-[10px] font-black h-9"><option value="">Selecione...</option>{bUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+                                    </div>
                                 </div>
 
                                 <div className="mb-8">
@@ -422,37 +520,37 @@ const QuestionsPage = () => {
                 </div>
             </Modal>
 
-            {/* MODAL EDIÇÃO/CRIAÇÃO INDIVIDUAL */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Modificar" : "Nova Questão"} maxWidth="max-w-6xl" footer={<Button onClick={handleSave} className="px-12 h-14 text-lg shadow-2xl font-black rounded-2xl">SALVAR NO BANCO</Button>}>
+            {/* MODAL EDIÇÃO/CRIAÇÃO INDIVIDUAL - HIERARQUIA COMPLETA */}
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Modificar Questão" : "Cadastrar Nova Questão"} maxWidth="max-w-6xl" footer={<Button onClick={handleSave} className="px-12 h-14 text-lg shadow-2xl font-black rounded-2xl">SALVAR NO BANCO DE DADOS</Button>}>
                 <div className="space-y-8 py-2">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                        <Select label="Área" value={editing.componentId || ''} onChange={e => setEditing({...editing, componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: ''})}>
+                    <div className="grid grid-cols-5 gap-3">
+                        <Select label="1. Área" value={editing.componentId || ''} onChange={e => setEditing({...editing, componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: ''})}>
                             <option value="">Selecione...</option>
                             {availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
                         </Select>
-                        <Select label="Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})} disabled={!editing.componentId}>
+                        <Select label="2. Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})} disabled={!editing.componentId}>
                             <option value="">Selecione...</option>
                             {activeComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </Select>
-                        <Select label="Capítulo" value={editing.chapterId || ''} onChange={e => setEditing({...editing, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!editing.disciplineId}>
+                        <Select label="3. Capítulo" value={editing.chapterId || ''} onChange={e => setEditing({...editing, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!editing.disciplineId}>
                             <option value="">Selecione...</option>
                             {activeDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </Select>
-                        <Select label="Unidade" value={editing.unitId || ''} onChange={e => setEditing({...editing, unitId: e.target.value, topicId: ''})} disabled={!editing.chapterId}>
+                        <Select label="4. Unidade" value={editing.unitId || ''} onChange={e => setEditing({...editing, unitId: e.target.value, topicId: ''})} disabled={!editing.chapterId}>
                             <option value="">Selecione...</option>
                             {activeChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </Select>
-                        <Select label="Tópico" value={editing.topicId || ''} onChange={e => setEditing({...editing, topicId: e.target.value})} disabled={!editing.unitId}>
+                        <Select label="5. Tópico" value={editing.topicId || ''} onChange={e => setEditing({...editing, topicId: e.target.value})} disabled={!editing.unitId}>
                             <option value="">Selecione...</option>
                             {activeUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </Select>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 border-t pt-8">
-                        <Select label="Tipo" value={editing.type} onChange={e => setEditing({...editing, type: e.target.value as any, options: [], pairs: []})}>
+                        <Select label="Tipo de Questão" value={editing.type} onChange={e => setEditing({...editing, type: e.target.value as any, options: [], pairs: []})}>
                             {Object.entries(QuestionTypeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </Select>
-                        <Select label="Dificuldade" value={editing.difficulty} onChange={e => setEditing({...editing, difficulty: e.target.value as any})}>
+                        <Select label="Nível de Dificuldade" value={editing.difficulty} onChange={e => setEditing({...editing, difficulty: e.target.value as any})}>
                             <option value="Easy">Fácil</option><option value="Medium">Média</option><option value="Hard">Difícil</option>
                         </Select>
                     </div>
