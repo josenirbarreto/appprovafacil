@@ -98,12 +98,19 @@ const QuestionsPage = () => {
     }, [allQuestions, selComp, selDisc, selChap, selUnit, selTopic, searchText, visFilter, user?.id]);
 
     const handleSave = async () => {
-        if(!editing.enunciado || !editing.componentId || !editing.topicId) { 
-            alert('Preencha os campos obrigatórios: Área, Tópico e Enunciado.'); 
+        // Tópico e Unidade não são mais obrigatórios para salvar
+        if(!editing.enunciado || !editing.componentId) { 
+            alert('Preencha os campos obrigatórios: Área e Enunciado.'); 
             return; 
         }
         try {
-            const q: any = { ...editing, authorId: editing.authorId || user?.id, institutionId: user?.institutionId, createdAt: editing.createdAt || new Date().toISOString(), reviewStatus: editing.reviewStatus || 'PENDING' };
+            const q: any = { 
+                ...editing, 
+                authorId: editing.authorId || user?.id, 
+                institutionId: user?.institutionId, 
+                createdAt: editing.createdAt || new Date().toISOString(), 
+                reviewStatus: editing.reviewStatus || 'PENDING' 
+            };
             if (q.id) await FirebaseService.updateQuestion(q);
             else await FirebaseService.addQuestion(q);
             setIsModalOpen(false); load();
@@ -118,7 +125,6 @@ const QuestionsPage = () => {
             const text = await PdfService.extractText(file);
             const parsed = await GeminiService.parseQuestionsFromText(text);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                // Injetamos a hierarquia atual dos filtros como padrão para facilitar
                 const enriched: Partial<Question>[] = parsed.map(q => ({
                     ...q,
                     componentId: selComp || '',
@@ -135,12 +141,20 @@ const QuestionsPage = () => {
     };
 
     const handleSaveBatch = async () => {
-        const invalid = batchQuestions.some(q => !q.componentId || !q.topicId || !q.enunciado);
-        if (invalid) return alert("Todas as questões marcadas precisam de Área, Tópico e Enunciado definidos.");
+        // Agora permite salvar se tiver Enunciado e Área (componentId)
+        const validQuestions = batchQuestions.filter(q => q.enunciado && q.componentId);
+        
+        if (validQuestions.length === 0) {
+            return alert("Nenhuma das questões listadas possui Área e Enunciado definidos.");
+        }
+
+        if (validQuestions.length < batchQuestions.length) {
+            if (!confirm(`Apenas ${validQuestions.length} de ${batchQuestions.length} questões possuem os dados mínimos (Área e Enunciado) e serão salvas. Deseja continuar?`)) return;
+        }
         
         setBatchSaving(true);
         try {
-            for (const qData of batchQuestions) {
+            for (const qData of validQuestions) {
                 await FirebaseService.addQuestion({
                     ...qData,
                     authorId: user?.id,
@@ -150,7 +164,7 @@ const QuestionsPage = () => {
                     visibility: 'PUBLIC'
                 } as Question);
             }
-            alert(`${batchQuestions.length} questões salvas!`);
+            alert(`${validQuestions.length} questões salvas com sucesso!`);
             setIsBatchPreviewOpen(false); load();
         } catch (error) { alert("Erro ao salvar lote."); } finally { setBatchSaving(false); }
     };
@@ -242,7 +256,7 @@ const QuestionsPage = () => {
                             {filteredQuestions.map(q => (
                                 <div key={q.id} onClick={() => setSelectedQuestionId(q.id)} className={`p-5 cursor-pointer hover:bg-slate-50 transition-all border-l-4 ${selectedQuestionId === q.id ? 'bg-blue-50 border-brand-blue' : 'border-transparent'}`}>
                                     <div className="flex justify-between items-start mb-2">
-                                        <Badge color={q.difficulty === 'Hard' ? 'red' : q.difficulty === 'Medium' ? 'orange' : 'green'}>{DifficultyLabels[q.difficulty]}</Badge>
+                                        <Badge color={q.difficulty === 'Hard' ? 'red' : q.difficulty === 'Medium' ? 'orange' : 'green'}>{DifficultyLabels[q.difficulty] || q.difficulty}</Badge>
                                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-tighter">{QuestionTypeLabels[q.type]}</span>
                                     </div>
                                     <div className="text-sm text-slate-700 line-clamp-2 font-medium mb-2 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
@@ -270,7 +284,7 @@ const QuestionsPage = () => {
                                 </div>
                             </div>
                             <div className="prose prose-slate max-w-none mb-10 rich-text-content font-medium text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{__html: selectedQuestion.enunciado}} />
-                            {selectedQuestion.options && selectedQuestion.options.length > 0 && (
+                            {selectedQuestion.options && selectedQuestion.options.length > 0 && selectedQuestion.type !== QuestionType.SHORT_ANSWER && (
                                 <div className="space-y-3">
                                     {selectedQuestion.options.map((opt, i) => (
                                         <div key={opt.id} className={`p-4 rounded-2xl border-2 flex items-center gap-4 ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
@@ -294,13 +308,13 @@ const QuestionsPage = () => {
             {/* MODAL DE PREVIEW DA IMPORTAÇÃO EM LOTE */}
             <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Revisar Lote do PDF" maxWidth="max-w-7xl" footer={
                 <Button onClick={handleSaveBatch} disabled={batchSaving} className="px-10 bg-emerald-600 hover:bg-emerald-700 font-bold h-12 shadow-xl shadow-emerald-100">
-                    {batchSaving ? 'Salvando Lote...' : `Salvar ${batchQuestions.length} Questões Validadas`}
+                    {batchSaving ? 'Salvando Lote...' : `Salvar Questões Validadas`}
                 </Button>
             }>
                 <div className="space-y-8 pb-10">
                     <div className="bg-amber-50 border-l-4 border-amber-400 p-4 text-xs text-amber-800 rounded-r-xl">
                         <p className="font-black uppercase tracking-tighter mb-1">Ação Requerida:</p>
-                        <p>Defina a hierarquia individual para cada questão abaixo e edite o texto se necessário. Questões sem Tópico não serão salvas.</p>
+                        <p>Defina a hierarquia individual para cada questão abaixo e edite o texto se necessário. Unidades e Tópicos não deverão ser obrigatórios.</p>
                     </div>
                     
                     <div className="space-y-12">
@@ -312,7 +326,6 @@ const QuestionsPage = () => {
 
                             return (
                                 <div key={idx} className="p-6 border-2 border-slate-200 rounded-3xl bg-white shadow-sm hover:border-brand-blue/50 transition-all relative group">
-                                    {/* Botão Remover Individual */}
                                     <button onClick={() => setBatchQuestions(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors z-10">
                                         <Icons.Trash className="w-4 h-4" />
                                     </button>
@@ -350,18 +363,18 @@ const QuestionsPage = () => {
                                             {bChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                                         </Select>
                                         <Select value={bq.topicId || ''} onChange={e => updateBatchQuestion(idx, { topicId: e.target.value })} disabled={!bq.unitId} className="text-[10px] font-bold h-8 border-brand-blue ring-1 ring-brand-blue/20">
-                                            <option value="">Tópico *</option>
+                                            <option value="">Tópico</option>
                                             {bUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                         </Select>
                                     </div>
 
-                                    {/* EDITOR ENUNCIADO */}
+                                    {/* EDITOR ENUNCIADO NO LOTE COM RICHTEXT */}
                                     <div className="mb-6">
                                         <RichTextEditor label="Enunciado" value={bq.enunciado || ''} onChange={html => updateBatchQuestion(idx, { enunciado: html })} />
                                     </div>
 
-                                    {/* ALTERNATIVAS EDITÁVEIS */}
-                                    {bq.type === QuestionType.MULTIPLE_CHOICE && (
+                                    {/* ALTERNATIVAS EDITÁVEIS (Ocultas se dissertativa) */}
+                                    {bq.type !== QuestionType.SHORT_ANSWER && (
                                         <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl">
                                             {bq.options?.map((opt, oidx) => (
                                                 <div key={oidx} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-brand-blue transition-all">
@@ -425,7 +438,8 @@ const QuestionsPage = () => {
 
                     <RichTextEditor label="Enunciado" value={editing.enunciado || ''} onChange={html => setEditing({...editing, enunciado: html})} />
                     
-                    {editing.type === QuestionType.MULTIPLE_CHOICE && (
+                    {/* ALTERNATIVAS INDIVIDUAIS (Ocultas se dissertativa) */}
+                    {editing.type !== QuestionType.SHORT_ANSWER && (
                         <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
                             <div className="flex justify-between items-center mb-2"><h4 className="font-black text-slate-700 uppercase text-xs tracking-widest">Alternativas</h4><Button variant="outline" className="text-[10px] h-7 px-3 font-bold" onClick={() => setEditing({...editing, options: [...(editing.options || []), { id: Date.now().toString(), text: '', isCorrect: false }]})}>+ Nova Opção</Button></div>
                             <div className="space-y-3">
