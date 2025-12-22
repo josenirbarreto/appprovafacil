@@ -19,17 +19,17 @@ export const GeminiService = {
             let prompt = `Crie uma questão acadêmica rigorosa sobre "${topicName}". Dificuldade: ${difficulty}. `;
             
             if (type === QuestionType.MULTIPLE_CHOICE) {
-                prompt += `Tipo: Múltipla Escolha. Forneça 4 ou 5 alternativas, uma correta.`;
+                prompt += `Tipo: Múltipla Escolha. Forneça 4 ou 5 alternativas, uma correta. NÃO inclua as letras das alternativas no enunciado.`;
             } else if (type === QuestionType.TRUE_FALSE) {
                 prompt += `Tipo: Verdadeiro ou Falso.`;
             } else if (type === QuestionType.SHORT_ANSWER) {
-                prompt += `Tipo: Dissertativa/Aberta. Não forneça alternativas, apenas o enunciado.`;
+                prompt += `Tipo: Dissertativa/Aberta. Forneça o enunciado e uma resposta esperada no campo de sugestão de gabarito.`;
             }
 
             const schema = {
                 type: Type.OBJECT,
                 properties: {
-                    enunciado: { type: Type.STRING, description: "O texto da questão em HTML formatado (pode usar <p>, <b>, <i>, <ul>, <li>)" },
+                    enunciado: { type: Type.STRING, description: "O texto da questão em HTML formatado. NÃO inclua as alternativas aqui." },
                     options: {
                         type: Type.ARRAY,
                         items: {
@@ -38,11 +38,11 @@ export const GeminiService = {
                                 text: { type: Type.STRING },
                                 isCorrect: { type: Type.BOOLEAN }
                             }
-                        },
-                        description: "Obrigatório apenas para questões objetivas. Deixe vazio [] para dissertativas."
-                    }
+                        }
+                    },
+                    gabaritoSugerido: { type: Type.STRING, description: "Para dissertativas, a resposta correta esperada." }
                 },
-                required: ["enunciado", "options"]
+                required: ["enunciado"]
             };
 
             const response = await ai.models.generateContent({
@@ -51,7 +51,7 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    systemInstruction: "Você é um assistente pedagógico de elite. Responda sempre em Português do Brasil.",
+                    systemInstruction: "Você é um assistente pedagógico de elite. Responda sempre em Português do Brasil. Mantenha enunciado e alternativas estritamente separados.",
                     temperature: 0.7
                 }
             });
@@ -68,7 +68,9 @@ export const GeminiService = {
                         id: `gen-${Date.now()}-${idx}`,
                         text: opt.text,
                         isCorrect: opt.isCorrect
-                    })) : []
+                    })) : [],
+                    // FIX: 'options_association' changed to 'pairs' which is a valid property of Question type
+                    pairs: []
                 };
             }
             return null;
@@ -88,8 +90,8 @@ export const GeminiService = {
                 items: {
                     type: Type.OBJECT,
                     properties: {
-                        enunciado: { type: Type.STRING, description: "Texto completo da questão. Se houver comandos 'Assinale', inclua no enunciado." },
-                        type: { type: Type.STRING, enum: ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] },
+                        enunciado: { type: Type.STRING, description: "Texto do comando da questão em HTML. REMOVA as alternativas deste campo." },
+                        type: { type: Type.STRING, enum: ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC"] },
                         options: {
                             type: Type.ARRAY,
                             items: {
@@ -101,21 +103,21 @@ export const GeminiService = {
                             }
                         }
                     },
-                    required: ["enunciado", "type", "options"]
+                    required: ["enunciado", "type"]
                 }
             };
 
             const prompt = `
-                Analise o texto de uma prova e extraia TODAS as questões encontradas.
+                Analise o texto de uma prova e extraia as questões.
                 
-                REGRAS CRÍTICAS:
-                1. Múltipla Escolha: Se houver letras (A, B, C...) seguidas de texto, identifique como MULTIPLE_CHOICE. Tente identificar a correta pelo contexto ou marque a primeira como false por padrão.
-                2. Verdadeiro/Falso: Identifique como TRUE_FALSE.
-                3. Dissertativa: Se não houver alternativas claras e for uma pergunta direta ou pedido de explicação, marque como SHORT_ANSWER e deixe options como [].
-                4. Converta o enunciado para HTML básico (<p>, <b>, <i>).
-                5. Se o texto estiver confuso, tente extrair o máximo possível que pareça uma pergunta acadêmica.
+                REGRAS DE OURO:
+                1. O campo 'enunciado' deve conter APENAS o comando da pergunta. 
+                2. NUNCA inclua as alternativas (A, B, C...) dentro do enunciado.
+                3. Se encontrar alternativas no texto original, remova-as do enunciado e coloque-as estritamente no campo 'options'.
+                4. Se não houver alternativas, marque como SHORT_ANSWER.
+                5. Se a resposta for apenas um número, marque como NUMERIC.
                 
-                Texto extraído do PDF:
+                Texto:
                 """
                 ${text.substring(0, 30000)} 
                 """
@@ -127,7 +129,7 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    systemInstruction: "Você é um especialista em OCR e estruturação de avaliações. Sua missão é não deixar nenhuma questão para trás.",
+                    systemInstruction: "Você é um especialista em estruturação de dados. Sua prioridade é separar o comando da questão de suas alternativas.",
                     temperature: 0.1
                 }
             });
@@ -141,7 +143,7 @@ export const GeminiService = {
                 return data.map((q: any) => ({
                     ...q,
                     difficulty: 'Medium', 
-                    options: (q.type === 'SHORT_ANSWER') ? [] : (Array.isArray(q.options) ? q.options.map((opt: any, idx: number) => ({
+                    options: (Array.isArray(q.options) ? q.options.map((opt: any, idx: number) => ({
                         id: `imp-${Date.now()}-${Math.random()}-${idx}`,
                         text: opt.text,
                         isCorrect: opt.isCorrect || false
@@ -156,37 +158,40 @@ export const GeminiService = {
         }
     },
 
-    checkSimilarity: async (newQuestionText: string, candidates: Question[]): Promise<{ isDuplicate: boolean, score: number, matchId?: string, reason?: string }> => {
+    // FIX: Added missing 'checkSimilarity' method used in ModerationPage
+    checkSimilarity: async (enunciado: string, candidates: Question[]): Promise<any> => {
         try {
             if (candidates.length === 0) return { isDuplicate: false, score: 0 };
+            
             const ai = getClient();
             
-            const candidatesJson = candidates.map(c => ({
-                id: c.id,
-                text: c.enunciado.replace(/<[^>]*>?/gm, '').substring(0, 300) 
-            }));
-
-            const prompt = `
-                Analise se a "NOVA QUESTÃO" é semanticamente duplicada ou muito parecida com alguma das "CANDIDATAS".
-                
-                NOVA QUESTÃO: "${newQuestionText.replace(/<[^>]*>?/gm, '')}"
-                
-                CANDIDATAS:
-                ${JSON.stringify(candidatesJson)}
-                
-                Responda APENAS o JSON.
-            `;
-
             const schema = {
                 type: Type.OBJECT,
                 properties: {
-                    isDuplicate: { type: Type.BOOLEAN },
-                    matchId: { type: Type.STRING, nullable: true },
-                    score: { type: Type.NUMBER },
-                    reason: { type: Type.STRING }
+                    isDuplicate: { type: Type.BOOLEAN, description: "Verdadeiro se houver alta similaridade semântica" },
+                    score: { type: Type.NUMBER, description: "Probabilidade de 0 a 100 de ser a mesma questão" },
+                    reason: { type: Type.STRING, description: "Explicação técnica da duplicidade" },
+                    matchId: { type: Type.STRING, description: "ID da questão existente mais parecida" }
                 },
-                required: ["isDuplicate", "score"]
+                required: ["isDuplicate", "score", "reason"]
             };
+
+            // Filtra candidatos para enviar apenas o texto plano para economizar tokens
+            const candidateTexts = candidates.slice(0, 20).map(c => ({
+                id: c.id,
+                text: c.enunciado.replace(/<[^>]*>?/gm, '').substring(0, 500)
+            }));
+
+            const prompt = `
+                Avalie se a questão abaixo é uma duplicata semântica de alguma das questões existentes no banco de dados.
+                Ignore diferenças de formatação HTML ou pontuação menor.
+                
+                QUESTÃO NOVA:
+                "${enunciado.replace(/<[^>]*>?/gm, '')}"
+                
+                BANCO DE CANDIDATOS:
+                ${JSON.stringify(candidateTexts)}
+            `;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
@@ -194,61 +199,7 @@ export const GeminiService = {
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    temperature: 0.1 
-                }
-            });
-
-            FirebaseService.trackAiUsage();
-
-            if (response.text) {
-                return JSON.parse(response.text);
-            }
-            return { isDuplicate: false, score: 0 };
-
-        } catch (error) {
-            console.error("Similarity Check Error:", error);
-            return { isDuplicate: false, score: 0 };
-        }
-    },
-
-    gradeExamImage: async (imageBase64: string, totalQuestions: number): Promise<{ studentName: string, answers: Record<string, string> } | null> => {
-        try {
-            const ai = getClient();
-            const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
-
-            const prompt = `
-                VOCÊ É UM SCANNER DE GABARITOS DE ALTA PRECISÃO.
-                SUA MISSÃO:
-                1. Identificar o NOME do aluno escrito no campo superior.
-                2. Para cada questão de 1 até ${totalQuestions}:
-                   - Se houver bolhas (A, B, C, D, E), identifique qual está pintada.
-                
-                Retorne APENAS um JSON.
-            `;
-
-            const schema = {
-                type: Type.OBJECT,
-                properties: {
-                    studentName: { type: Type.STRING },
-                    answers: {
-                        type: Type.OBJECT,
-                        description: "Chave é o número da questão, valor é a letra (A, B, C, D, E) ou null"
-                    }
-                },
-                required: ["answers"]
-            };
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: {
-                    parts: [
-                        { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
-                        { text: prompt }
-                    ]
-                },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: schema,
+                    systemInstruction: "Você é um auditor de integridade pedagógica. Sua função é impedir que questões repetidas entrem no acervo global.",
                     temperature: 0.1
                 }
             });
@@ -258,11 +209,10 @@ export const GeminiService = {
             if (response.text) {
                 return JSON.parse(response.text);
             }
-            return null;
-
+            return { isDuplicate: false, score: 0, reason: "Análise inconclusiva" };
         } catch (error) {
-            console.error("Gemini Vision Grading Error:", error);
-            return null;
+            console.error("Gemini Similarity Error:", error);
+            return { isDuplicate: false, score: 0, reason: "Erro ao processar análise de similaridade" };
         }
     }
 };
