@@ -420,9 +420,12 @@ const ExamsPage = () => {
                     </div>
 
                     <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
-                        <div id="exam-print-container" className={`${printFontSize} text-black bg-white`}>
+                        {/* 
+                            O ID 'exam-print-container' é alvo do CSS de impressão para garantir fluxo contínuo.
+                        */}
+                        <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full`}>
                             {viewingMode === 'EXAM' ? (
-                                <div className="animate-fade-in bg-white">
+                                <div className="animate-fade-in bg-white w-full">
                                     {renderHeaderPrint()}
 
                                     {editing.instructions && (
@@ -430,7 +433,7 @@ const ExamsPage = () => {
                                     )}
 
                                     <div 
-                                        className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : ''}`}
+                                        className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'w-full'}`}
                                     >
                                         {currentQs.map((q, idx) => (
                                             <div key={q.id || idx} className="mb-6 break-inside-avoid bg-white">
@@ -453,7 +456,7 @@ const ExamsPage = () => {
                                     </div>
 
                                     {editing.showAnswerKey && (
-                                        <div className="page-break mt-10 pt-10 border-t-2 border-dashed border-black bg-white">
+                                        <div className="page-break mt-10 pt-10 border-t-2 border-dashed border-black bg-white w-full">
                                             {renderHeaderPrint('(GABARITO)')}
                                             <div className="mt-6 bg-white">
                                                 <h3 className="font-black text-center text-lg mb-6 uppercase border-b-2 border-black pb-2">Folha de Respostas Oficiais</h3>
@@ -479,7 +482,7 @@ const ExamsPage = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div className="animate-fade-in bg-white">
+                                <div className="animate-fade-in bg-white w-full">
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
                                     <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6 bg-white">
                                         {currentQs.map((q, idx) => (

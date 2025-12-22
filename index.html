@@ -31,38 +31,34 @@
       }
     </script>
     <style>
+      /* --- ESTILOS DE IMPRESSÃO --- */
       @media print {
         @page {
-          margin: 12mm;
+          margin: 15mm 10mm 15mm 10mm; /* Margens físicas da folha */
           size: A4;
         }
 
-        /* 1. Reset Global de Impressão */
+        /* 1. Reset Total de Layout para Fluxo Contínuo */
         html, body {
-          background: white !important;
-          color: black !important;
           margin: 0 !important;
           padding: 0 !important;
           height: auto !important;
           min-height: 0 !important;
           overflow: visible !important;
+          background: white !important;
+          color: black !important;
           width: 100% !important;
         }
 
-        /* 2. Ocultar tudo que não for o container de prova */
-        body > *:not(#root),
-        nav, aside, header, footer, button, .no-print {
-          display: none !important;
-        }
-
-        /* 3. Desmontar o Modal para permitir quebra de página */
+        /* 2. Neutralização de Containers de UI (Modal, Sidebar, Nav) */
         #root, 
         main, 
         [role="dialog"], 
         [role="dialog"] > div,
         div[class*="fixed"], 
         div[class*="absolute"],
-        div[class*="overflow-y-auto"] {
+        div[class*="overflow-y-auto"],
+        div[class*="max-h-"] {
           position: static !important;
           display: block !important;
           height: auto !important;
@@ -72,35 +68,41 @@
           padding: 0 !important;
           border: none !important;
           box-shadow: none !important;
-          background: white !important;
+          background: transparent !important;
           transform: none !important;
+          width: 100% !important;
         }
 
-        /* 4. O container da prova deve começar no topo absoluto */
+        /* 3. Ocultar elementos desnecessários */
+        nav, aside, header, footer, button, .no-print, 
+        .fixed.inset-0.bg-slate-900\/60 { /* Overlay do modal */
+          display: none !important;
+        }
+
+        /* 4. Container Principal da Prova */
         #exam-print-container {
           display: block !important;
           width: 100% !important;
+          margin: 0 !important;
           padding: 0 !important;
-          margin-top: 0 !important;
           visibility: visible !important;
         }
 
-        /* 5. Motor de Colunas Robusto */
+        /* 5. Motor de Colunas A4 */
         .print-columns-2 {
           display: block !important;
           column-count: 2 !important;
           column-gap: 12mm !important;
-          column-rule: 0.5pt solid #000 !important;
-          widows: 2;
-          orphans: 2;
+          column-rule: 0.5pt solid #eee !important; /* Divisor sutil entre colunas */
+          width: 100% !important;
         }
 
-        /* 6. Prevenção de quebras no meio de questões */
+        /* 6. Controle de Quebras de Página e Coluna */
         .break-inside-avoid {
           break-inside: avoid-column !important;
           page-break-inside: avoid !important;
           display: block !important;
-          margin-bottom: 5mm !important;
+          margin-bottom: 6mm !important;
         }
 
         .page-break {
@@ -108,9 +110,10 @@
           page-break-before: always !important;
           break-before: page !important;
           height: 0 !important;
+          margin: 0 !important;
         }
 
-        /* Reset de cores para economia */
+        /* Reset de Cores e Fundo */
         * {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
@@ -119,17 +122,18 @@
           text-shadow: none !important;
         }
         
-        #exam-print-container .bg-white,
-        #exam-print-container .bg-slate-50 {
-           background-color: white !important;
-        }
-
         .answer-bubble {
           border: 1pt solid black !important;
+          background-color: white !important;
+        }
+
+        /* Garantir visibilidade do texto */
+        .rich-text-content p, .rich-text-content span {
+          color: black !important;
         }
       }
 
-      /* Preview e UI */
+      /* Preview e UI (Navegador) */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
