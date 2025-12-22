@@ -119,14 +119,14 @@ const QuestionsPage = () => {
             const parsed = await GeminiService.parseQuestionsFromText(text);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 // Injetamos a hierarquia atual dos filtros como padrão para facilitar
-                const enriched = parsed.map(q => ({
+                const enriched: Partial<Question>[] = parsed.map(q => ({
                     ...q,
                     componentId: selComp || '',
                     disciplineId: selDisc || '',
                     chapterId: selChap || '',
                     unitId: selUnit || '',
                     topicId: selTopic || '',
-                    difficulty: 'Medium'
+                    difficulty: 'Medium' as const
                 }));
                 setBatchQuestions(enriched);
                 setIsBatchPreviewOpen(true);
