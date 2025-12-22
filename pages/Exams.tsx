@@ -185,26 +185,26 @@ const ExamsPage = () => {
     };
 
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="border-2 border-black p-4 mb-6 break-inside-avoid bg-white">
+        <div className="border-2 border-black p-4 mb-4 break-inside-avoid bg-white">
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-black/10">
                 {selectedInstitution?.logoUrl && (
-                    <img src={selectedInstitution.logoUrl} alt="Logo" className="h-12 w-auto object-contain shrink-0" />
+                    <img src={selectedInstitution.logoUrl} alt="Logo" className="h-10 w-auto object-contain shrink-0" />
                 )}
                 <div className="flex-1">
-                    <h1 className="font-black text-lg uppercase leading-tight">{selectedInstitution?.name || 'INSTITUIÇÃO DE ENSINO'}</h1>
-                    <h2 className="font-bold text-sm uppercase text-slate-600">{editing.title || 'AVALIAÇÃO'} {titleSuffix}</h2>
+                    <h1 className="font-black text-base uppercase leading-tight">{selectedInstitution?.name || 'INSTITUIÇÃO DE ENSINO'}</h1>
+                    <h2 className="font-bold text-xs uppercase text-slate-600">{editing.title || 'AVALIAÇÃO'} {titleSuffix}</h2>
                 </div>
                 <div className="text-right">
                     <div className="text-[10px] font-black border border-black px-2 py-0.5 rounded">VERSÃO: {activeVersion}</div>
                 </div>
             </div>
-            <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                {headerFields.nome && <div className="border-b border-black pb-1 font-bold">ALUNO:</div>}
-                {headerFields.data && <div className="border-b border-black pb-1 font-bold">DATA: ____/____/____</div>}
-                {headerFields.turma && <div className="border-b border-black pb-1 font-bold">TURMA:</div>}
+            <div className="grid grid-cols-2 gap-y-3 gap-x-8">
+                {headerFields.nome && <div className="border-b border-black pb-0.5 font-bold text-xs">ALUNO:</div>}
+                {headerFields.data && <div className="border-b border-black pb-0.5 font-bold text-xs">DATA: ____/____/____</div>}
+                {headerFields.turma && <div className="border-b border-black pb-0.5 font-bold text-xs">TURMA:</div>}
                 <div className="flex gap-4">
-                    {headerFields.nota && <div className="flex-1 border-b border-black pb-1 font-bold">NOTA:</div>}
-                    {headerFields.valor && <div className="flex-1 border-b border-black pb-1 font-bold">VALOR: 10,0</div>}
+                    {headerFields.nota && <div className="flex-1 border-b border-black pb-0.5 font-bold text-xs">NOTA:</div>}
+                    {headerFields.valor && <div className="flex-1 border-b border-black pb-0.5 font-bold text-xs">VALOR: 10,0</div>}
                 </div>
             </div>
         </div>
@@ -419,17 +419,14 @@ const ExamsPage = () => {
                         </div>
                     </div>
 
-                    <div className="lg:col-span-2 bg-white rounded-2xl p-8 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
-                        {/* 
-                            CRÍTICO: O ID 'exam-print-container' deve estar limpo de margens superiores para a impressão começar no topo.
-                        */}
-                        <div id="exam-print-container" className={`print-active-container ${printFontSize} text-slate-800 bg-white`}>
+                    <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
+                        <div id="exam-print-container" className={`${printFontSize} text-black bg-white`}>
                             {viewingMode === 'EXAM' ? (
                                 <div className="animate-fade-in bg-white">
                                     {renderHeaderPrint()}
 
                                     {editing.instructions && (
-                                        <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-800 italic rich-text-content break-inside-avoid print:bg-white" dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                        <div className="mb-4 p-3 bg-white border-l-4 border-black italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
                                     )}
 
                                     <div 
@@ -446,7 +443,7 @@ const ExamsPage = () => {
                                                         {q.options.map((opt, i) => (
                                                             <div key={i} className="flex gap-2">
                                                                 <span className="w-5 h-5 border border-black rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{String.fromCharCode(65+i)}</span>
-                                                                <span>{opt.text}</span>
+                                                                <span className="text-sm">{opt.text}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -456,7 +453,7 @@ const ExamsPage = () => {
                                     </div>
 
                                     {editing.showAnswerKey && (
-                                        <div className="page-break mt-10 pt-10 border-t border-dashed border-slate-200 bg-white">
+                                        <div className="page-break mt-10 pt-10 border-t-2 border-dashed border-black bg-white">
                                             {renderHeaderPrint('(GABARITO)')}
                                             <div className="mt-6 bg-white">
                                                 <h3 className="font-black text-center text-lg mb-6 uppercase border-b-2 border-black pb-2">Folha de Respostas Oficiais</h3>
@@ -468,9 +465,9 @@ const ExamsPage = () => {
                                                             : '---';
 
                                                         return (
-                                                            <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-slate-100 pb-1 break-inside-avoid">
+                                                            <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-black pb-1 break-inside-avoid">
                                                                 <span className="font-bold text-sm">Questão {idx + 1}:</span>
-                                                                <span className="font-black text-brand-blue bg-blue-50 px-3 py-1 rounded border border-blue-200 print:bg-transparent print:border-black print:text-black">
+                                                                <span className="font-black text-lg">
                                                                     {correctLetter}
                                                                 </span>
                                                             </div>
@@ -486,8 +483,8 @@ const ExamsPage = () => {
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
                                     <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6 bg-white">
                                         {currentQs.map((q, idx) => (
-                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-slate-100 pb-3 break-inside-avoid bg-white">
-                                                <span className="font-black text-slate-400 w-8">{idx + 1}</span>
+                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-black pb-3 break-inside-avoid bg-white">
+                                                <span className="font-black text-slate-600 w-8">{idx + 1}</span>
                                                 <div className="flex gap-2">
                                                     {['A', 'B', 'C', 'D', 'E'].map(letter => (
                                                         <div key={letter} className="answer-bubble bg-white">{letter}</div>

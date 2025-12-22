@@ -31,79 +31,76 @@
       }
     </script>
     <style>
-      /* ESTILOS DE IMPRESSÃO - CORREÇÃO DEFINITIVA */
       @media print {
         @page {
-          margin: 10mm;
+          margin: 12mm;
           size: A4;
         }
 
-        /* 1. Reset de Layout Global: remove restrições de altura e scroll */
+        /* 1. Reset Global de Impressão */
         html, body {
+          background: white !important;
+          color: black !important;
+          margin: 0 !important;
+          padding: 0 !important;
           height: auto !important;
           min-height: 0 !important;
           overflow: visible !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: white !important;
+          width: 100% !important;
         }
 
-        /* 2. Forçar todos os ancestrais a serem transparentes no fluxo */
-        /* Isso impede que o modal "trave" o conteúdo em uma página só */
+        /* 2. Ocultar tudo que não for o container de prova */
+        body > *:not(#root),
+        nav, aside, header, footer, button, .no-print {
+          display: none !important;
+        }
+
+        /* 3. Desmontar o Modal para permitir quebra de página */
         #root, 
-        #root > div, 
         main, 
         [role="dialog"], 
         [role="dialog"] > div,
-        div[class*="overflow-y-auto"],
-        div[class*="max-h-"] {
+        div[class*="fixed"], 
+        div[class*="absolute"],
+        div[class*="overflow-y-auto"] {
           position: static !important;
           display: block !important;
           height: auto !important;
           min-height: 0 !important;
           overflow: visible !important;
-          width: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
           border: none !important;
           box-shadow: none !important;
+          background: white !important;
           transform: none !important;
         }
 
-        /* 3. Ocultar interface do sistema e overlays do modal */
-        nav, 
-        aside, 
-        header, 
-        footer, 
-        button, 
-        .no-print,
-        .fixed.inset-0.bg-slate-900\/60 { /* Fundo escuro do modal */
-          display: none !important;
-        }
-
-        /* 4. Garantir que o container de prova seja o foco */
+        /* 4. O container da prova deve começar no topo absoluto */
         #exam-print-container {
           display: block !important;
-          visibility: visible !important;
-          position: relative !important;
           width: 100% !important;
-          margin: 0 !important;
           padding: 0 !important;
-          top: 0 !important;
-          left: 0 !important;
+          margin-top: 0 !important;
+          visibility: visible !important;
         }
 
-        /* 5. Comportamento de Conteúdo */
+        /* 5. Motor de Colunas Robusto */
         .print-columns-2 {
           display: block !important;
           column-count: 2 !important;
           column-gap: 12mm !important;
-          column-rule: 1px solid #000 !important;
+          column-rule: 0.5pt solid #000 !important;
+          widows: 2;
+          orphans: 2;
         }
 
+        /* 6. Prevenção de quebras no meio de questões */
         .break-inside-avoid {
-          break-inside: avoid !important;
+          break-inside: avoid-column !important;
           page-break-inside: avoid !important;
+          display: block !important;
+          margin-bottom: 5mm !important;
         }
 
         .page-break {
@@ -113,16 +110,26 @@
           height: 0 !important;
         }
 
-        /* Ajuste de cores para impressão econômica */
+        /* Reset de cores para economia */
         * {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
-          text-shadow: none !important;
+          background-color: transparent !important;
           box-shadow: none !important;
+          text-shadow: none !important;
+        }
+        
+        #exam-print-container .bg-white,
+        #exam-print-container .bg-slate-50 {
+           background-color: white !important;
+        }
+
+        .answer-bubble {
+          border: 1pt solid black !important;
         }
       }
 
-      /* Estilos de preview (Navegador) */
+      /* Preview e UI */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
