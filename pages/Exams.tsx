@@ -185,7 +185,7 @@ const ExamsPage = () => {
     };
 
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="border-2 border-black p-4 mb-6 break-inside-avoid">
+        <div className="border-2 border-black p-4 mb-6 break-inside-avoid bg-white">
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-black/10">
                 {selectedInstitution?.logoUrl && (
                     <img src={selectedInstitution.logoUrl} alt="Logo" className="h-12 w-auto object-contain shrink-0" />
@@ -195,7 +195,7 @@ const ExamsPage = () => {
                     <h2 className="font-bold text-sm uppercase text-slate-600">{editing.title || 'AVALIAÇÃO'} {titleSuffix}</h2>
                 </div>
                 <div className="text-right">
-                    <div className="text-[10px] font-black border border-black px-2 py-0.5 rounded">TIPO: {activeVersion}</div>
+                    <div className="text-[10px] font-black border border-black px-2 py-0.5 rounded">VERSÃO: {activeVersion}</div>
                 </div>
             </div>
             <div className="grid grid-cols-2 gap-y-4 gap-x-8">
@@ -210,8 +210,9 @@ const ExamsPage = () => {
         </div>
     );
 
+    const currentQs = examVersions[activeVersion] || Array.isArray(editing.questions) ? editing.questions : [];
+
     const renderStepContent = () => {
-        const currentQs = Array.isArray(editing.questions) ? editing.questions : [];
         const activeScopes = Array.isArray(tempScopes) ? tempScopes : [];
 
         switch(currentStep) {
@@ -320,7 +321,7 @@ const ExamsPage = () => {
             case 3: return (
                 <div className="space-y-6">
                     <div className="flex bg-slate-100 p-1 rounded-2xl w-fit mx-auto">
-                        <button onClick={() => setSelectionMode('AUTO')} className={`px-8 py-2 rounded-xl text-sm font-black transition-all ${selectionMode === 'AUTO' ? 'bg-white text-brand-blue shadow-md' : 'text-slate-50'}`}>Sorteio Automático</button>
+                        <button onClick={() => setSelectionMode('AUTO')} className={`px-8 py-2 rounded-xl text-sm font-black transition-all ${selectionMode === 'AUTO' ? 'bg-white text-brand-blue shadow-md' : 'text-slate-500'}`}>Sorteio Automático</button>
                         <button onClick={() => setSelectionMode('MANUAL')} className={`px-8 py-2 rounded-xl text-sm font-black transition-all ${selectionMode === 'MANUAL' ? 'bg-white text-brand-blue shadow-md' : 'text-slate-500'}`}>Seleção Manual</button>
                     </div>
 
@@ -329,9 +330,7 @@ const ExamsPage = () => {
                             <div className="w-20 h-20 bg-blue-50 text-brand-blue rounded-full flex items-center justify-center mb-6"><Icons.Sparkles className="w-10 h-10" /></div>
                             <h3 className="text-xl font-bold text-slate-800 mb-2">Pronto para o Sorteio?</h3>
                             <p className="text-slate-500 mb-8 max-w-sm mx-auto">O sistema selecionará questões aleatórias baseadas no escopo definido.</p>
-                            <div className="flex justify-center">
-                                <Button onClick={handleAutoGenerate} className="h-14 px-10 text-lg shadow-xl shadow-blue-100 font-black">Sortear Agora</Button>
-                            </div>
+                            <Button onClick={handleAutoGenerate} className="h-14 px-10 text-lg shadow-xl shadow-blue-100 font-black">Sortear Agora</Button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-6 max-h-[600px] overflow-y-auto custom-scrollbar pr-2 pb-10">
@@ -355,7 +354,7 @@ const ExamsPage = () => {
                             {allQuestions.filter(q => activeScopes.some(s => s.componentId === q.componentId) && !currentQs.some(x => x.id === q.id)).map(q => (
                                 <Card key={q.id} className="p-6 cursor-pointer border-2 border-slate-100 hover:border-brand-blue transition-all" onClick={() => toggleQuestionSelection(q)}>
                                     <div className="flex justify-between items-start mb-4">
-                                        <Badge color={q.difficulty === 'Hard' ? 'red' : 'blue'}>{q.difficulty}</Badge>
+                                        <Badge color={q.difficulty === 'Hard' ? 'red' : 'blue'}>{DifficultyLabels[q.difficulty] || q.difficulty}</Badge>
                                         <div className="bg-slate-100 text-slate-400 rounded-full p-1"><Icons.Plus className="w-4 h-4"/></div>
                                     </div>
                                     <div className="text-sm font-medium rich-text-content line-clamp-3" dangerouslySetInnerHTML={{__html: q.enunciado}} />
@@ -367,7 +366,7 @@ const ExamsPage = () => {
             );
             case 4: return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1 space-y-6 bg-slate-50 p-8 rounded-[32px] border-2 border-slate-100">
+                    <div className="lg:col-span-1 space-y-6 bg-slate-50 p-8 rounded-[32px] border-2 border-slate-100 no-print">
                         <h4 className="font-black text-slate-800 uppercase text-xs tracking-widest mb-4">Ajustes da Prova</h4>
                         
                         <div className="space-y-4">
@@ -420,26 +419,26 @@ const ExamsPage = () => {
                         </div>
                     </div>
 
-                    <div className="lg:col-span-2 bg-white shadow-2xl rounded-2xl p-8 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar">
-                        <div id="exam-print-container" className={`${printFontSize} text-slate-800 p-4`}>
+                    <div className="lg:col-span-2 bg-white shadow-2xl rounded-2xl p-8 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
+                        <div id="exam-print-container" className={`${printFontSize} text-slate-800 p-4 bg-white`}>
                             {viewingMode === 'EXAM' ? (
                                 <div className="animate-fade-in">
                                     {renderHeaderPrint()}
 
                                     {editing.instructions && (
-                                        <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-800 italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                        <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-800 italic rich-text-content break-inside-avoid print:bg-white" dangerouslySetInnerHTML={{__html: editing.instructions}} />
                                     )}
 
                                     <div 
                                         className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : ''}`}
                                     >
-                                        {(examVersions[activeVersion] || currentQs).map((q, idx) => (
+                                        {currentQs.map((q, idx) => (
                                             <div key={q.id || idx} className="mb-6 break-inside-avoid">
                                                 <div className="flex gap-2">
                                                     <span className="font-bold">{idx + 1}.</span>
                                                     <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                                 </div>
-                                                {Array.isArray(q.options) && (
+                                                {Array.isArray(q.options) && q.options.length > 0 && (
                                                     <div className="mt-2 ml-6 space-y-1">
                                                         {q.options.map((opt, i) => (
                                                             <div key={i} className="flex gap-2">
@@ -454,12 +453,12 @@ const ExamsPage = () => {
                                     </div>
 
                                     {editing.showAnswerKey && (
-                                        <div className="page-break mt-10 pt-10 border-t border-dashed border-slate-200">
+                                        <div className="page-break mt-10 pt-10 border-t border-dashed border-slate-200 bg-white">
                                             {renderHeaderPrint('(GABARITO)')}
                                             <div className="mt-6">
                                                 <h3 className="font-black text-center text-lg mb-6 uppercase border-b-2 border-black pb-2">Folha de Respostas Oficiais</h3>
                                                 <div className="grid grid-cols-2 gap-x-12 gap-y-4">
-                                                    {(examVersions[activeVersion] || currentQs).map((q, idx) => {
+                                                    {currentQs.map((q, idx) => {
                                                         const correctOptIndex = q.options?.findIndex(o => o.isCorrect);
                                                         const correctLetter = correctOptIndex !== undefined && correctOptIndex !== -1 
                                                             ? String.fromCharCode(65 + correctOptIndex) 
@@ -468,26 +467,23 @@ const ExamsPage = () => {
                                                         return (
                                                             <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-slate-100 pb-1 break-inside-avoid">
                                                                 <span className="font-bold text-sm">Questão {idx + 1}:</span>
-                                                                <span className="font-black text-brand-blue bg-blue-50 px-3 py-1 rounded border border-blue-200">
+                                                                <span className="font-black text-brand-blue bg-blue-50 px-3 py-1 rounded border border-blue-200 print:bg-transparent print:border-black print:text-black">
                                                                     {correctLetter}
                                                                 </span>
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
-                                                <div className="mt-12 p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest break-inside-avoid">
-                                                    Fim do Gabarito - Versão {activeVersion}
-                                                </div>
                                             </div>
                                         </div>
                                     )}
                                 </div>
                             ) : (
-                                <div className="animate-fade-in">
+                                <div className="animate-fade-in bg-white h-full">
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
                                     <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6">
-                                        {(examVersions[activeVersion] || currentQs).map((q, idx) => (
-                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-slate-100 pb-3">
+                                        {currentQs.map((q, idx) => (
+                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-slate-100 pb-3 break-inside-avoid">
                                                 <span className="font-black text-slate-400 w-8">{idx + 1}</span>
                                                 <div className="flex gap-2">
                                                     {['A', 'B', 'C', 'D', 'E'].map(letter => (
@@ -497,7 +493,7 @@ const ExamsPage = () => {
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="mt-12 p-6 border-2 border-black border-dashed rounded-xl">
+                                    <div className="mt-12 p-6 border-2 border-black border-dashed rounded-xl break-inside-avoid">
                                         <p className="text-[10px] font-black uppercase mb-4 tracking-widest">Instruções para o Cartão</p>
                                         <ul className="text-[10px] space-y-1">
                                             <li>• Utilize apenas caneta azul ou preta.</li>
@@ -515,9 +511,15 @@ const ExamsPage = () => {
         }
     };
 
+    const DifficultyLabels: Record<string, string> = {
+        'Easy': 'Fácil',
+        'Medium': 'Média',
+        'Hard': 'Difícil'
+    };
+
     return (
-        <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar">
-            <div className="flex justify-between items-center mb-8 print:hidden">
+        <div className="p-8 h-full flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar print:p-0 print:bg-white">
+            <div className="flex justify-between items-center mb-8 no-print">
                 <div>
                     <h2 className="text-3xl font-display font-bold text-slate-800">Minhas Provas</h2>
                     <p className="text-slate-500 mt-1">Gerencie e imprima suas avaliações.</p>
@@ -528,9 +530,9 @@ const ExamsPage = () => {
             </div>
 
             {loading ? (
-                <div className="p-20 text-center text-slate-300 font-black uppercase tracking-widest animate-pulse">Sincronizando...</div>
+                <div className="p-20 text-center text-slate-300 font-black uppercase tracking-widest animate-pulse no-print">Sincronizando...</div>
             ) : (
-                <div className="space-y-4 print:hidden">
+                <div className="space-y-4 no-print">
                     {institutions.map(inst => {
                         const instExams = exams.filter(e => e.institutionId === inst.id);
                         if (instExams.length === 0) return null;
@@ -568,14 +570,14 @@ const ExamsPage = () => {
             )}
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Editor de Prova" : "Gerador Inteligente"} maxWidth="max-w-7xl" footer={
-                <div className="flex justify-between w-full items-center">
+                <div className="flex justify-between w-full items-center no-print">
                     {currentStep > 1 && <Button variant="ghost" onClick={() => setCurrentStep(currentStep - 1)} className="font-black uppercase text-xs"><Icons.ArrowLeft /> Voltar</Button>}
                     <div className="flex gap-2 ml-auto">
                         {currentStep < 4 ? <Button onClick={() => setCurrentStep(currentStep + 1)} disabled={currentStep === 1 && !editing.title} className="px-8 h-12">Próximo <Icons.ArrowRight /></Button> : <Button onClick={handleSaveExam} className="px-10 h-12 shadow-lg font-black">CONCLUIR E SALVAR</Button>}
                     </div>
                 </div>
             }>
-                <div className="flex items-center justify-between mb-10 px-20">
+                <div className="flex items-center justify-between mb-10 px-20 no-print">
                     {[1, 2, 3, 4].map(s => (
                         <React.Fragment key={s}>
                             <div className="flex flex-col items-center gap-2">
