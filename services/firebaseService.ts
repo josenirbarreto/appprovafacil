@@ -1,5 +1,4 @@
 
-
 import { 
     collection, 
     getDocs, 
@@ -171,8 +170,25 @@ export const FirebaseService = {
     addQuestion: async (q: Question) => { const { id, ...data } = q; const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), cleanPayload(data)); return { ...q, id: docRef.id }; },
     updateQuestion: async (q: Question) => { 
         const { id, ...data } = q; 
-        // Quando o autor atualiza, resetamos o status para Pendente se for Pública
-        const payload = { ...data, reviewStatus: q.visibility === 'PUBLIC' ? 'PENDING' : q.reviewStatus, reviewComment: null };
+        
+        let finalStatus = q.reviewStatus;
+        let finalVisibility = q.visibility;
+
+        // Se a questão estava REPROVADA, ou se é uma edição de questão pública, 
+        // ela deve voltar para a moderação (PENDENTE) e tornar-se PÚBLICA novamente.
+        if (q.reviewStatus === 'REJECTED') {
+            finalStatus = 'PENDING';
+            finalVisibility = 'PUBLIC';
+        } else if (q.visibility === 'PUBLIC') {
+            finalStatus = 'PENDING';
+        }
+
+        const payload = { 
+            ...data, 
+            reviewStatus: finalStatus, 
+            visibility: finalVisibility,
+            reviewComment: null 
+        };
         await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), cleanPayload(payload)); 
     },
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },
@@ -196,7 +212,7 @@ export const FirebaseService = {
     deleteExam: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.EXAMS, id)); },
     getExamResults: async (examId: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ExamAttempt)); },
     updateAttemptScore: async (id: string, score: number, manualGradingComplete: boolean = true, questionScores?: Record<string, number>) => { const updates: any = { score, manualGradingComplete }; if (questionScores) updates.questionScores = questionScores; await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), updates); },
-    startAttempt: async (examId: string, studentName: string, studentIdentifier: string, totalQuestions: number, studentId?: string) => { const attempt = { examId, studentName, studentIdentifier, studentId, totalQuestions, startedAt: new Date().toISOString(), answers: {}, score: 0, status: 'IN_PROGRESS' }; const docRef = await addDoc(collection(db, COLLECTIONS.ATTEMPTS), cleanPayload(attempt)); return { ...attempt, id: docRef.id } as ExamAttempt; },
+    startAttempt: async (examId: string, studentName: string, studentIdentifier: string, totalQuestions: number, studentId?: string) => { const attempt = { examId, studentName, studentIdentifier, studentId, totalQuestions, startedAt: new Date().toISOString(), answers: {}, score: 0, status: 'IN_PROGRESS' }; const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), cleanPayload(attempt)); return { ...attempt, id: docRef.id } as ExamAttempt; },
     submitAttempt: async (id: string, answers: any, score: number, total: number) => { await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { answers, score, totalQuestions: total, submittedAt: new Date().toISOString(), status: 'COMPLETED' }); },
     getStudentAttempts: async (eId: string, ident: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", eId), where("studentIdentifier", "==", ident)); const snap = await getDocs(q); return snap.docs.map(d => d.data()); },
 
