@@ -41,9 +41,6 @@ const QuestionsPage = () => {
     // Filtros
     const [selComp, setSelComp] = useState('');
     const [selDisc, setSelDisc] = useState('');
-    const [selChap, setSelChap] = useState('');
-    const [selUnit, setSelUnit] = useState('');
-    const [selTopic, setSelTopic] = useState('');
     const [searchText, setSearchText] = useState('');
     const [visFilter, setVisFilter] = useState<'ALL' | 'MINE'>('ALL');
 
@@ -72,22 +69,12 @@ const QuestionsPage = () => {
     }, [hierarchy, user]);
 
     const filterComp = useMemo(() => hierarchy.find(cc => cc.id === selComp), [hierarchy, selComp]);
-    const filterDisc = useMemo(() => filterComp?.disciplines?.find(d => d.id === selDisc), [filterComp, selDisc]);
-    const filterChap = useMemo(() => filterDisc?.chapters?.find(c => c.id === selChap), [filterDisc, selChap]);
-    const filterUnit = useMemo(() => filterChap?.units?.find(u => u.id === selUnit), [filterChap, selUnit]);
-
     const activeComp = useMemo(() => hierarchy.find(cc => cc.id === editing.componentId), [hierarchy, editing.componentId]);
-    const activeDisc = useMemo(() => activeComp?.disciplines?.find(d => d.id === editing.disciplineId), [activeComp, editing.disciplineId]);
-    const activeChap = useMemo(() => activeDisc?.chapters?.find(c => c.id === editing.chapterId), [activeDisc, editing.chapterId]);
-    const activeUnit = useMemo(() => activeChap?.units?.find(u => u.id === editing.unitId), [activeChap, editing.unitId]);
 
     const filteredQuestions = useMemo(() => {
         return allQuestions.filter(q => {
             if (selComp && q.componentId !== selComp) return false;
             if (selDisc && q.disciplineId !== selDisc) return false;
-            if (selChap && q.chapterId !== selChap) return false;
-            if (selUnit && q.unitId !== selUnit) return false;
-            if (selTopic && q.topicId !== selTopic) return false;
             if (searchText) {
                 const term = searchText.toLowerCase();
                 if (!q.enunciado.toLowerCase().includes(term)) return false;
@@ -95,11 +82,11 @@ const QuestionsPage = () => {
             if (visFilter === 'MINE') return q.authorId === user?.id;
             return true;
         });
-    }, [allQuestions, selComp, selDisc, selChap, selUnit, selTopic, searchText, visFilter, user?.id]);
+    }, [allQuestions, selComp, selDisc, searchText, visFilter, user?.id]);
 
     const handleSave = async () => {
         if(!editing.enunciado || !editing.componentId) { 
-            alert('Preencha os campos obrigatórios: Área e Enunciado.'); 
+            alert('Preencha a Área e o Enunciado.'); 
             return; 
         }
         try {
@@ -119,26 +106,21 @@ const QuestionsPage = () => {
     const handlePdfImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        setImportStep("Extraindo texto do PDF...");
+        setImportStep("Extraindo texto...");
         try {
             const text = await PdfService.extractText(file);
-            setImportStep("IA estruturando questões e limpando enunciados...");
+            setImportStep("IA estruturando enunciados acadêmicos...");
             const parsed = await GeminiService.parseQuestionsFromText(text);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                const enriched: Partial<Question>[] = parsed.map(q => ({
+                setBatchQuestions(parsed.map(q => ({
                     ...q,
                     componentId: selComp || '',
                     disciplineId: selDisc || '',
-                    chapterId: selChap || '',
-                    unitId: selUnit || '',
-                    topicId: selTopic || '',
-                    difficulty: 'Medium' as const,
-                    pairs: []
-                }));
-                setBatchQuestions(enriched);
+                    difficulty: 'Medium' as const
+                })));
                 setIsBatchPreviewOpen(true);
-            } else alert("Nenhuma questão encontrada.");
-        } catch (error) { alert("Erro ao ler PDF."); } finally { setImportStep(null); e.target.value = ''; }
+            } else alert("Nenhuma questão estruturada encontrada.");
+        } catch (error) { alert("Erro no processamento."); } finally { setImportStep(null); e.target.value = ''; }
     };
 
     const handleRepeatHierarchy = () => {
@@ -155,14 +137,13 @@ const QuestionsPage = () => {
     };
 
     const handleSaveBatch = async () => {
-        const validQuestions = batchQuestions.filter(q => q.enunciado && q.componentId);
-        if (validQuestions.length === 0) return alert("Preencha Área e Enunciado.");
+        const valid = batchQuestions.filter(q => q.enunciado && q.componentId);
+        if (valid.length === 0) return alert("Área e Enunciado são obrigatórios.");
         setBatchSaving(true);
         try {
-            for (const qData of validQuestions) {
-                await FirebaseService.addQuestion({ ...qData, authorId: user?.id, institutionId: user?.institutionId, createdAt: new Date().toISOString(), reviewStatus: 'PENDING', visibility: 'PUBLIC' } as Question);
+            for (const q of valid) {
+                await FirebaseService.addQuestion({ ...q, authorId: user?.id, institutionId: user?.institutionId, createdAt: new Date().toISOString(), reviewStatus: 'PENDING', visibility: 'PUBLIC' } as Question);
             }
-            alert(`${validQuestions.length} questões salvas!`);
             setIsBatchPreviewOpen(false); load();
         } catch (error) { alert("Erro ao salvar lote."); } finally { setBatchSaving(false); }
     };
@@ -171,7 +152,7 @@ const QuestionsPage = () => {
         if (!editing.componentId) return alert("Selecione uma área.");
         setIsAiLoading(true);
         try {
-            const generated = await GeminiService.generateQuestion("Conteúdo Geral", editing.type || QuestionType.MULTIPLE_CHOICE, editing.difficulty || 'Medium');
+            const generated = await GeminiService.generateQuestion("Geral", editing.type || QuestionType.MULTIPLE_CHOICE, editing.difficulty || 'Medium');
             if (generated) setEditing(prev => ({ ...prev, enunciado: generated.enunciado, options: generated.options }));
         } catch (e) { alert("Erro na IA."); } finally { setIsAiLoading(false); }
     };
@@ -184,49 +165,84 @@ const QuestionsPage = () => {
 
     const selectedQuestion = allQuestions.find(q => q.id === selectedQuestionId);
 
-    // Componente Interno para Interface de Gabarito
-    const GabaritoUI = ({ q, onChange, isBatch = false }: { q: Partial<Question>, onChange: (data: Partial<Question>) => void, isBatch?: boolean }) => {
+    // INTERFACE DE GABARITO (FIXED State Sync)
+    const GabaritoUI = ({ q, onChange, questionIndex = 0 }: { q: Partial<Question>, onChange: (data: Partial<Question>) => void, questionIndex?: number }) => {
         if (q.type === QuestionType.MULTIPLE_CHOICE || q.type === QuestionType.TRUE_FALSE) {
+            const radioGroupName = `correct_group_${q.id || 'new'}_${questionIndex}`;
+            
             return (
-                <div className="space-y-3">
+                <div className="space-y-4">
                     <div className="flex justify-between items-center mb-2">
-                        <h4 className="font-black text-slate-700 uppercase text-[10px] tracking-widest">Alternativas</h4>
-                        {!isBatch && q.type === QuestionType.MULTIPLE_CHOICE && (
-                            <Button variant="outline" className="text-[10px] h-6 px-2" onClick={() => onChange({ options: [...(q.options || []), { id: Date.now().toString(), text: '', isCorrect: false }] })}>+ Opção</Button>
+                        <h4 className="font-black text-slate-700 uppercase text-[10px] tracking-widest">Alternativas & Gabarito</h4>
+                        {q.type === QuestionType.MULTIPLE_CHOICE && (
+                            <Button variant="outline" className="text-[10px] h-7 px-3" onClick={() => {
+                                const newOpt = { id: Date.now().toString(), text: '', isCorrect: false };
+                                onChange({ options: [...(q.options || []), newOpt] });
+                            }}>+ Nova Opção</Button>
                         )}
                     </div>
-                    {q.options?.map((opt, idx) => (
-                        <div key={idx} className="flex gap-2 items-center">
-                            <input type="radio" checked={opt.isCorrect} onChange={() => onChange({ options: q.options?.map((o, i) => ({ ...o, isCorrect: i === idx })) })} className="w-4 h-4 text-green-500" />
-                            <input value={opt.text} onChange={e => { const os = [...(q.options || [])]; os[idx].text = e.target.value; onChange({ options: os }); }} className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium" placeholder={`Opção ${String.fromCharCode(65+idx)}`} />
-                            {!isBatch && q.type === QuestionType.MULTIPLE_CHOICE && <button onClick={() => onChange({ options: q.options?.filter((_, i) => i !== idx) })} className="text-slate-300 hover:text-red-500"><Icons.X className="w-4 h-4" /></button>}
-                        </div>
-                    ))}
+                    <div className="space-y-3">
+                        {q.options?.map((opt, idx) => (
+                            <div key={idx} className="flex gap-3 items-center group">
+                                <div className="flex flex-col items-center">
+                                    <input 
+                                        type="radio" 
+                                        name={radioGroupName}
+                                        checked={opt.isCorrect} 
+                                        onChange={() => {
+                                            // FIX: Cria cópia imutável e atualiza o marcador 'isCorrect'
+                                            const newOptions = (q.options || []).map((o, i) => ({ 
+                                                ...o, 
+                                                isCorrect: i === idx 
+                                            }));
+                                            onChange({ options: newOptions });
+                                        }} 
+                                        className="w-5 h-5 text-brand-blue cursor-pointer focus:ring-brand-blue" 
+                                    />
+                                    <span className="text-[8px] font-black text-slate-400 mt-1 uppercase">Correta</span>
+                                </div>
+                                <input 
+                                    value={opt.text} 
+                                    onChange={e => {
+                                        const os = [...(q.options || [])];
+                                        os[idx] = { ...os[idx], text: e.target.value };
+                                        onChange({ options: os });
+                                    }} 
+                                    className={`flex-1 bg-white border-2 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none transition-all ${opt.isCorrect ? 'border-brand-blue bg-blue-50/30' : 'border-slate-100 focus:border-brand-blue'}`} 
+                                    placeholder={`Texto da Opção ${String.fromCharCode(65+idx)}...`} 
+                                />
+                                {q.type === QuestionType.MULTIPLE_CHOICE && (
+                                    <button onClick={() => onChange({ options: q.options?.filter((_, i) => i !== idx) })} className="text-slate-300 hover:text-red-500 transition-colors"><Icons.Trash /></button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    {q.options?.length === 0 && <p className="text-center text-slate-400 text-xs italic py-4">Nenhuma opção definida.</p>}
                 </div>
             );
         }
 
         if (q.type === QuestionType.NUMERIC) {
             return (
-                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                    <label className="block text-[10px] font-black text-blue-800 uppercase mb-2">Gabarito Numérico</label>
-                    <Input type="number" step="any" placeholder="Valor exato da resposta" value={q.options?.[0]?.text || ''} onChange={e => onChange({ options: [{ id: 'num', text: e.target.value, isCorrect: true }] })} className="font-black text-lg" />
+                <div className="bg-blue-50 p-6 rounded-2xl border-2 border-blue-100">
+                    <label className="block text-[10px] font-black text-blue-800 uppercase mb-2 tracking-widest">Gabarito Numérico</label>
+                    <Input type="number" step="any" placeholder="Valor correto" value={q.options?.[0]?.text || ''} onChange={e => onChange({ options: [{ id: 'num', text: e.target.value, isCorrect: true }] })} className="font-black text-2xl h-14" />
                 </div>
             );
         }
 
         if (q.type === QuestionType.ASSOCIATION) {
             return (
-                <div className="space-y-3">
+                <div className="space-y-4">
                     <div className="flex justify-between items-center mb-2">
-                        <h4 className="font-black text-slate-700 uppercase text-[10px] tracking-widest">Pares de Associação</h4>
-                        <Button variant="outline" className="text-[10px] h-6 px-2" onClick={() => onChange({ pairs: [...(q.pairs || []), { id: Date.now().toString(), left: '', right: '' }] })}>+ Par</Button>
+                        <h4 className="font-black text-slate-700 uppercase text-[10px] tracking-widest">Pares de Correspondência</h4>
+                        <Button variant="outline" className="text-[10px] h-7 px-3" onClick={() => onChange({ pairs: [...(q.pairs || []), { id: Date.now().toString(), left: '', right: '' }] })}>+ Novo Par</Button>
                     </div>
                     {q.pairs?.map((p, idx) => (
-                        <div key={idx} className="grid grid-cols-2 gap-2 items-center bg-white p-2 rounded-lg border border-slate-100 shadow-sm relative">
-                            <Input placeholder="Coluna A" value={p.left} onChange={e => { const ps = [...(q.pairs || [])]; ps[idx].left = e.target.value; onChange({ pairs: ps }); }} className="text-xs" />
-                            <Input placeholder="Coluna B" value={p.right} onChange={e => { const ps = [...(q.pairs || [])]; ps[idx].right = e.target.value; onChange({ pairs: ps }); }} className="text-xs" />
-                            <button onClick={() => onChange({ pairs: q.pairs?.filter((_, i) => i !== idx) })} className="absolute -right-2 -top-2 bg-white rounded-full shadow border p-0.5 text-red-500"><Icons.X className="w-3 h-3" /></button>
+                        <div key={idx} className="grid grid-cols-2 gap-4 items-center bg-white p-3 rounded-2xl border-2 border-slate-100 relative">
+                            <Input placeholder="Termo A" value={p.left} onChange={e => { const ps = [...(q.pairs || [])]; ps[idx].left = e.target.value; onChange({ pairs: ps }); }} className="text-xs" />
+                            <Input placeholder="Respondente B" value={p.right} onChange={e => { const ps = [...(q.pairs || [])]; ps[idx].right = e.target.value; onChange({ pairs: ps }); }} className="text-xs" />
+                            <button onClick={() => onChange({ pairs: q.pairs?.filter((_, i) => i !== idx) })} className="absolute -right-2 -top-2 bg-red-500 text-white rounded-full p-1 shadow-lg"><Icons.X className="w-3 h-3" /></button>
                         </div>
                     ))}
                 </div>
@@ -235,9 +251,14 @@ const QuestionsPage = () => {
 
         if (q.type === QuestionType.SHORT_ANSWER) {
             return (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Sugestão de Resposta / Critérios</label>
-                    <textarea value={q.options?.[0]?.text || ''} onChange={e => onChange({ options: [{ id: 'sa', text: e.target.value, isCorrect: true }] })} className="w-full h-24 p-3 rounded-lg border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-blue" placeholder="O que o aluno deve responder para pontuar?" />
+                <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Critérios de Avaliação</label>
+                    <textarea 
+                        value={q.options?.[0]?.text || ''} 
+                        onChange={e => onChange({ options: [{ id: 'sa', text: e.target.value, isCorrect: true }] })} 
+                        className="w-full h-32 p-4 rounded-xl border-2 border-slate-200 text-sm font-medium outline-none focus:border-brand-blue bg-white" 
+                        placeholder="Quais termos ou conceitos o aluno deve citar?" 
+                    />
                 </div>
             );
         }
@@ -248,12 +269,12 @@ const QuestionsPage = () => {
     return (
         <div className="flex flex-col h-full bg-slate-50 overflow-hidden relative">
             {importStep && (
-                <div className="fixed inset-0 z-[200] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center">
-                    <Card className="p-10 text-center flex flex-col items-center gap-4 animate-scale-in">
-                        <div className="w-16 h-16 border-4 border-slate-100 border-t-brand-blue rounded-full animate-spin"></div>
-                        <h3 className="text-lg font-black text-slate-800">Processando PDF</h3>
-                        <p className="text-sm text-slate-500">{importStep}</p>
-                    </Card>
+                <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-md flex items-center justify-center">
+                    <div className="bg-white p-12 rounded-[40px] shadow-2xl flex flex-col items-center max-w-sm text-center animate-scale-in">
+                        <div className="w-20 h-20 border-8 border-slate-100 border-t-brand-blue rounded-full animate-spin mb-6"></div>
+                        <h3 className="text-2xl font-black text-slate-800 mb-2">Processando PDF</h3>
+                        <p className="text-slate-500 font-medium">{importStep}</p>
+                    </div>
                 </div>
             )}
 
@@ -262,50 +283,51 @@ const QuestionsPage = () => {
                 <div className="flex justify-between items-center mb-4">
                     <div>
                         <h2 className="text-2xl font-black font-display text-slate-800 flex items-center gap-2"><Icons.Questions className="text-brand-blue" /> Banco de Questões</h2>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">{filteredQuestions.length} filtradas de {allQuestions.length} totais</p>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">{filteredQuestions.length} questões encontradas</p>
                     </div>
                     <div className="flex gap-2">
                         <div className="relative">
-                            <Button variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-black h-10 px-4">
+                            <Button variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-black h-11 px-6 shadow-sm">
                                 <Icons.Download className="w-4 h-4" /> Importar PDF
                             </Button>
                             <input type="file" accept=".pdf" onChange={handlePdfImport} className="absolute inset-0 opacity-0 cursor-pointer" />
                         </div>
-                        <Button onClick={() => { setEditing({ type: QuestionType.MULTIPLE_CHOICE, difficulty: 'Medium', visibility: 'PUBLIC', options: [], pairs: [] }); setIsModalOpen(true); }} className="shadow-lg h-10"><Icons.Plus /> Nova Questão</Button>
+                        <Button onClick={() => { setEditing({ type: QuestionType.MULTIPLE_CHOICE, difficulty: 'Medium', visibility: 'PUBLIC', options: [], pairs: [] }); setIsModalOpen(true); }} className="shadow-lg h-11 px-6 text-sm">
+                            <Icons.Plus /> Nova Questão
+                        </Button>
                     </div>
                 </div>
 
                 <div className="flex items-end gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                    <Select value={selComp} onChange={e => { setSelComp(e.target.value); setSelDisc(''); setSelChap(''); setSelUnit(''); setSelTopic(''); }} className="min-w-[140px] text-[10px] font-bold h-9">
+                    <Select value={selComp} onChange={e => { setSelComp(e.target.value); setSelDisc(''); }} className="min-w-[140px] text-[10px] font-bold h-10">
                         <option value="">Área (Tudo)</option>
                         {availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
                     </Select>
-                    <Select value={selDisc} onChange={e => { setSelDisc(e.target.value); setSelChap(''); setSelUnit(''); setSelTopic(''); }} className="min-w-[140px] text-[10px] font-bold h-9" disabled={!selComp}>
+                    <Select value={selDisc} onChange={e => setSelDisc(e.target.value)} className="min-w-[140px] text-[10px] font-bold h-10" disabled={!selComp}>
                         <option value="">Disciplina</option>
                         {filterComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </Select>
-                    <Select value={selChap} onChange={e => { setSelChap(e.target.value); setSelUnit(''); setSelTopic(''); }} className="min-w-[140px] text-[10px] font-bold h-9" disabled={!selDisc}>
-                        <option value="">Capítulo</option>
-                        {filterDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </Select>
-                    <div className="relative min-w-[200px] flex-1">
-                        <input type="text" className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue bg-white h-9 font-medium" placeholder="Buscar no texto..." value={searchText} onChange={e => setSearchText(e.target.value)} />
-                        <div className="absolute left-3 top-2.5 text-slate-400"><Icons.Search className="w-4 h-4" /></div>
+                    <div className="relative min-w-[300px] flex-1">
+                        <input type="text" className="w-full pl-10 pr-4 py-2 text-sm border-2 border-slate-200 rounded-xl outline-none focus:border-brand-blue bg-white h-10 font-medium" placeholder="Buscar no enunciado..." value={searchText} onChange={e => setSearchText(e.target.value)} />
+                        <div className="absolute left-3.5 top-3 text-slate-400"><Icons.Search className="w-4 h-4" /></div>
                     </div>
-                    <Select value={visFilter} onChange={e => setVisFilter(e.target.value as any)} className="w-28 text-[10px] font-bold h-9"><option value="ALL">Global</option><option value="MINE">Minhas</option></Select>
+                    <Select value={visFilter} onChange={e => setVisFilter(e.target.value as any)} className="w-32 text-[10px] font-bold h-10">
+                        <option value="ALL">Global</option>
+                        <option value="MINE">Minhas</option>
+                    </Select>
                 </div>
             </div>
 
-            {/* CONTEÚDO PRINCIPAL */}
+            {/* CONTEÚDO */}
             <div className="flex flex-1 overflow-hidden">
                 <div className="w-1/3 min-w-[350px] border-r border-slate-200 bg-white overflow-y-auto custom-scrollbar">
-                    {loading ? <div className="p-10 text-center animate-pulse font-bold text-slate-400 uppercase text-[10px]">Sincronizando...</div> : (
+                    {loading ? <div className="p-10 text-center animate-pulse font-black text-slate-300 uppercase text-[11px]">Sincronizando Banco...</div> : (
                         <div className="divide-y divide-slate-100">
                             {filteredQuestions.map(q => (
-                                <div key={q.id} onClick={() => setSelectedQuestionId(q.id)} className={`p-5 cursor-pointer hover:bg-slate-50 transition-all border-l-4 ${selectedQuestionId === q.id ? 'bg-blue-50 border-brand-blue' : 'border-transparent'}`}>
+                                <div key={q.id} onClick={() => setSelectedQuestionId(q.id)} className={`p-6 cursor-pointer hover:bg-slate-50 transition-all border-l-4 ${selectedQuestionId === q.id ? 'bg-blue-50 border-brand-blue' : 'border-transparent'}`}>
                                     <div className="flex justify-between items-start mb-2">
                                         <Badge color={q.difficulty === 'Hard' ? 'red' : q.difficulty === 'Medium' ? 'orange' : 'green'}>{DifficultyLabels[q.difficulty]}</Badge>
-                                        <span className="text-[9px] font-black text-slate-300 uppercase">{QuestionTypeLabels[q.type]}</span>
+                                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-tight">{QuestionTypeLabels[q.type]}</span>
                                     </div>
                                     <div className="text-sm text-slate-700 line-clamp-2 font-medium rich-text-content mb-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{hierarchy.find(cc => cc.id === q.componentId)?.name || 'N/A'}</div>
@@ -317,35 +339,34 @@ const QuestionsPage = () => {
 
                 <div className="flex-1 bg-slate-50 p-10 overflow-y-auto custom-scrollbar">
                     {selectedQuestion ? (
-                        <Card className="max-w-4xl mx-auto shadow-xl border-none">
-                            <div className="flex justify-between items-start mb-8 border-b border-slate-100 pb-6">
+                        <Card className="max-w-4xl mx-auto shadow-2xl border-none p-10">
+                            <div className="flex justify-between items-start mb-8 border-b border-slate-100 pb-8">
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Localização</p>
-                                    <h3 className="text-sm font-bold text-slate-800">{FirebaseService.getFullHierarchyString(selectedQuestion, hierarchy)}</h3>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Localização Pedagógica</p>
+                                    <h3 className="text-sm font-black text-slate-800">{FirebaseService.getFullHierarchyString(selectedQuestion, hierarchy)}</h3>
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button variant="outline" className="text-xs h-9" onClick={() => { setEditing(selectedQuestion); setIsModalOpen(true); }}><Icons.Edit /> Editar</Button>
-                                    {selectedQuestion.authorId === user?.id && <Button variant="danger" className="text-xs h-9" onClick={() => { if(confirm('Excluir?')) FirebaseService.deleteQuestion(selectedQuestion.id).then(load); }}><Icons.Trash /></Button>}
+                                    <Button variant="outline" className="text-xs h-9 font-black" onClick={() => { setEditing(selectedQuestion); setIsModalOpen(true); }}><Icons.Edit /> Editar</Button>
+                                    {selectedQuestion.authorId === user?.id && <Button variant="danger" className="text-xs h-9 font-black" onClick={() => { if(confirm('Remover esta questão?')) FirebaseService.deleteQuestion(selectedQuestion.id).then(load); }}><Icons.Trash /></Button>}
                                 </div>
                             </div>
-                            <div className="prose prose-slate max-w-none mb-10 rich-text-content font-medium text-slate-700" dangerouslySetInnerHTML={{__html: selectedQuestion.enunciado}} />
+                            <div className="prose prose-slate max-w-none mb-12 rich-text-content font-medium text-slate-700 leading-relaxed text-lg" dangerouslySetInnerHTML={{__html: selectedQuestion.enunciado}} />
                             
-                            {/* Visualização de Gabarito conforme tipo */}
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {selectedQuestion.type === QuestionType.ASSOCIATION ? (
                                     selectedQuestion.pairs?.map((p, i) => (
-                                        <div key={i} className="flex gap-2 text-sm font-bold">
-                                            <div className="bg-slate-100 p-3 rounded-xl flex-1">{p.left}</div>
+                                        <div key={i} className="flex gap-3 text-sm font-bold">
+                                            <div className="bg-slate-100 p-4 rounded-2xl flex-1 border-2 border-slate-200">{p.left}</div>
                                             <div className="flex items-center text-slate-300"><Icons.ArrowRight /></div>
-                                            <div className="bg-blue-50 p-3 border border-blue-100 rounded-xl flex-1 text-blue-900">{p.right}</div>
+                                            <div className="bg-blue-50 p-4 border-2 border-blue-200 rounded-2xl flex-1 text-blue-900 shadow-sm">{p.right}</div>
                                         </div>
                                     ))
                                 ) : (
                                     selectedQuestion.options?.map((opt, i) => (
-                                        <div key={opt.id} className={`p-4 rounded-2xl border-2 flex items-center gap-4 ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
-                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm ${opt.isCorrect ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'}`}>{String.fromCharCode(65+i)}</div>
-                                            <span className={`flex-1 font-bold ${opt.isCorrect ? 'text-green-900' : 'text-slate-700'}`}>{opt.text}</span>
-                                            {opt.isCorrect && <Icons.Check className="text-green-500" />}
+                                        <div key={opt.id} className={`p-5 rounded-3xl border-2 flex items-center gap-5 transition-all ${opt.isCorrect ? 'bg-green-50 border-green-300 shadow-md shadow-green-100' : 'bg-white border-slate-100 opacity-80'}`}>
+                                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-lg ${opt.isCorrect ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'}`}>{String.fromCharCode(65+i)}</div>
+                                            <span className={`flex-1 font-bold text-base ${opt.isCorrect ? 'text-green-900' : 'text-slate-700'}`}>{opt.text}</span>
+                                            {opt.isCorrect && <div className="bg-green-500 text-white rounded-full p-1"><Icons.Check /></div>}
                                         </div>
                                     ))
                                 )}
@@ -353,56 +374,51 @@ const QuestionsPage = () => {
                         </Card>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-300">
-                            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4"><Icons.Questions /></div>
-                            <p className="text-lg font-bold">Selecione uma questão para visualizar.</p>
+                            <div className="w-24 h-24 bg-white rounded-[40px] shadow-xl flex items-center justify-center mb-6"><Icons.Questions className="w-10 h-10" /></div>
+                            <p className="text-xl font-black text-slate-400">Banco de Questões</p>
+                            <p className="text-sm">Selecione um item para revisar os detalhes.</p>
                         </div>
                     )}
                 </div>
             </div>
 
             {/* MODAL LOTE PDF */}
-            <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Revisar Lote do PDF" maxWidth="max-w-7xl" footer={
-                <div className="flex justify-between w-full items-center">
-                    <Button onClick={handleRepeatHierarchy} variant="outline" className="text-xs font-black border-slate-300 px-6 h-10"><Icons.Refresh className="w-3 h-3" /> REPETIR ÁREA DA 1ª PARA TODAS</Button>
-                    <Button onClick={handleSaveBatch} disabled={batchSaving} className="px-10 bg-emerald-600 hover:bg-emerald-700 font-bold h-12 shadow-xl shadow-emerald-100">{batchSaving ? 'Salvando...' : `Salvar ${batchQuestions.length} Questões`}</Button>
+            <Modal isOpen={isBatchPreviewOpen} onClose={() => !batchSaving && setIsBatchPreviewOpen(false)} title="Importação em Lote" maxWidth="max-w-7xl" footer={
+                <div className="flex justify-between w-full items-center p-2">
+                    <Button onClick={handleRepeatHierarchy} variant="outline" className="text-xs font-black border-slate-300 px-6 h-12 shadow-sm">
+                        <Icons.Refresh className="w-4 h-4" /> REPETIR ÁREA DA 1ª PARA TODAS
+                    </Button>
+                    <Button onClick={handleSaveBatch} disabled={batchSaving} className="px-12 bg-emerald-600 hover:bg-emerald-700 font-black h-12 shadow-2xl text-base">
+                        {batchSaving ? 'Salvando...' : `Salvar ${batchQuestions.length} Questões`}
+                    </Button>
                 </div>
             }>
-                <div className="space-y-12 pb-10">
+                <div className="space-y-12 pb-20">
                     {batchQuestions.map((bq, idx) => {
                         const bComp = hierarchy.find(cc => cc.id === bq.componentId);
-                        const bDisc = bComp?.disciplines.find(d => d.id === bq.disciplineId);
-                        const bChap = bDisc?.chapters.find(c => c.id === bq.chapterId);
-                        const bUnit = bChap?.units.find(u => u.id === bq.unitId);
-
                         return (
-                            <div key={idx} className="p-6 border-2 border-slate-200 rounded-3xl bg-white shadow-sm hover:border-brand-blue/30 transition-all relative">
-                                <button onClick={() => setBatchQuestions(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors z-10"><Icons.Trash className="w-4 h-4" /></button>
-                                <div className="flex justify-between items-center mb-6">
+                            <div key={idx} className="p-8 border-2 border-slate-200 rounded-[40px] bg-white shadow-lg relative">
+                                <button onClick={() => setBatchQuestions(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-3 -right-3 w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center shadow-xl hover:bg-red-600"><Icons.Trash /></button>
+                                <div className="flex justify-between items-center mb-8">
                                     <Badge color="blue">QUESTÃO {idx + 1}</Badge>
-                                    <div className="flex gap-2">
-                                        <Select value={bq.type} onChange={e => updateBatchQuestion(idx, { type: e.target.value as any })} className="w-40 text-[10px] h-8 font-black">
+                                    <div className="flex gap-3">
+                                        <Select value={bq.type} onChange={e => updateBatchQuestion(idx, { type: e.target.value as any, options: [] })} className="w-44 text-[11px] h-10 font-black">
                                             {Object.entries(QuestionTypeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                                         </Select>
-                                        <Select value={bq.difficulty} onChange={e => updateBatchQuestion(idx, { difficulty: e.target.value as any })} className="w-32 text-[10px] h-8 font-black">
+                                        <Select value={bq.difficulty} onChange={e => updateBatchQuestion(idx, { difficulty: e.target.value as any })} className="w-36 text-[11px] h-10 font-black">
                                             <option value="Easy">Fácil</option><option value="Medium">Média</option><option value="Hard">Difícil</option>
                                         </Select>
                                     </div>
                                 </div>
-
-                                <div className="grid grid-cols-5 gap-2 mb-6">
-                                    <Select value={bq.componentId || ''} onChange={e => updateBatchQuestion(idx, { componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: '' })} className={`text-[10px] font-bold h-8 ${!bq.componentId ? 'border-red-300' : ''}`}><option value="">Área...</option>{availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}</Select>
-                                    <Select value={bq.disciplineId || ''} onChange={e => updateBatchQuestion(idx, { disciplineId: e.target.value, chapterId: '', unitId: '', topicId: '' })} disabled={!bq.componentId} className="text-[10px] font-bold h-8"><option value="">Disciplina...</option>{bComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
-                                    <Select value={bq.chapterId || ''} onChange={e => updateBatchQuestion(idx, { chapterId: e.target.value, unitId: '', topicId: '' })} disabled={!bq.disciplineId} className="text-[10px] font-bold h-8"><option value="">Capítulo...</option>{bDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
-                                    <Select value={bq.unitId || ''} onChange={e => updateBatchQuestion(idx, { unitId: e.target.value, topicId: '' })} disabled={!bq.chapterId} className="text-[10px] font-bold h-8"><option value="">Unidade...</option>{bChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
-                                    <Select value={bq.topicId || ''} onChange={e => updateBatchQuestion(idx, { topicId: e.target.value })} disabled={!bq.unitId} className="text-[10px] font-bold h-8 border-slate-200"><option value="">Tópico</option>{bUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+                                <div className="grid grid-cols-2 gap-3 mb-8">
+                                    <Select value={bq.componentId || ''} onChange={e => updateBatchQuestion(idx, { componentId: e.target.value, disciplineId: '' })} className={`text-[10px] font-black h-10 ${!bq.componentId ? 'border-red-400 bg-red-50' : ''}`}><option value="">Área...</option>{availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}</Select>
+                                    <Select value={bq.disciplineId || ''} onChange={e => updateBatchQuestion(idx, { disciplineId: e.target.value })} disabled={!bq.componentId} className="text-[10px] font-black h-10"><option value="">Disciplina...</option>{bComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
                                 </div>
-
-                                <div className="mb-6">
-                                    <RichTextEditor label="Enunciado" value={bq.enunciado || ''} onChange={html => updateBatchQuestion(idx, { enunciado: html })} />
+                                <div className="mb-8">
+                                    <RichTextEditor label="Enunciado (Comando da Pergunta)" value={bq.enunciado || ''} onChange={html => updateBatchQuestion(idx, { enunciado: html })} />
                                 </div>
-
-                                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                                    <GabaritoUI q={bq} isBatch={true} onChange={data => updateBatchQuestion(idx, data)} />
+                                <div className="bg-slate-50 p-8 rounded-[32px] border-2 border-slate-100">
+                                    <GabaritoUI q={bq} questionIndex={idx} onChange={data => updateBatchQuestion(idx, data)} />
                                 </div>
                             </div>
                         );
@@ -411,51 +427,39 @@ const QuestionsPage = () => {
             </Modal>
 
             {/* MODAL INDIVIDUAL */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Editar Questão" : "Criar Nova Questão"} maxWidth="max-w-6xl" footer={<Button onClick={handleSave} className="px-10 h-12 text-base shadow-xl font-bold">Salvar Questão</Button>}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Alterar Questão" : "Criar Nova Questão"} maxWidth="max-w-5xl" footer={<Button onClick={handleSave} className="px-12 h-14 text-lg shadow-2xl font-black rounded-2xl">SALVAR NO BANCO</Button>}>
                 <div className="space-y-8 py-2">
-                    <div className="flex flex-wrap gap-4 items-center justify-between bg-slate-900 p-4 rounded-2xl shadow-inner">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-white"><Icons.Sparkles /></div>
-                            <div><h4 className="text-white text-sm font-black uppercase tracking-tight">Criador Assistido</h4><p className="text-slate-400 text-[10px]">Gerado pelo Gemini com inteligência pedagógica</p></div>
+                    <div className="flex flex-wrap gap-4 items-center justify-between bg-slate-900 p-6 rounded-[32px] shadow-2xl">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white"><Icons.Sparkles className="w-6 h-6" /></div>
+                            <div><h4 className="text-white text-base font-black uppercase tracking-tight">Criador Assistido</h4><p className="text-slate-400 text-xs">A IA escreve o enunciado e as opções para você</p></div>
                         </div>
-                        <Button onClick={handleAiGenerate} disabled={isAiLoading || !editing.componentId} className="bg-gradient-to-r from-purple-600 to-indigo-600 border-none text-white font-black text-xs px-8 py-3">{isAiLoading ? 'Escrevendo...' : <><Icons.Sparkles className="w-4 h-4" /> Gerar com IA</>}</Button>
+                        <Button onClick={handleAiGenerate} disabled={isAiLoading || !editing.componentId} className="bg-white hover:bg-slate-100 text-slate-900 font-black text-xs px-10 h-12 border-none">GERAR COM IA</Button>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <Select label="Área" value={editing.componentId || ''} onChange={e => setEditing({...editing, componentId: e.target.value, disciplineId: '', chapterId: '', unitId: '', topicId: ''})}>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Select label="Área" value={editing.componentId || ''} onChange={e => setEditing({...editing, componentId: e.target.value, disciplineId: ''})}>
                             <option value="">Selecione...</option>
                             {availableComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
                         </Select>
-                        <Select label="Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value, chapterId: '', unitId: '', topicId: ''})} disabled={!editing.componentId}>
+                        <Select label="Disciplina" value={editing.disciplineId || ''} onChange={e => setEditing({...editing, disciplineId: e.target.value})} disabled={!editing.componentId}>
                             <option value="">Selecione...</option>
-                            {activeComp?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                        </Select>
-                        <Select label="Capítulo" value={editing.chapterId || ''} onChange={e => setEditing({...editing, chapterId: e.target.value, unitId: '', topicId: ''})} disabled={!editing.disciplineId}>
-                            <option value="">Selecione...</option>
-                            {activeDisc?.chapters?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </Select>
-                        <Select label="Unidade" value={editing.unitId || ''} onChange={e => setEditing({...editing, unitId: e.target.value, topicId: ''})} disabled={!editing.chapterId}>
-                            <option value="">Selecione...</option>
-                            {activeChap?.units?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </Select>
-                        <Select label="Tópico" value={editing.topicId || ''} onChange={e => setEditing({...editing, topicId: e.target.value})} disabled={!editing.unitId}>
-                            <option value="">Selecione...</option>
-                            {activeUnit?.topics?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            {hierarchy.find(cc => cc.id === editing.componentId)?.disciplines?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </Select>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-6">
-                        <Select label="Tipo" value={editing.type} onChange={e => setEditing({...editing, type: e.target.value as any, options: [], pairs: []})}>
+                    <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-8">
+                        <Select label="Tipo de Questão" value={editing.type} onChange={e => setEditing({...editing, type: e.target.value as any, options: [], pairs: []})}>
                             {Object.entries(QuestionTypeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </Select>
-                        <Select label="Dificuldade" value={editing.difficulty} onChange={e => setEditing({...editing, difficulty: e.target.value as any})}>
+                        <Select label="Dificuldade Estimada" value={editing.difficulty} onChange={e => setEditing({...editing, difficulty: e.target.value as any})}>
                             <option value="Easy">Fácil</option><option value="Medium">Média</option><option value="Hard">Difícil</option>
                         </Select>
                     </div>
 
                     <RichTextEditor label="Enunciado" value={editing.enunciado || ''} onChange={html => setEditing({...editing, enunciado: html})} />
                     
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                    <div className="bg-slate-50 p-8 rounded-[32px] border-2 border-slate-100">
                         <GabaritoUI q={editing} onChange={data => setEditing({...editing, ...data})} />
                     </div>
                 </div>

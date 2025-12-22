@@ -16,18 +16,6 @@ export const Icons = {
   X: ({ className = "w-6 h-6" }: IconProps) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
 };
 
-// Icons specific to the Rich Text Editor
-const EditorIcons = {
-    Undo: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>,
-    Redo: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>,
-    Bold: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"/></svg>,
-    Italic: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z"/></svg>,
-    Underline: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M12 17c3.31 0 6-2.69 6-6V3h-2.5v8c0 1.93-1.57 3.5-3.5 3.5S8.5 12.93 8.5 11V3H6v8c0 3.31 2.69 6 6 6zm-7 2v2h14v-2H5z"/></svg>,
-    ListBulleted: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/></svg>,
-    ListNumbered: ({ className = "w-4 h-4" }: IconProps) => <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"/></svg>,
-};
-
-/* Componente Button: Botão de ação com variantes pré-definidas de estilo. */
 export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' }> = ({ className = '', variant = 'primary', ...props }) => {
     const base = "flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 text-sm";
     const variants = {
@@ -40,7 +28,6 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
     return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
 };
 
-/* Componente Input: Campo de entrada de dados com suporte a labels. */
 export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label?: string }> = ({ label, className = '', ...props }) => (
     <div className="w-full space-y-1">
         {label && <label className="block text-sm font-bold text-slate-700">{label}</label>}
@@ -51,7 +38,6 @@ export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { lab
     </div>
 );
 
-/* Componente Select: Elemento de seleção dropdown para formulários. */
 export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement> & { label?: string }> = ({ label, children, className = '', ...props }) => (
     <div className="w-full space-y-1">
         {label && <label className="block text-sm font-bold text-slate-700">{label}</label>}
@@ -64,7 +50,6 @@ export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement> & { 
     </div>
 );
 
-/* Componente Card: Container visual para agrupamento de informações com bordas suaves. */
 export const Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { title?: string }> = ({ title, children, className = '', ...props }) => (
     <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ${className}`} {...props}>
         {title && <h3 className="text-lg font-bold text-slate-800 mb-4">{title}</h3>}
@@ -72,7 +57,6 @@ export const Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { title?: str
     </div>
 );
 
-/* Componente Badge: Indicador colorido compacto para etiquetas e categorias. */
 export const Badge: React.FC<{ color?: 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'orange' | 'slate', children: React.ReactNode }> = ({ color = 'blue', children }) => {
     const colors = {
         blue: "bg-blue-100 text-blue-700 border-blue-200",
@@ -90,7 +74,6 @@ export const Badge: React.FC<{ color?: 'blue' | 'green' | 'red' | 'yellow' | 'pu
     );
 };
 
-/* Componente Modal: Janela de diálogo sobreposta com fundo esmaecido. */
 export const Modal: React.FC<{ isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, footer?: React.ReactNode, maxWidth?: string, compact?: boolean }> = ({ isOpen, onClose, title, children, footer, maxWidth = 'max-w-2xl', compact = false }) => {
     if (!isOpen) return null;
     return (
@@ -114,9 +97,9 @@ export const Modal: React.FC<{ isOpen: boolean, onClose: () => void, title: stri
     );
 };
 
-/* Componente RichTextEditor: Editor de texto rico simplificado baseado em contentEditable nativo. */
 export const RichTextEditor: React.FC<{ label?: string, value: string, onChange: (html: string) => void }> = ({ label, value, onChange }) => {
     const editorRef = useRef<HTMLDivElement>(null);
+    const [activeTab, setActiveTab] = useState<'FORMAT' | 'MATH' | 'CHEM'>('FORMAT');
 
     useEffect(() => {
         if (editorRef.current && editorRef.current.innerHTML !== value) {
@@ -124,36 +107,96 @@ export const RichTextEditor: React.FC<{ label?: string, value: string, onChange:
         }
     }, [value]);
 
-    const execCommand = (command: string, val: string = '') => {
-        document.execCommand(command, false, val);
-        if (editorRef.current) {
-            onChange(editorRef.current.innerHTML);
+    const exec = (cmd: string, val: string = '') => {
+        document.execCommand(cmd, false, val);
+        if (editorRef.current) onChange(editorRef.current.innerHTML);
+    };
+
+    const insertHTML = (html: string) => {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            const div = document.createElement("div");
+            div.innerHTML = html;
+            const frag = document.createDocumentFragment();
+            let lastNode;
+            while (lastNode = div.firstChild) {
+                frag.appendChild(lastNode);
+            }
+            range.insertNode(frag);
+            if (editorRef.current) onChange(editorRef.current.innerHTML);
         }
     };
 
+    const SYMBOLS = {
+        MATH: ['π', '√', '∛', '±', '≠', '≈', '∞', '∫', '∑', 'Δ', 'α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'λ', 'μ', 'ξ', 'ρ', 'σ', 'τ', 'φ', 'χ', 'ψ', 'ω', 'Ω', '∈', '∉', '⊂', '⊆', '∪', '∩', '∀', '∃', '∠', '°'],
+        CHEM: ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Fe', 'Cu', 'Zn', 'Ag', 'Au', 'Hg', 'Pb', '→', '⇄', '↑', '↓', 'Δ', '°C']
+    };
+
     return (
-        <div className="space-y-1">
+        <div className="space-y-1 w-full">
             {label && <label className="block text-sm font-bold text-slate-700">{label}</label>}
-            <div className="border border-slate-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-brand-blue focus-within:border-brand-blue transition-all bg-white shadow-inner">
-                <div className="flex flex-wrap gap-1 p-2 bg-slate-50 border-b border-slate-200">
-                    <button type="button" onClick={() => execCommand('bold')} className="p-1.5 hover:bg-white rounded transition-colors" title="Negrito"><EditorIcons.Bold /></button>
-                    <button type="button" onClick={() => execCommand('italic')} className="p-1.5 hover:bg-white rounded transition-colors" title="Itálico"><EditorIcons.Italic /></button>
-                    <button type="button" onClick={() => execCommand('underline')} className="p-1.5 hover:bg-white rounded transition-colors" title="Sublinhado"><EditorIcons.Underline /></button>
-                    <div className="w-px h-6 bg-slate-300 mx-1"></div>
-                    <button type="button" onClick={() => execCommand('insertUnorderedList')} className="p-1.5 hover:bg-white rounded transition-colors" title="Lista Marcadores"><EditorIcons.ListBulleted /></button>
-                    <button type="button" onClick={() => execCommand('insertOrderedList')} className="p-1.5 hover:bg-white rounded transition-colors" title="Lista Numerada"><EditorIcons.ListNumbered /></button>
-                    <div className="w-px h-6 bg-slate-300 mx-1"></div>
-                    <button type="button" onClick={() => execCommand('undo')} className="p-1.5 hover:bg-white rounded transition-colors" title="Desfazer"><EditorIcons.Undo /></button>
-                    <button type="button" onClick={() => execCommand('redo')} className="p-1.5 hover:bg-white rounded transition-colors" title="Refazer"><EditorIcons.Redo /></button>
+            <div className="border-2 border-[#3d5a73] rounded-2xl overflow-hidden bg-white shadow-lg focus-within:ring-2 focus-within:ring-blue-400 transition-all">
+                
+                {/* Header Estilo MathType */}
+                <div className="bg-[#4a6b8a] p-1 flex items-center justify-between border-b border-[#3d5a73]">
+                    <div className="flex">
+                        <button type="button" onClick={() => setActiveTab('FORMAT')} className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all rounded-t-lg mx-0.5 ${activeTab === 'FORMAT' ? 'bg-white text-[#4a6b8a]' : 'text-white hover:bg-white/10'}`}>Formatação</button>
+                        <button type="button" onClick={() => setActiveTab('MATH')} className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all rounded-t-lg mx-0.5 ${activeTab === 'MATH' ? 'bg-white text-[#4a6b8a]' : 'text-white hover:bg-white/10'}`}>Matemática</button>
+                        <button type="button" onClick={() => setActiveTab('CHEM')} className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all rounded-t-lg mx-0.5 ${activeTab === 'CHEM' ? 'bg-white text-[#4a6b8a]' : 'text-white hover:bg-white/10'}`}>Química</button>
+                    </div>
+                    <span className="text-[9px] text-white/50 font-mono pr-3 hidden sm:block">{activeTab}TYPE ACADEMIC v4.0</span>
                 </div>
+
+                {/* Toolbar */}
+                <div className="flex flex-wrap gap-1 p-2 bg-[#f0f4f7] border-b border-slate-200 min-h-[50px]">
+                    {activeTab === 'FORMAT' && (
+                        <div className="flex flex-wrap gap-1 items-center">
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('bold'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded font-bold border border-transparent hover:border-slate-300">B</button>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('italic'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded italic border border-transparent hover:border-slate-300">I</button>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('underline'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded underline border border-transparent hover:border-slate-300">U</button>
+                            <div className="w-px h-6 bg-slate-300 mx-1"></div>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('insertUnorderedList'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300">•</button>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('insertOrderedList'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300 text-[10px]">1.</button>
+                            <div className="w-px h-6 bg-slate-300 mx-1"></div>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyLeft'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300"><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V7H3v2zm0-6v2h18V3H3z"/></svg></button>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('justifyCenter'); }} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded border border-transparent hover:border-slate-300"><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm2-4h14v-2H5v2zm-2-4h18v-2H3v2zm2-4h14V7H5v2zm-2-6v2h18V3H3z"/></svg></button>
+                        </div>
+                    )}
+                    {activeTab === 'MATH' && (
+                        <div className="grid grid-cols-8 sm:grid-cols-12 gap-0.5">
+                            <button type="button" onMouseDown={e => { e.preventDefault(); insertHTML('<sup>x</sup>'); }} className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-[10px] font-bold hover:bg-blue-50" title="Sobrescrito">x²</button>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); insertHTML('<sub>x</sub>'); }} className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-[10px] font-bold hover:bg-blue-50" title="Subscrito">x₂</button>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); insertHTML('<span style="border-top:1px solid">x</span>'); }} className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-[10px] font-bold hover:bg-blue-50" title="Raiz">√</button>
+                            <div className="w-px h-7 bg-slate-300 mx-0.5"></div>
+                            {SYMBOLS.MATH.map(sym => (
+                                <button key={sym} type="button" onMouseDown={e => { e.preventDefault(); insertHTML(sym); }} className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-xs hover:bg-blue-50 font-medium transition-colors">{sym}</button>
+                            ))}
+                        </div>
+                    )}
+                    {activeTab === 'CHEM' && (
+                        <div className="grid grid-cols-8 sm:grid-cols-12 gap-0.5">
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('subscript'); }} className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-[10px] font-bold hover:bg-emerald-50" title="H2O">H₂</button>
+                            <button type="button" onMouseDown={e => { e.preventDefault(); exec('superscript'); }} className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-[10px] font-bold hover:bg-emerald-50" title="Ion">Fe³⁺</button>
+                            <div className="w-px h-7 bg-slate-300 mx-0.5"></div>
+                            {SYMBOLS.CHEM.map(sym => (
+                                <button key={sym} type="button" onMouseDown={e => { e.preventDefault(); insertHTML(sym); }} className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-xs hover:bg-emerald-50 font-bold transition-colors">{sym}</button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Editor Content */}
                 <div 
                     ref={editorRef}
                     contentEditable
-                    className="p-4 min-h-[150px] outline-none prose prose-sm prose-slate max-w-none rich-text-content"
+                    className="p-5 min-h-[220px] outline-none prose prose-slate max-w-none rich-text-content font-medium text-slate-800 bg-[#fdfdfd]"
                     onBlur={(e) => onChange(e.currentTarget.innerHTML)}
                     onInput={(e) => onChange(e.currentTarget.innerHTML)}
                 />
             </div>
+            <p className="text-[10px] text-slate-400 italic">Use as abas para alternar entre formatação textual e símbolos científicos.</p>
         </div>
     );
 };
