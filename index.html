@@ -34,42 +34,35 @@
       @media print {
         @page {
           margin: 15mm;
-          size: auto;
+          size: A4;
+        }
+
+        /* Esconde tudo que não for o conteúdo de impressão */
+        body * {
+          visibility: hidden;
+        }
+
+        #exam-print-container, #exam-print-container * {
+          visibility: visible;
+        }
+
+        #exam-print-container {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          background: white !important;
+          color: black !important;
         }
 
         html, body {
           height: auto !important;
-          min-height: 0 !important;
           overflow: visible !important;
-          position: static !important;
           background: white !important;
         }
 
-        #root {
-          height: auto !important;
-          overflow: visible !important;
-          position: static !important;
-        }
-
-        #root > div, main {
-            height: auto !important;
-            overflow: visible !important;
-            display: block !important; 
-        }
-
-        .custom-scrollbar, div[class*="overflow-y-auto"], div[class*="overflow-hidden"] {
-            height: auto !important;
-            overflow: visible !important;
-        }
-
-        .no-print, .print\:hidden { 
-          display: none !important; 
-        }
+        .no-print { display: none !important; }
         
-        ::-webkit-scrollbar {
-          display: none;
-        }
-
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
@@ -84,12 +77,10 @@
         .print-columns-2 {
           column-count: 2 !important;
           column-gap: 15mm !important;
-          column-rule: 1px solid #000 !important;
+          column-rule: 1.5px solid #000 !important;
         }
       }
 
-      .print-only { display: none; }
-      
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
@@ -97,23 +88,28 @@
 
       .rich-text-content h1, .rich-text-content h2, .rich-text-content h3 { font-weight: bold; margin-bottom: 0.5em; }
       .rich-text-content p { margin-bottom: 0.5em; }
-      .rich-text-content a { color: #3A72EC !important; text-decoration: underline !important; cursor: pointer; }
-      .rich-text-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
-      .rich-text-content ul ul { list-style-type: circle !important; }
-      .rich-text-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-left: 0 !important; text-align: left; }
-      .rich-text-content ol ol { list-style-type: lower-alpha !important; }
-      .rich-text-content li { margin-bottom: 0.25rem; }
-      .rich-text-content img { max-width: 100%; height: auto; }
-      .rich-text-content table { border-collapse: collapse; }
-      .rich-text-content td, .rich-text-content th { border: 1px solid #cbd5e1; padding: 4px 8px; }
+      .rich-text-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; }
+      .rich-text-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
 
       /* Fix para visualização de 2 colunas no navegador */
       .preview-columns-2 {
           column-count: 2;
           column-gap: 15mm;
-          column-rule: 1px solid #cbd5e1;
+          column-rule: 1.5px solid #000;
           height: auto;
-          overflow: visible;
+      }
+      
+      /* Estilo das bolinhas do cartão resposta */
+      .answer-bubble {
+          width: 24px;
+          height: 24px;
+          border: 1px solid black;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          font-weight: bold;
       }
     </style>
   <script type="importmap">

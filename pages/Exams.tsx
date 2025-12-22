@@ -48,6 +48,7 @@ const ExamsPage = () => {
     const [headerFields, setHeaderFields] = useState({ nome: true, data: true, turma: true, nota: true, valor: true });
     const [activeVersion, setActiveVersion] = useState('A');
     const [examVersions, setExamVersions] = useState<Record<string, Question[]>>({});
+    const [viewingMode, setViewingMode] = useState<'EXAM' | 'ANSWER_CARD'>('EXAM');
 
     useEffect(() => { if (user) load(); }, [user]);
 
@@ -319,7 +320,7 @@ const ExamsPage = () => {
             case 3: return (
                 <div className="space-y-6">
                     <div className="flex bg-slate-100 p-1 rounded-2xl w-fit mx-auto">
-                        <button onClick={() => setSelectionMode('AUTO')} className={`px-8 py-2 rounded-xl text-sm font-black transition-all ${selectionMode === 'AUTO' ? 'bg-white text-brand-blue shadow-md' : 'text-slate-500'}`}>Sorteio Automático</button>
+                        <button onClick={() => setSelectionMode('AUTO')} className={`px-8 py-2 rounded-xl text-sm font-black transition-all ${selectionMode === 'AUTO' ? 'bg-white text-brand-blue shadow-md' : 'text-slate-50'}`}>Sorteio Automático</button>
                         <button onClick={() => setSelectionMode('MANUAL')} className={`px-8 py-2 rounded-xl text-sm font-black transition-all ${selectionMode === 'MANUAL' ? 'bg-white text-brand-blue shadow-md' : 'text-slate-500'}`}>Seleção Manual</button>
                     </div>
 
@@ -405,69 +406,104 @@ const ExamsPage = () => {
                                 )}
                             </div>
 
-                            <Button onClick={() => window.print()} className="w-full h-14 bg-slate-900 text-white shadow-xl">
-                                <Icons.Printer /> Imprimir Versão {activeVersion}
+                            <div className="pt-6 border-t border-slate-200">
+                                <h5 className="font-black text-slate-800 uppercase text-[10px] tracking-widest mb-4">Modo de Visualização</h5>
+                                <div className="flex bg-white rounded-xl p-1 border">
+                                    <button onClick={() => setViewingMode('EXAM')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${viewingMode === 'EXAM' ? 'bg-brand-blue text-white' : 'text-slate-400'}`}>PROVA</button>
+                                    <button onClick={() => setViewingMode('ANSWER_CARD')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${viewingMode === 'ANSWER_CARD' ? 'bg-brand-blue text-white' : 'text-slate-400'}`}>CARTÃO</button>
+                                </div>
+                            </div>
+
+                            <Button onClick={() => window.print()} className="w-full h-14 bg-slate-900 text-white shadow-xl mt-4">
+                                <Icons.Printer /> Imprimir {viewingMode === 'EXAM' ? 'Prova' : 'Cartão'}
                             </Button>
                         </div>
                     </div>
 
-                    <div className="lg:col-span-2 bg-white shadow-2xl rounded-2xl p-8 border border-slate-200 min-h-[600px] print:p-0 print:shadow-none print:border-none overflow-hidden">
-                        <div id="exam-print-preview" className={`${printFontSize} text-slate-800`}>
-                            {renderHeaderPrint()}
+                    <div className="lg:col-span-2 bg-white shadow-2xl rounded-2xl p-8 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar">
+                        <div id="exam-print-container" className={`${printFontSize} text-slate-800 p-4`}>
+                            {viewingMode === 'EXAM' ? (
+                                <div className="animate-fade-in">
+                                    {renderHeaderPrint()}
 
-                            {editing.instructions && (
-                                <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-800 italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
-                            )}
+                                    {editing.instructions && (
+                                        <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-800 italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                    )}
 
-                            <div 
-                                className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : ''}`}
-                            >
-                                {(examVersions[activeVersion] || currentQs).map((q, idx) => (
-                                    <div key={q.id || idx} className="mb-6 break-inside-avoid">
-                                        <div className="flex gap-2">
-                                            <span className="font-bold">{idx + 1}.</span>
-                                            <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                                        </div>
-                                        {Array.isArray(q.options) && (
-                                            <div className="mt-2 ml-6 space-y-1">
-                                                {q.options.map((opt, i) => (
-                                                    <div key={i} className="flex gap-2">
-                                                        <span className="w-5 h-5 border border-black rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{String.fromCharCode(65+i)}</span>
-                                                        <span>{opt.text}</span>
+                                    <div 
+                                        className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : ''}`}
+                                    >
+                                        {(examVersions[activeVersion] || currentQs).map((q, idx) => (
+                                            <div key={q.id || idx} className="mb-6 break-inside-avoid">
+                                                <div className="flex gap-2">
+                                                    <span className="font-bold">{idx + 1}.</span>
+                                                    <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                </div>
+                                                {Array.isArray(q.options) && (
+                                                    <div className="mt-2 ml-6 space-y-1">
+                                                        {q.options.map((opt, i) => (
+                                                            <div key={i} className="flex gap-2">
+                                                                <span className="w-5 h-5 border border-black rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{String.fromCharCode(65+i)}</span>
+                                                                <span>{opt.text}</span>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ))}
+                                                )}
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
 
-                            {/* GABARITO NO FINAL EM PÁGINA SEPARADA */}
-                            {editing.showAnswerKey && (
-                                <div className="page-break mt-10 pt-10 border-t border-dashed border-slate-200">
-                                    {renderHeaderPrint('(GABARITO)')}
-                                    <div className="mt-6">
-                                        <h3 className="font-black text-center text-lg mb-6 uppercase border-b-2 border-black pb-2">Folha de Respostas Oficiais</h3>
-                                        <div className="grid grid-cols-2 gap-x-12 gap-y-4">
-                                            {(examVersions[activeVersion] || currentQs).map((q, idx) => {
-                                                const correctOptIndex = q.options?.findIndex(o => o.isCorrect);
-                                                const correctLetter = correctOptIndex !== undefined && correctOptIndex !== -1 
-                                                    ? String.fromCharCode(65 + correctOptIndex) 
-                                                    : '---';
+                                    {editing.showAnswerKey && (
+                                        <div className="page-break mt-10 pt-10 border-t border-dashed border-slate-200">
+                                            {renderHeaderPrint('(GABARITO)')}
+                                            <div className="mt-6">
+                                                <h3 className="font-black text-center text-lg mb-6 uppercase border-b-2 border-black pb-2">Folha de Respostas Oficiais</h3>
+                                                <div className="grid grid-cols-2 gap-x-12 gap-y-4">
+                                                    {(examVersions[activeVersion] || currentQs).map((q, idx) => {
+                                                        const correctOptIndex = q.options?.findIndex(o => o.isCorrect);
+                                                        const correctLetter = correctOptIndex !== undefined && correctOptIndex !== -1 
+                                                            ? String.fromCharCode(65 + correctOptIndex) 
+                                                            : '---';
 
-                                                return (
-                                                    <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-slate-100 pb-1 break-inside-avoid">
-                                                        <span className="font-bold text-sm">Questão {idx + 1}:</span>
-                                                        <span className="font-black text-brand-blue bg-blue-50 px-3 py-1 rounded border border-blue-200">
-                                                            {correctLetter}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
+                                                        return (
+                                                            <div key={`ans-${q.id || idx}`} className="flex justify-between items-center border-b border-slate-100 pb-1 break-inside-avoid">
+                                                                <span className="font-bold text-sm">Questão {idx + 1}:</span>
+                                                                <span className="font-black text-brand-blue bg-blue-50 px-3 py-1 rounded border border-blue-200">
+                                                                    {correctLetter}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="mt-12 p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest break-inside-avoid">
+                                                    Fim do Gabarito - Versão {activeVersion}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="mt-12 p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest break-inside-avoid">
-                                            Fim do Gabarito - Versão {activeVersion}
-                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="animate-fade-in">
+                                    {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
+                                    <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6">
+                                        {(examVersions[activeVersion] || currentQs).map((q, idx) => (
+                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-slate-100 pb-3">
+                                                <span className="font-black text-slate-400 w-8">{idx + 1}</span>
+                                                <div className="flex gap-2">
+                                                    {['A', 'B', 'C', 'D', 'E'].map(letter => (
+                                                        <div key={letter} className="answer-bubble">{letter}</div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-12 p-6 border-2 border-black border-dashed rounded-xl">
+                                        <p className="text-[10px] font-black uppercase mb-4 tracking-widest">Instruções para o Cartão</p>
+                                        <ul className="text-[10px] space-y-1">
+                                            <li>• Utilize apenas caneta azul ou preta.</li>
+                                            <li>• Preencha completamente o círculo da alternativa escolhida.</li>
+                                            <li>• Questões com mais de uma marcação ou rasuras serão anuladas.</li>
+                                        </ul>
                                     </div>
                                 </div>
                             )}
