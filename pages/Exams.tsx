@@ -210,7 +210,7 @@ const ExamsPage = () => {
         </div>
     );
 
-    const currentQs = examVersions[activeVersion] || Array.isArray(editing.questions) ? editing.questions : [];
+    const currentQs = examVersions[activeVersion] || (Array.isArray(editing.questions) ? editing.questions : []);
 
     const renderStepContent = () => {
         const activeScopes = Array.isArray(tempScopes) ? tempScopes : [];
@@ -419,10 +419,10 @@ const ExamsPage = () => {
                         </div>
                     </div>
 
-                    <div className="lg:col-span-2 bg-white shadow-2xl rounded-2xl p-8 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
+                    <div className="lg:col-span-2 bg-white rounded-2xl p-8 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
                         <div id="exam-print-container" className={`${printFontSize} text-slate-800 p-4 bg-white`}>
                             {viewingMode === 'EXAM' ? (
-                                <div className="animate-fade-in">
+                                <div className="animate-fade-in bg-white">
                                     {renderHeaderPrint()}
 
                                     {editing.instructions && (
@@ -433,7 +433,7 @@ const ExamsPage = () => {
                                         className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : ''}`}
                                     >
                                         {currentQs.map((q, idx) => (
-                                            <div key={q.id || idx} className="mb-6 break-inside-avoid">
+                                            <div key={q.id || idx} className="mb-6 break-inside-avoid bg-white">
                                                 <div className="flex gap-2">
                                                     <span className="font-bold">{idx + 1}.</span>
                                                     <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
@@ -455,7 +455,7 @@ const ExamsPage = () => {
                                     {editing.showAnswerKey && (
                                         <div className="page-break mt-10 pt-10 border-t border-dashed border-slate-200 bg-white">
                                             {renderHeaderPrint('(GABARITO)')}
-                                            <div className="mt-6">
+                                            <div className="mt-6 bg-white">
                                                 <h3 className="font-black text-center text-lg mb-6 uppercase border-b-2 border-black pb-2">Folha de Respostas Oficiais</h3>
                                                 <div className="grid grid-cols-2 gap-x-12 gap-y-4">
                                                     {currentQs.map((q, idx) => {
@@ -479,21 +479,21 @@ const ExamsPage = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div className="animate-fade-in bg-white h-full">
+                                <div className="animate-fade-in bg-white">
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
-                                    <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6">
+                                    <div className="mt-8 grid grid-cols-2 gap-x-10 gap-y-6 bg-white">
                                         {currentQs.map((q, idx) => (
-                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-slate-100 pb-3 break-inside-avoid">
+                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-slate-100 pb-3 break-inside-avoid bg-white">
                                                 <span className="font-black text-slate-400 w-8">{idx + 1}</span>
                                                 <div className="flex gap-2">
                                                     {['A', 'B', 'C', 'D', 'E'].map(letter => (
-                                                        <div key={letter} className="answer-bubble">{letter}</div>
+                                                        <div key={letter} className="answer-bubble bg-white">{letter}</div>
                                                     ))}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="mt-12 p-6 border-2 border-black border-dashed rounded-xl break-inside-avoid">
+                                    <div className="mt-12 p-6 border-2 border-black border-dashed rounded-xl break-inside-avoid bg-white">
                                         <p className="text-[10px] font-black uppercase mb-4 tracking-widest">Instruções para o Cartão</p>
                                         <ul className="text-[10px] space-y-1">
                                             <li>• Utilize apenas caneta azul ou preta.</li>

@@ -37,66 +37,75 @@
           size: A4;
         }
 
-        /* Esconde elementos da interface do sistema */
-        nav, aside, button, footer, header, .no-print, [role="dialog"] > div:first-child { 
+        /* 1. Reset Global e Remoção de Fundos Cinzas */
+        * {
+          background-color: transparent !important;
+          box-shadow: none !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        html, body {
+          height: auto !important;
+          overflow: visible !important;
+          background: white !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          -webkit-print-color-adjust: exact;
+        }
+
+        /* 2. Isolamento do Conteúdo de Impressão */
+        /* Esconde toda a interface do sistema (menus, botões, overlays) */
+        #root > div:not(#exam-print-container),
+        nav, aside, button, footer, header, .no-print, 
+        .fixed, .absolute:not(#exam-print-container *) { 
           display: none !important; 
         }
 
-        /* Reseta body para permitir múltiplas páginas */
-        html, body {
-          height: auto !important;
-          min-height: 100% !important;
-          overflow: visible !important;
-          background: white !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-
-        #root {
+        /* 3. Garantia de Fluxo para Múltiplas Páginas */
+        #root, main, [role="dialog"], div {
+          position: static !important;
           height: auto !important;
           overflow: visible !important;
           display: block !important;
         }
 
-        /* Garante que o container de impressão ocupe o fluxo normal */
         #exam-print-container {
           display: block !important;
-          position: relative !important;
           width: 100% !important;
-          height: auto !important;
-          overflow: visible !important;
+          position: relative !important;
           background: white !important;
-          color: black !important;
           padding: 0 !important;
           margin: 0 !important;
+          visibility: visible !important;
         }
 
-        /* Força visibilidade se estiver oculto por modais */
-        [role="dialog"], #root > div {
-           position: static !important;
-           height: auto !important;
-           overflow: visible !important;
-        }
-
+        /* 4. Controle de Quebra de Página */
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
+          margin-bottom: 1rem;
         }
 
         .page-break {
           page-break-before: always !important;
           break-before: page !important;
+          display: block;
+          height: 0;
         }
 
-        /* Linha divisória robusta */
+        /* 5. Colunas com Linha Divisória nítida */
         .print-columns-2 {
           column-count: 2 !important;
           column-gap: 15mm !important;
           column-rule: 1px solid #000 !important;
           height: auto !important;
+          overflow: visible !important;
+          display: block !important;
         }
       }
 
+      /* Estilos para visualização em tela */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
