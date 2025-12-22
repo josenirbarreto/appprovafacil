@@ -37,95 +37,61 @@
           size: A4;
         }
 
-        /* 1. Reset Total de Cores e Sombras da Interface */
-        * {
+        /* 1. Reset de visibilidade: esconde tudo */
+        body * {
+          visibility: hidden;
           background: transparent !important;
-          color: #000 !important;
           box-shadow: none !important;
-          text-shadow: none !important;
         }
 
-        /* 2. Forçar fluxo contínuo para múltiplas páginas */
+        /* 2. Força o container de impressão e seus filhos a ficarem visíveis */
+        #exam-print-container, 
+        #exam-print-container * {
+          visibility: visible;
+        }
+
+        /* 3. Posicionamento Crítico: tira o conteúdo de dentro do Modal travado */
+        #exam-print-container {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          display: block !important;
+          background: white !important;
+          color: black !important;
+        }
+
+        /* 4. Remove travas de scroll do body/html */
         html, body {
           height: auto !important;
-          min-height: 0 !important;
           overflow: visible !important;
-          position: static !important;
-          background: #fff !important;
+          background: white !important;
           margin: 0 !important;
           padding: 0 !important;
         }
 
-        /* 3. Esconde toda a UI do Sistema */
-        #root > div:not(#exam-print-container),
-        nav, aside, button, footer, header, .no-print,
-        [role="dialog"] > div:first-child { 
-          display: none !important; 
-        }
-
-        /* 4. Neutraliza o Modal e Containers de Layout */
-        /* Isso faz com que o conteúdo "saia" de dentro do modal fixo */
-        #root, main, [role="dialog"], 
-        div[class*="overflow-y-auto"], 
-        div[class*="max-h-"],
-        .relative, .fixed, .absolute {
-          position: static !important;
-          display: block !important;
-          height: auto !important;
-          min-height: 0 !important;
-          overflow: visible !important;
-          width: 100% !important;
-          max-width: none !important;
-          border: none !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          transform: none !important;
-        }
-
-        /* 5. Container Principal da Prova */
-        #exam-print-container {
-          display: block !important;
-          visibility: visible !important;
-          background: #fff !important;
-          color: #000 !important;
-          width: 100% !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-
-        #exam-print-container * {
-          visibility: visible !important;
-        }
-
-        /* 6. Controle de Colunas e Quebras */
+        /* 5. Estilo das colunas e quebras */
         .print-columns-2 {
           display: block !important;
           column-count: 2 !important;
           column-gap: 15mm !important;
           column-rule: 1px solid #000 !important;
-          overflow: visible !important;
-          height: auto !important;
         }
 
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
+          display: block;
         }
 
         .page-break {
-          display: block !important;
           page-break-before: always !important;
           break-before: page !important;
+          display: block;
+          height: 0;
         }
 
-        /* Ajuste fino nas bolinhas do cartão para impressão */
-        .answer-bubble {
-          border: 1.5px solid #000 !important;
-          background: #fff !important;
-          color: #000 !important;
-          print-color-adjust: exact;
-          -webkit-print-color-adjust: exact;
-        }
+        .no-print { display: none !important; }
       }
 
       /* Estilos de preview (Navegador) */
