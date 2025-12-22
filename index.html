@@ -34,11 +34,11 @@
       /* --- ESTILOS DE IMPRESSÃO --- */
       @media print {
         @page {
-          margin: 15mm 10mm 15mm 10mm; /* Margens físicas da folha */
+          margin: 10mm 10mm 10mm 10mm; /* Define a margem real da folha */
           size: A4;
         }
 
-        /* 1. Reset Total de Layout para Fluxo Contínuo */
+        /* 1. Destruição de restrições de layout do navegador */
         html, body {
           margin: 0 !important;
           padding: 0 !important;
@@ -48,9 +48,11 @@
           background: white !important;
           color: black !important;
           width: 100% !important;
+          -webkit-print-color-adjust: exact !important;
         }
 
-        /* 2. Neutralização de Containers de UI (Modal, Sidebar, Nav) */
+        /* 2. Flattening: Transforma o Modal e Wrappers em blocos simples */
+        /* Isso é CRÍTICO para que o conteúdo flua para a próxima página */
         #root, 
         main, 
         [role="dialog"], 
@@ -58,7 +60,8 @@
         div[class*="fixed"], 
         div[class*="absolute"],
         div[class*="overflow-y-auto"],
-        div[class*="max-h-"] {
+        div[class*="max-h-"],
+        div[class*="p-8"] {
           position: static !important;
           display: block !important;
           height: auto !important;
@@ -73,36 +76,38 @@
           width: 100% !important;
         }
 
-        /* 3. Ocultar elementos desnecessários */
+        /* 3. Ocultar interface (Sidebar, Botões, Overlays) */
         nav, aside, header, footer, button, .no-print, 
-        .fixed.inset-0.bg-slate-900\/60 { /* Overlay do modal */
+        div[class*="bg-slate-900/60"], 
+        div[class*="backdrop-blur"] {
           display: none !important;
         }
 
-        /* 4. Container Principal da Prova */
+        /* 4. Container de Prova: Força início no topo */
         #exam-print-container {
           display: block !important;
           width: 100% !important;
-          margin: 0 !important;
+          margin-top: 0 !important;
           padding: 0 !important;
           visibility: visible !important;
+          background: white !important;
         }
 
-        /* 5. Motor de Colunas A4 */
+        /* 5. Motor de Colunas */
         .print-columns-2 {
           display: block !important;
           column-count: 2 !important;
           column-gap: 12mm !important;
-          column-rule: 0.5pt solid #eee !important; /* Divisor sutil entre colunas */
+          column-rule: 0.5pt solid #ddd !important;
           width: 100% !important;
         }
 
-        /* 6. Controle de Quebras de Página e Coluna */
+        /* 6. Prevenção de quebras órfãs */
         .break-inside-avoid {
           break-inside: avoid-column !important;
           page-break-inside: avoid !important;
           display: block !important;
-          margin-bottom: 6mm !important;
+          margin-bottom: 5mm !important;
         }
 
         .page-break {
@@ -110,26 +115,24 @@
           page-break-before: always !important;
           break-before: page !important;
           height: 0 !important;
-          margin: 0 !important;
         }
 
-        /* Reset de Cores e Fundo */
+        /* Reset de cores e bordas para garantir nitidez */
         * {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
           background-color: transparent !important;
           box-shadow: none !important;
           text-shadow: none !important;
+          color: black !important;
         }
         
         .answer-bubble {
           border: 1pt solid black !important;
           background-color: white !important;
         }
-
-        /* Garantir visibilidade do texto */
-        .rich-text-content p, .rich-text-content span {
-          color: black !important;
+        
+        .rich-text-content img {
+          max-width: 100% !important;
+          page-break-inside: avoid !important;
         }
       }
 

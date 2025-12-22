@@ -422,6 +422,7 @@ const ExamsPage = () => {
                     <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200 min-h-[600px] overflow-y-auto custom-scrollbar print:shadow-none print:border-none print:p-0">
                         {/* 
                             O ID 'exam-print-container' é alvo do CSS de impressão para garantir fluxo contínuo.
+                            Removidos paddings superiores de preview durante a impressão real.
                         */}
                         <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full`}>
                             {viewingMode === 'EXAM' ? (
