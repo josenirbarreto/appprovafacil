@@ -40,93 +40,114 @@
       }
     </script>
     <style>
-      /* --- MOTOR DE IMPRESSÃO REVISADO --- */
+      /* --- MOTOR DE IMPRESSÃO PROFISSIONAL --- */
       @media print {
         @page {
-          margin: 10mm;
+          margin: 15mm 10mm;
           size: A4;
         }
 
-        /* Esconde tudo por padrão */
+        /* Reset de visibilidade */
         body * {
           visibility: hidden !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
         }
 
-        /* Força a exibição do contêiner de prova e seus descendentes */
+        /* Contêiner Principal de Impressão */
         #exam-print-container, 
         #exam-print-container * {
           visibility: visible !important;
-          display: block !important;
         }
 
-        /* Remove elementos de interface dentro do contêiner */
-        .no-print, .no-print * {
-          display: none !important;
-          visibility: hidden !important;
-        }
-
-        /* Reseta o posicionamento para ocupar a folha toda */
         #exam-print-container {
           position: absolute !important;
           left: 0 !important;
-          top: 0 !important;
+          top: -10mm !important; /* Compensa margens de modais/headers */
           width: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
           background: white !important;
-          z-index: 9999 !important;
+          display: block !important;
         }
 
+        /* Força quebra de página se houver overflow */
         html, body {
           background: white !important;
           height: auto !important;
           overflow: visible !important;
         }
 
+        .no-print {
+          display: none !important;
+        }
+
+        /* Layout de Colunas */
         .print-columns-2 {
+          display: block !important;
           column-count: 2 !important;
-          column-gap: 10mm !important;
-          column-rule: 0.5pt solid #eee !important;
+          column-gap: 12mm !important;
+          column-rule: 0.2pt solid #eee !important;
         }
 
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
-          margin-bottom: 5mm !important;
+          margin-bottom: 6mm !important;
+          display: block !important;
         }
-        
-        .vision-anchor {
-            width: 10mm;
-            height: 10mm;
-            background-color: black !important;
-            position: absolute;
-            display: block !important;
-            visibility: visible !important;
+
+        /* Cartão Resposta - Bolinhas na Horizontal */
+        .answer-row-print {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 4mm !important;
+            width: 100% !important;
+            margin-bottom: 4mm !important;
         }
 
         .answer-bubble {
           border: 1pt solid black !important;
           border-radius: 50% !important;
-          display: inline-flex !important;
-          visibility: visible !important;
+          width: 24px !important;
+          height: 24px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          font-size: 8pt !important;
+          font-weight: bold !important;
+          background-color: white !important;
+          -webkit-print-color-adjust: exact !important;
         }
+
+        /* Âncoras para o Scanner */
+        .vision-anchor {
+            width: 8mm;
+            height: 8mm;
+            background-color: black !important;
+            position: absolute !important;
+            z-index: 10000;
+            display: block !important;
+        }
+        
+        .anchor-tl { top: 0; left: 0; }
+        .anchor-tr { top: 0; right: 0; }
+        .anchor-bl { bottom: 0; left: 0; }
+        .anchor-br { bottom: 0; right: 0; }
       }
 
-      /* Preview UI */
+      /* Estilos de Preview (Tela) */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
       
-      .rich-text-content h1, .rich-text-content h2 { font-weight: bold; margin-bottom: 0.5em; }
-      .rich-text-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; }
-      .rich-text-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
+      .rich-text-content img { max-width: 100%; height: auto; margin: 10px 0; border-radius: 8px; }
+      .rich-text-content table { border-collapse: collapse; width: 100%; }
+      .rich-text-content td { border: 1px solid #ddd; padding: 4px; }
 
       .preview-columns-2 {
           column-count: 2;
-          column-gap: 15mm;
-          column-rule: 1px solid #cbd5e1;
+          column-gap: 30px;
+          column-rule: 1px solid #e2e8f0;
       }
       
       .answer-bubble {
@@ -142,9 +163,8 @@
           background-color: white;
       }
 
-      /* Scanner Overlay */
       .scanner-overlay {
-          background: rgba(0,0,0,0.8);
+          background: rgba(0,0,0,0.85);
           position: fixed;
           inset: 0;
           z-index: 200;
@@ -152,24 +172,7 @@
           flex-direction: column;
           align-items: center;
           justify-content: center;
-      }
-      
-      .camera-viewport {
-          width: 90%;
-          max-width: 500px;
-          aspect-ratio: 3/4;
-          background: #000;
-          border-radius: 20px;
-          overflow: hidden;
-          position: relative;
-          border: 4px solid #3A72EC;
-      }
-
-      .scan-frame {
-          position: absolute;
-          inset: 40px;
-          border: 2px dashed rgba(255,255,255,0.5);
-          pointer-events: none;
+          backdrop-blur: 10px;
       }
     </style>
     <script type="importmap">

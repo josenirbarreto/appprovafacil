@@ -272,10 +272,10 @@ const ExamsPage = () => {
 
     // --- RENDERIZADORES ---
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="border-2 border-black p-4 mb-4 break-inside-avoid bg-white block relative overflow-hidden">
-            {/* Âncoras de Visão nos Cantos - Apenas para Print */}
-            <div className="vision-anchor top-0 left-0 hidden print:block"></div>
-            <div className="vision-anchor top-0 right-0 hidden print:block"></div>
+        <div className="border-2 border-black p-4 mb-4 break-inside-avoid bg-white block relative overflow-visible">
+            {/* Âncoras de Visão nos Cantos - Reduzidas e posicionadas corretamente para o scanner */}
+            <div className="vision-anchor anchor-tl hidden print:block"></div>
+            <div className="vision-anchor anchor-tr hidden print:block"></div>
             
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-black/10">
                 {selectedInstitution?.logoUrl && (
@@ -416,19 +416,20 @@ const ExamsPage = () => {
                                 </div>
                             ) : (
                                 <div className="animate-fade-in bg-white w-full block relative min-h-[297mm]">
-                                    <div className="vision-anchor top-0 left-0 hidden print:block"></div>
-                                    <div className="vision-anchor top-0 right-0 hidden print:block"></div>
-                                    <div className="vision-anchor bottom-0 left-0 hidden print:block"></div>
-                                    <div className="vision-anchor bottom-0 right-0 hidden print:block"></div>
+                                    {/* Âncoras do Scanner para o Cartão de Respostas */}
+                                    <div className="vision-anchor anchor-tl hidden print:block"></div>
+                                    <div className="vision-anchor anchor-tr hidden print:block"></div>
+                                    <div className="vision-anchor anchor-bl hidden print:block"></div>
+                                    <div className="vision-anchor anchor-br hidden print:block"></div>
 
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
                                     <div className="mt-12 grid grid-cols-2 gap-x-16 gap-y-6 bg-white print:grid">
                                         {(currentQs || []).filter(Boolean).map((_, idx) => (
-                                            <div key={`card-${idx}`} className="flex items-center gap-6 border-b border-black/10 pb-4 break-inside-avoid bg-white mb-4">
-                                                <span className="font-black text-slate-400 w-8 text-xl">{idx + 1}</span>
-                                                <div className="flex gap-3">
+                                            <div key={`card-${idx}`} className="answer-row-print border-b border-black/10 pb-4 break-inside-avoid bg-white mb-4 flex items-center gap-6">
+                                                <span className="font-black text-slate-400 w-8 text-xl shrink-0">{idx + 1}</span>
+                                                <div className="flex gap-4 flex-row">
                                                     {['A', 'B', 'C', 'D', 'E'].map(letter => (
-                                                        <div key={letter} className="answer-bubble bg-white">{letter}</div>
+                                                        <div key={letter} className="answer-bubble bg-white shrink-0">{letter}</div>
                                                     ))}
                                                 </div>
                                             </div>
