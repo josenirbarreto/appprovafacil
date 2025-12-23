@@ -205,7 +205,12 @@ const ExamsPage = () => {
     const authorizedHierarchy = useMemo(() => {
         const full = Array.isArray(hierarchy) ? hierarchy : [];
         if (!user || user.role === UserRole.ADMIN) return full;
-        const authIds = [...(user.subjects || []), ...(user.accessGrants || [])];
+        
+        // Fix: Use Array.isArray to prevent "is not iterable" errors
+        const userSubjects = Array.isArray(user.subjects) ? user.subjects : [];
+        const userGrants = Array.isArray(user.accessGrants) ? user.accessGrants : [];
+        
+        const authIds = [...userSubjects, ...userGrants];
         return full.filter(cc => authIds.includes(cc.id));
     }, [hierarchy, user]);
 
