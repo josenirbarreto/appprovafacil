@@ -206,7 +206,6 @@ const ExamsPage = () => {
         const full = Array.isArray(hierarchy) ? hierarchy : [];
         if (!user || user.role === UserRole.ADMIN) return full;
         
-        // Fix: Use Array.isArray to prevent "is not iterable" errors
         const userSubjects = Array.isArray(user.subjects) ? user.subjects : [];
         const userGrants = Array.isArray(user.accessGrants) ? user.accessGrants : [];
         
@@ -227,7 +226,6 @@ const ExamsPage = () => {
         const versions: Record<string, Question[]> = {};
         for (let i = 0; i < count; i++) {
             const vLetter = String.fromCharCode(65 + i);
-            // Embaralha questões para cada versão
             const shuffled = [...source].sort(() => 0.5 - Math.random());
             versions[vLetter] = shuffled;
         }
@@ -274,9 +272,11 @@ const ExamsPage = () => {
 
     // --- RENDERIZADORES ---
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="border-2 border-black p-4 mb-4 break-inside-avoid bg-white block relative">
-            <div className="vision-anchor top-0 left-0 no-print hidden print:block"></div>
-            <div className="vision-anchor top-0 right-0 no-print hidden print:block"></div>
+        <div className="border-2 border-black p-4 mb-4 break-inside-avoid bg-white block relative overflow-hidden">
+            {/* Âncoras de Visão nos Cantos - Apenas para Print */}
+            <div className="vision-anchor top-0 left-0 hidden print:block"></div>
+            <div className="vision-anchor top-0 right-0 hidden print:block"></div>
+            
             <div className="flex items-center gap-4 mb-4 pb-4 border-b border-black/10">
                 {selectedInstitution?.logoUrl && (
                     <img src={selectedInstitution.logoUrl} alt="Logo" className="h-10 w-auto object-contain shrink-0" />
@@ -371,6 +371,7 @@ const ExamsPage = () => {
             );
             case 4: return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+                    {/* Painel de Controle - Apenas Visual na Tela */}
                     <div className="lg:col-span-1 space-y-6 bg-slate-50 p-6 rounded-3xl border no-print">
                         <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest">Ajustes Finais</h4>
                         <Select label="Tamanho do Texto" value={printFontSize} onChange={e => setPrintFontSize(e.target.value)}>
@@ -385,6 +386,7 @@ const ExamsPage = () => {
                         <Button onClick={() => window.print()} className="w-full h-14 bg-slate-900 text-white shadow-xl mt-4 no-print"><Icons.Printer /> Imprimir Documento</Button>
                     </div>
 
+                    {/* Contêiner de Visualização & Print */}
                     <div className="lg:col-span-2 bg-white rounded-2xl p-4 border overflow-y-auto custom-scrollbar print:p-0 print:border-none print:overflow-visible">
                         <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block print:static relative`}>
                             {viewingMode === 'EXAM' ? (
@@ -414,13 +416,13 @@ const ExamsPage = () => {
                                 </div>
                             ) : (
                                 <div className="animate-fade-in bg-white w-full block relative min-h-[297mm]">
-                                    <div className="vision-anchor top-0 left-0 no-print hidden print:block"></div>
-                                    <div className="vision-anchor top-0 right-0 no-print hidden print:block"></div>
-                                    <div className="vision-anchor bottom-0 left-0 no-print hidden print:block"></div>
-                                    <div className="vision-anchor bottom-0 right-0 no-print hidden print:block"></div>
+                                    <div className="vision-anchor top-0 left-0 hidden print:block"></div>
+                                    <div className="vision-anchor top-0 right-0 hidden print:block"></div>
+                                    <div className="vision-anchor bottom-0 left-0 hidden print:block"></div>
+                                    <div className="vision-anchor bottom-0 right-0 hidden print:block"></div>
 
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
-                                    <div className="mt-12 grid grid-cols-2 gap-x-16 gap-y-6 bg-white print:block">
+                                    <div className="mt-12 grid grid-cols-2 gap-x-16 gap-y-6 bg-white print:grid">
                                         {(currentQs || []).filter(Boolean).map((_, idx) => (
                                             <div key={`card-${idx}`} className="flex items-center gap-6 border-b border-black/10 pb-4 break-inside-avoid bg-white mb-4">
                                                 <span className="font-black text-slate-400 w-8 text-xl">{idx + 1}</span>
@@ -604,8 +606,11 @@ const ExamsPage = () => {
                         </React.Fragment>
                     ))}
                 </div>
-                <div className="animate-fade-in min-h-[450px] no-print">{renderStepContent()}</div>
-                <div className="hidden print:block">{currentStep === 4 && renderStepContent()}</div>
+                
+                {/* Renderização única do conteúdo do passo para evitar IDs duplicados no Print */}
+                <div className="animate-fade-in min-h-[450px]">
+                    {renderStepContent()}
+                </div>
             </Modal>
         </div>
     );
