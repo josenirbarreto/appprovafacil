@@ -25,34 +25,24 @@
               sans: ['Inter', 'sans-serif'],
               display: ['Space Grotesk', 'sans-serif'],
               mono: ['Source Code Pro', 'monospace'],
-            },
-            animation: {
-              'scan-line': 'scan 2s linear infinite',
-            },
-            keyframes: {
-              scan: {
-                '0%': { top: '0%' },
-                '100%': { top: '100%' }
-              }
             }
           }
         }
       }
     </script>
     <style>
-      /* --- MOTOR DE IMPRESSÃO PROVA FÁCIL V3 --- */
+      /* --- ENGINE DE IMPRESSÃO DEFINITIVA V4 (A4 PRECISION) --- */
       @media print {
         @page {
-          margin: 10mm;
           size: A4;
+          margin: 0 !important; /* Remove margens do navegador */
         }
 
-        /* Reset Total de Visibilidade */
+        /* Oculta tudo exceto o container de impressão */
         body * {
           visibility: hidden !important;
         }
 
-        /* Container de Impressão (Força aparecer no topo da folha) */
         #exam-print-container, 
         #exam-print-container * {
           visibility: visible !important;
@@ -60,39 +50,45 @@
 
         #exam-print-container {
           position: absolute !important;
-          left: 0 !important;
           top: 0 !important;
-          width: 190mm !important; /* A4 (210mm) - 20mm de margem */
-          margin: 0 !important;
-          padding: 0 !important;
+          left: 0 !important;
+          width: 210mm !important; /* Largura exata A4 */
+          min-height: 297mm !important;
           background: white !important;
+          color: black !important;
+          padding: 15mm !important; /* Margem interna real da prova */
+          margin: 0 !important;
+          box-sizing: border-box !important;
           display: block !important;
         }
 
-        .no-print {
-          display: none !important;
+        /* Força o cabeçalho a ocupar as duas colunas */
+        .print-span-all {
+          column-span: all !important;
+          width: 100% !important;
+          margin-bottom: 5mm !important;
         }
 
-        /* Colunas reais para as questões */
+        /* Controle de Colunas das Questões */
         .print-columns-2 {
           display: block !important;
           column-count: 2 !important;
           column-gap: 10mm !important;
           column-rule: 0.1pt solid #eee !important;
-          width: 100% !important;
+          column-fill: auto !important;
         }
 
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
-          margin-bottom: 6mm !important;
+          margin-bottom: 8mm !important;
           display: block !important;
         }
 
-        /* Âncoras Pretas nos 4 Cantos (Sólidas para o Scanner) */
+        /* Âncoras de Scanner (Pretas Sólidas nos Cantos) */
         .vision-anchor {
-            width: 8mm !important;
-            height: 8mm !important;
+            width: 10mm !important;
+            height: 10mm !important;
             background-color: black !important;
             position: absolute !important;
             z-index: 9999 !important;
@@ -101,14 +97,15 @@
             print-color-adjust: exact !important;
         }
         
+        /* Posicionamento relativo ao container de 210mm */
         .anchor-tl { top: 0; left: 0; }
         .anchor-tr { top: 0; right: 0; }
         .anchor-bl { bottom: 0; left: 0; }
         .anchor-br { bottom: 0; right: 0; }
 
-        /* Cartão Resposta */
+        /* Cartão Resposta (Bolhas) */
         .answer-bubble {
-          border: 1.5pt solid black !important;
+          border: 1.2pt solid black !important;
           border-radius: 50% !important;
           width: 22px !important;
           height: 22px !important;
@@ -117,16 +114,19 @@
           justify-content: center !important;
           font-size: 8pt !important;
           font-weight: 900 !important;
-          background-color: white !important;
+          background: white !important;
           -webkit-print-color-adjust: exact !important;
         }
+
+        .no-print { display: none !important; }
+        .page-break { page-break-after: always !important; }
       }
 
-      /* Estilos para o Preview na Tela */
+      /* Preview UI */
+      .preview-columns-2 { column-count: 2; column-gap: 30px; }
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
-      .rich-text-content img { max-width: 100%; height: auto; margin: 1rem 0; border-radius: 8px; }
-      .preview-columns-2 { column-count: 2; column-gap: 30px; }
+      .rich-text-content img { max-width: 100%; height: auto; margin: 1rem 0; }
     </style>
   <script type="importmap">
 {
