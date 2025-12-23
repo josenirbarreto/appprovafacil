@@ -272,36 +272,32 @@ const ExamsPage = () => {
 
     // --- RENDERIZADORES ---
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="print-span-all border-b-4 border-black pb-6 mb-8 bg-white relative">
-            {/* Âncoras de Visão nos Cantos - Apenas para Print */}
+        <div className="border-2 border-black p-4 mb-6 bg-white relative block">
+            {/* Âncoras de Visão - Posicionadas nos cantos da folha via CSS index.html */}
             <div className="vision-anchor anchor-tl hidden print:block"></div>
             <div className="vision-anchor anchor-tr hidden print:block"></div>
             
-            <div className="flex items-center gap-8 mb-6">
+            <div className="flex items-center gap-6 mb-4">
                 {selectedInstitution?.logoUrl && (
-                    <img src={selectedInstitution.logoUrl} alt="Logo" className="h-20 w-auto object-contain shrink-0" />
+                    <img src={selectedInstitution.logoUrl} alt="Logo" className="h-12 w-auto object-contain shrink-0" />
                 )}
                 <div className="flex-1">
-                    <h1 className="font-black text-2xl uppercase leading-none mb-2">{selectedInstitution?.name || 'INSTITUIÇÃO DE ENSINO'}</h1>
-                    <h2 className="font-bold text-base uppercase text-slate-700">{editing.title || 'AVALIAÇÃO'} {titleSuffix}</h2>
+                    <h1 className="font-black text-lg uppercase leading-none">{selectedInstitution?.name || 'INSTITUIÇÃO DE ENSINO'}</h1>
+                    <h2 className="font-bold text-xs uppercase text-slate-700">{editing.title || 'AVALIAÇÃO'} {titleSuffix}</h2>
                 </div>
                 <div className="text-right">
-                    <div className="text-sm font-black border-4 border-black px-4 py-2 rounded-xl">VERSÃO: {activeVersion}</div>
-                    <div className="text-[10px] font-mono mt-2 opacity-40 uppercase tracking-widest">ID: {editing.id?.slice(0,8) || 'NOVA'}</div>
+                    <div className="text-[10px] font-black border-2 border-black px-2 py-0.5 rounded">VERSÃO: {activeVersion}</div>
+                    <div className="text-[7px] font-mono mt-1 opacity-40 uppercase">ID: {editing.id?.slice(0,8) || 'NOVA'}</div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-12 gap-y-4">
-                <div className="flex flex-col gap-1">
-                    {headerFields.nome && <div className="border-b-2 border-black font-black text-xs h-10 flex items-end">ALUNO:</div>}
-                    {headerFields.turma && <div className="border-b-2 border-black font-black text-xs h-10 flex items-end">TURMA:</div>}
-                </div>
-                <div className="flex flex-col gap-1">
-                    {headerFields.data && <div className="border-b-2 border-black font-black text-xs h-10 flex items-end">DATA: ___/___/___</div>}
-                    <div className="flex gap-4">
-                        {headerFields.nota && <div className="flex-1 border-b-2 border-black font-black text-xs h-10 flex items-end">NOTA:</div>}
-                        {headerFields.valor && <div className="flex-1 border-b-2 border-black font-black text-xs h-10 flex items-end">VALOR: 10,0</div>}
-                    </div>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+                <div className="border-b border-black font-black text-[10px] h-8 flex items-end">ALUNO:</div>
+                <div className="border-b border-black font-black text-[10px] h-8 flex items-end">DATA: ___/___/___</div>
+                <div className="border-b border-black font-black text-[10px] h-8 flex items-end">TURMA:</div>
+                <div className="flex gap-4">
+                    <div className="flex-1 border-b border-black font-black text-[10px] h-8 flex items-end">NOTA:</div>
+                    <div className="flex-1 border-b border-black font-black text-[10px] h-8 flex items-end">VALOR: 10,0</div>
                 </div>
             </div>
         </div>
@@ -378,11 +374,11 @@ const ExamsPage = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
                     {/* Painel de Controle */}
                     <div className="lg:col-span-1 space-y-6 bg-slate-50 p-6 rounded-3xl border no-print">
-                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest">Controles de Arquivo</h4>
+                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest">Ajustes Finais</h4>
                         <Select label="Tamanho da Fonte" value={printFontSize} onChange={e => setPrintFontSize(e.target.value)}>
-                            <option value="text-[11px]">Compacta (Econômica)</option>
-                            <option value="text-sm">Padrão (Acadêmica)</option>
-                            <option value="text-base">Acessível (Grande)</option>
+                            <option value="text-[11px]">Econômica (Pequena)</option>
+                            <option value="text-sm">Confortável (Padrão)</option>
+                            <option value="text-base">Grande (Acessibilidade)</option>
                         </Select>
                         <div className="flex bg-white rounded-xl p-1 border">
                             <button onClick={() => setViewingMode('EXAM')} className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${viewingMode === 'EXAM' ? 'bg-brand-blue text-white shadow-md' : 'text-slate-400'}`}>PROVA</button>
@@ -396,22 +392,25 @@ const ExamsPage = () => {
                         <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block`}>
                             {viewingMode === 'EXAM' ? (
                                 <div className="animate-fade-in bg-white w-full block">
+                                    {/* Cabeçalho FORA das colunas para evitar bugs */}
                                     {renderHeaderPrint()}
+                                    
                                     {editing.instructions && (
-                                        <div className="print-span-all mb-8 p-6 border-l-8 border-black bg-slate-50 italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                        <div className="mb-6 p-4 border-l-4 border-black bg-slate-50 italic rich-text-content break-inside-avoid" dangerouslySetInnerHTML={{__html: editing.instructions}} />
                                     )}
+
                                     <div className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'w-full block'}`}>
                                         {(currentQs || []).filter(Boolean).map((q, idx) => (
-                                            <div key={idx} className="break-inside-avoid bg-white block mb-10">
-                                                <div className="flex gap-3 font-black mb-3">
-                                                    <span className="text-slate-900">{idx + 1}.</span>
+                                            <div key={idx} className="break-inside-avoid bg-white block mb-8">
+                                                <div className="flex gap-2 font-bold mb-2">
+                                                    <span>{idx + 1}.</span>
                                                     <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                                 </div>
-                                                <div className="mt-3 ml-8 space-y-3 block">
+                                                <div className="mt-2 ml-6 space-y-2 block">
                                                     {(q.options || []).map((opt, i) => (
-                                                        <div key={i} className="flex gap-4 py-1.5 items-start">
-                                                            <span className="w-6 h-6 border-2 border-black rounded-full flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">{String.fromCharCode(65+i)}</span>
-                                                            <span className="text-sm leading-snug">{opt.text}</span>
+                                                        <div key={i} className="flex gap-3 py-1 items-start">
+                                                            <span className="w-5 h-5 border border-black rounded-full flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">{String.fromCharCode(65+i)}</span>
+                                                            <span className="text-sm leading-tight">{opt.text}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -421,7 +420,7 @@ const ExamsPage = () => {
                                 </div>
                             ) : (
                                 <div className="animate-fade-in bg-white w-full block relative min-h-[280mm]">
-                                    {/* Âncoras do Scanner */}
+                                    {/* Âncoras de Visão nos 4 cantos para o Scanner */}
                                     <div className="vision-anchor anchor-tl hidden print:block"></div>
                                     <div className="vision-anchor anchor-tr hidden print:block"></div>
                                     <div className="vision-anchor anchor-bl hidden print:block"></div>
@@ -429,11 +428,11 @@ const ExamsPage = () => {
 
                                     {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
                                     
-                                    <div className="mt-16 grid grid-cols-2 gap-x-16 gap-y-6 bg-white print:grid">
+                                    <div className="mt-12 grid grid-cols-2 gap-x-12 gap-y-6 bg-white print:grid">
                                         {(currentQs || []).filter(Boolean).map((_, idx) => (
-                                            <div key={`card-${idx}`} className="flex items-center gap-6 border-b border-black/10 pb-4 break-inside-avoid">
-                                                <span className="font-black text-slate-300 w-10 text-2xl shrink-0">{idx + 1}</span>
-                                                <div className="flex gap-5 flex-row">
+                                            <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-black/10 pb-2 break-inside-avoid">
+                                                <span className="font-black text-slate-300 w-8 text-xl shrink-0">{idx + 1}</span>
+                                                <div className="flex gap-4 flex-row">
                                                     {['A', 'B', 'C', 'D', 'E'].map(letter => (
                                                         <div key={letter} className="answer-bubble bg-white shrink-0">{letter}</div>
                                                     ))}
@@ -441,9 +440,8 @@ const ExamsPage = () => {
                                             </div>
                                         ))}
                                     </div>
-
-                                    <div className="absolute bottom-10 left-0 right-0 text-center opacity-10 text-[10px] uppercase font-black tracking-[1.5em]">
-                                        PROVA FÁCIL SCAN ENGINE V1.0
+                                    <div className="absolute bottom-10 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em]">
+                                        PROVA FÁCIL SCANNER V3
                                     </div>
                                 </div>
                             )}
