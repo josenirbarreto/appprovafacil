@@ -90,6 +90,7 @@ export const FirebaseService = {
     },
 
     getUsers: async (currentUser?: User | null) => { 
+        if (!currentUser) return [];
         let q;
         if (currentUser?.role === UserRole.ADMIN) q = collection(db, COLLECTIONS.USERS);
         else if (currentUser?.role === UserRole.MANAGER) q = query(collection(db, COLLECTIONS.USERS), where("institutionId", "==", currentUser.institutionId));
@@ -98,13 +99,55 @@ export const FirebaseService = {
         return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as User));
     },
     getUserByEmail: async (email: string) => { const q = query(collection(db, COLLECTIONS.USERS), where("email", "==", email), limit(1)); const snap = await getDocs(q); return snap.empty ? null : { ...(snap.docs[0].data() as object), id: snap.docs[0].id } as User; },
-    register: async (email: string, pass: string, name: string, role: UserRole) => { const cred = await createUserWithEmailAndPassword(auth, email, pass); const user: User = { id: cred.user.uid, name, email, role, status: 'ACTIVE', plan: 'BASIC', subscriptionEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }; await setDoc(doc(db, COLLECTIONS.USERS, cred.user.uid), user); return user; },
+    
+    register: async (email: string, pass: string, name: string, role: UserRole, whatsapp?: string, subjects?: string[]) => { 
+        const cred = await createUserWithEmailAndPassword(auth, email, pass); 
+        const user: User = { 
+            id: cred.user.uid, 
+            name, 
+            email, 
+            whatsapp,
+            role, 
+            status: 'ACTIVE', 
+            plan: 'BASIC', 
+            subjects: subjects || [],
+            subscriptionEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
+        }; 
+        await setDoc(doc(db, COLLECTIONS.USERS, cred.user.uid), user); 
+        return user; 
+    },
+
     createSubUser: async (owner: User, data: any) => { const id = `sub-${Date.now()}`; const user: User = { id, name: data.name, email: data.email, role: data.role, status: 'ACTIVE', plan: owner.plan, subscriptionEnd: owner.subscriptionEnd, ownerId: owner.id, subjects: data.subjects, institutionId: owner.institutionId, requiresPasswordChange: true }; await setDoc(doc(db, COLLECTIONS.USERS, id), user); return user; },
     updateUser: async (id: string, data: Partial<User>) => { await updateDoc(doc(db, COLLECTIONS.USERS, id), cleanPayload(data)); },
     changeUserPassword: async (newPassword: string) => { if (auth.currentUser) { await updatePassword(auth.currentUser, newPassword); await updateDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid), { requiresPasswordChange: false }); } },
     resetPassword: async (email: string) => { await sendPasswordResetEmail(auth, email); },
 
     // Hierarchy
+    getPublicComponents: async () => {
+        /**
+         * Tenta buscar os componentes curriculares do banco.
+         * Se falhar por falta de permissão (usuário deslogado), retorna uma lista padrão (BNCC) 
+         * para não travar o fluxo de cadastro.
+         */
+        try {
+            const snap = await getDocs(collection(db, COLLECTIONS.COMPONENTS));
+            if (snap.empty) throw new Error("Coleção vazia");
+            return snap.docs.map(doc => ({ ...(doc.data() as object), id: doc.id } as CurricularComponent));
+        } catch (e) {
+            console.warn("Acesso ao Firestore negado ou indisponível. Usando fallback de componentes padrão.");
+            // Fallback: Áreas de conhecimento padrão para o cadastro inicial
+            return [
+                { id: 'default-mat', name: 'Matemática', disciplines: [] },
+                { id: 'default-port', name: 'Língua Portuguesa', disciplines: [] },
+                { id: 'default-cie', name: 'Ciências da Natureza', disciplines: [] },
+                { id: 'default-his', name: 'História', disciplines: [] },
+                { id: 'default-geo', name: 'Geografia', disciplines: [] },
+                { id: 'default-art', name: 'Artes', disciplines: [] },
+                { id: 'default-efis', name: 'Educação Física', disciplines: [] },
+                { id: 'default-ing', name: 'Língua Inglesa', disciplines: [] }
+            ] as CurricularComponent[];
+        }
+    },
     getHierarchy: async () => { 
         const [cc, d, c, u, t] = await Promise.all([
             getDocs(collection(db, COLLECTIONS.COMPONENTS)),
@@ -147,12 +190,16 @@ export const FirebaseService = {
 
     // Questions
     getQuestions: async (currentUser?: User | null) => { 
+        if (!currentUser) return []; // CRÍTICO: Se não houver usuário, retorna vazio em vez de tentar ler tudo
+        
         let constraints: QueryConstraint[] = [];
         if (currentUser?.role === UserRole.TEACHER) constraints.push(where("visibility", "in", ["PUBLIC", "INSTITUTION", "PRIVATE"]));
         else if (currentUser?.role === UserRole.MANAGER) constraints.push(where("institutionId", "==", currentUser.institutionId));
+        
         const q = constraints.length > 0 ? query(collection(db, COLLECTIONS.QUESTIONS), ...constraints) : collection(db, COLLECTIONS.QUESTIONS);
         const snap = await getDocs(q);
         let results = snap.docs.map(d => ({...(d.data() as object), id: d.id} as Question));
+        
         if (currentUser?.role === UserRole.TEACHER) {
             const authorizedComponents = [...(Array.isArray(currentUser.subjects) ? currentUser.subjects : []), ...(Array.isArray(currentUser.accessGrants) ? currentUser.accessGrants : [])];
             results = results.filter(q => {
@@ -160,7 +207,7 @@ export const FirebaseService = {
                 const isAuthorizedComponent = authorizedComponents.includes(q.componentId);
                 const isPublicApproved = q.visibility === 'PUBLIC' && q.reviewStatus === 'APPROVED';
                 const isOfficialSchool = q.visibility === 'INSTITUTION' && q.institutionId === currentUser.institutionId;
-                const isRejectedSelf = q.reviewStatus === 'REJECTED' && q.authorId === currentUser.id; // Permite ver as próprias rejeitadas
+                const isRejectedSelf = q.reviewStatus === 'REJECTED' && q.authorId === currentUser.id;
                 return isAuthor || (isAuthorizedComponent && (isPublicApproved || isOfficialSchool));
             });
         }
@@ -174,8 +221,6 @@ export const FirebaseService = {
         let finalStatus = q.reviewStatus;
         let finalVisibility = q.visibility;
 
-        // Se a questão estava REPROVADA, ou se é uma edição de questão pública, 
-        // ela deve voltar para a moderação (PENDENTE) e tornar-se PÚBLICA novamente.
         if (q.reviewStatus === 'REJECTED') {
             finalStatus = 'PENDING';
             finalVisibility = 'PUBLIC';
@@ -199,6 +244,7 @@ export const FirebaseService = {
 
     // Exams
     getExams: async (currentUser?: User | null) => { 
+        if (!currentUser) return [];
         let q;
         if (currentUser?.role === UserRole.ADMIN) q = collection(db, COLLECTIONS.EXAMS);
         else if (currentUser?.role === UserRole.MANAGER) q = query(collection(db, COLLECTIONS.EXAMS), where("institutionId", "==", currentUser.institutionId));
@@ -237,6 +283,7 @@ export const FirebaseService = {
     updateInstitution: async (data: Institution) => { await updateDoc(doc(db, COLLECTIONS.INSTITUTIONS, data.id), cleanPayload(data)); },
     deleteInstitution: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.INSTITUTIONS, id)); },
     getClasses: async (currentUser?: User | null) => { 
+        if (!currentUser) return [];
         let q;
         if (currentUser?.role === UserRole.ADMIN) q = collection(db, COLLECTIONS.CLASSES);
         else if (currentUser?.institutionId) q = query(collection(db, COLLECTIONS.CLASSES), where("institutionId", "==", currentUser.institutionId));
@@ -276,7 +323,7 @@ export const FirebaseService = {
     trackAiUsage: async () => { try { await updateDoc(doc(db, COLLECTIONS.SETTINGS, 'global'), { "aiConfig.totalGenerations": increment(1) }); } catch (error) {} },
 
     // Support
-    listenTickets: (user: User, callback: (ts: Ticket[]) => void) => { const q = user.role === UserRole.ADMIN ? collection(db, COLLECTIONS.TICKETS) : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", user.id)); return onSnapshot(q, (snap) => { callback(snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Ticket))); }); },
+    listenTickets: (user: User, callback: (ts: Ticket[]) => void) => { if (!user) return () => {}; const q = user.role === UserRole.ADMIN ? collection(db, COLLECTIONS.TICKETS) : query(collection(db, COLLECTIONS.TICKETS), where("authorId", "==", user.id)); return onSnapshot(q, (snap) => { callback(snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Ticket))); }); },
     listenTicketMessages: (ticketId: string, callback: (ms: TicketMessage[]) => void) => { const q = query(collection(db, COLLECTIONS.TICKET_MESSAGES), where("ticketId", "==", ticketId), orderBy("createdAt", "asc")); return onSnapshot(q, (snap) => { callback(snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as TicketMessage))); }); },
     createTicket: async (t: any) => { await addDoc(collection(db, COLLECTIONS.TICKETS), { ...t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); },
     addTicketMessage: async (ticketId: string, authorId: string, authorName: string, message: string, isAdminReply: boolean) => { await addDoc(collection(db, COLLECTIONS.TICKET_MESSAGES), { ticketId, authorId, authorName, message, isAdminReply, createdAt: new Date().toISOString() }); await updateDoc(doc(db, COLLECTIONS.TICKETS, ticketId), { updatedAt: new Date().toISOString() }); },
@@ -292,7 +339,6 @@ export const FirebaseService = {
     saveContractTemplate: async (t: any, forceNewVersion: boolean = false) => { if (!forceNewVersion && t.id) { await updateDoc(doc(db, COLLECTIONS.CONTRACT_TEMPLATES, t.id), { ...cleanPayload(t), updatedAt: new Date().toISOString() }); } else { const { id, ...data } = t; await addDoc(collection(db, COLLECTIONS.CONTRACT_TEMPLATES), { ...cleanPayload(data), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); } },
     signContract: async (user: User, template: ContractTemplate, typedName: string) => { await addDoc(collection(db, COLLECTIONS.SIGNATURES), { userId: user.id, userName: user.name, templateId: template.id, version: template.version, timestamp: new Date().toISOString(), typedName }); await updateDoc(doc(db, COLLECTIONS.USERS, user.id), { lastSignedContractId: template.id }); },
     
-    /* Adicionado generateCommercialToken para suportar licenciamento de componentes curriculares */
     generateCommercialToken: async (componentId: string, includeQuestions: boolean) => {
         const code = (Math.random().toString(36).substring(2, 6) + '-' + Math.random().toString(36).substring(2, 6)).toUpperCase();
         await setDoc(doc(db, COLLECTIONS.TOKENS, code), cleanPayload({
@@ -305,7 +351,6 @@ export const FirebaseService = {
         return code;
     },
 
-    /* Adicionado redeemCommercialToken para permitir que usuários ativem conteúdos licenciados */
     redeemCommercialToken: async (code: string, user: User) => {
         const tokenRef = doc(db, COLLECTIONS.TOKENS, code);
         const tokenSnap = await getDoc(tokenRef);

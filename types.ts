@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGER = 'MANAGER', 
@@ -14,6 +13,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  whatsapp?: string; // Novo campo
   role: UserRole;
   status: 'ACTIVE' | 'INACTIVE';
   plan: string; 
@@ -162,7 +162,6 @@ export interface Institution {
 }
 
 export interface SchoolClass { id: string; name: string; year: number; institutionId: string; }
-/* Adicionado interface Student para suportar gestão de alunos e corrigir erros de exportação */
 export interface Student { id: string; name: string; registration: string; classId: string; institutionId: string; createdAt?: string; }
 export interface Payment { id: string; userId: string; userName: string; planName: string; amount: number; date: string; method: string; periodMonths: number; status: string; }
 export interface Campaign { id: string; title: string; channel: string; status: string; segmentation: any; content: any; stats: any; createdAt: string; sentAt?: string; }
