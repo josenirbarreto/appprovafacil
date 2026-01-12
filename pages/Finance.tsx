@@ -87,7 +87,7 @@ const FinancePage = () => {
 
             if (u.subscriptionEnd >= todayStr) {
                 activeCount++;
-                const userPlan = plans.find(p => p.name === u.plan);
+                const userPlan = plans.find(p => p.name.toLowerCase() === u.plan.toLowerCase());
                 if (userPlan && userPlan.price > 0) {
                     if (userPlan.interval === 'yearly') currentMrr += userPlan.price / 12;
                     else if (userPlan.interval === 'monthly') currentMrr += userPlan.price;
@@ -136,18 +136,48 @@ const FinancePage = () => {
         setExpiringUsers(expiringList);
     };
 
-    const handleCreateMonthlyPayment = async (u: User, monthIdx: number) => {
+    const handleToggleMonthlyPayment = async (u: User, monthIdx: number) => {
         if (isActionLoading) return;
         
         const monthName = MONTHS[monthIdx];
         const year = selectedYear;
-        
+
+        // Verifica se já existe pagamento para esse mês/ano
+        const paymentRecord = allPayments.find(p => {
+            const pDate = new Date(p.date);
+            return p.userId === u.id && 
+                   p.status === 'PAID' && 
+                   pDate.getMonth() === monthIdx && 
+                   pDate.getFullYear() === selectedYear;
+        });
+
+        if (paymentRecord) {
+            // Lógica de ESTORNO/REMOÇÃO
+            if (!confirm(`Deseja ESTORNAR (remover) o pagamento de ${monthName}/${year} para ${u.name}?`)) return;
+            
+            setIsActionLoading(true);
+            try {
+                await FirebaseService.deletePayment(paymentRecord.id);
+                // Nota: O subscriptionEnd não é revertido automaticamente por segurança, pois o usuário pode ter outras faturas.
+                await loadData();
+            } catch (e) {
+                alert("Erro ao estornar pagamento.");
+            } finally {
+                setIsActionLoading(false);
+            }
+            return;
+        }
+
+        // Lógica de REGISTRO
         if (!confirm(`Deseja registrar o pagamento de ${monthName}/${year} para ${u.name}?`)) return;
 
         setIsActionLoading(true);
         try {
-            const userPlan = plans.find(p => p.name === u.plan);
-            const amount = userPlan ? userPlan.price : 0;
+            const userPlan = plans.find(p => p.name.toLowerCase().trim() === u.plan.toLowerCase().trim());
+            let amount = 0;
+            if (userPlan && userPlan.price !== -1) {
+                amount = userPlan.price;
+            }
             
             const paymentDate = new Date(year, monthIdx, 15).toISOString();
 
@@ -161,6 +191,14 @@ const FinancePage = () => {
                 method: 'MANUAL_CHECK',
                 date: paymentDate
             });
+
+            const endOfMonth = new Date(year, monthIdx + 1, 0).toISOString();
+            if (endOfMonth > u.subscriptionEnd) {
+                await FirebaseService.updateUser(u.id, {
+                    subscriptionEnd: endOfMonth,
+                    status: 'ACTIVE'
+                });
+            }
 
             await loadData();
         } catch (e) {
@@ -204,7 +242,7 @@ const FinancePage = () => {
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" onClick={loadData} disabled={isActionLoading}>
-                        <Icons.Refresh /> {isActionLoading ? 'Sincronizando...' : 'Atualizar'}
+                        <Icons.Refresh /> {isActionLoading ? 'Processando...' : 'Atualizar'}
                     </Button>
                     <Button variant="secondary" onClick={() => setShowReportModal(true)}>
                         <Icons.FileText /> Exportar
@@ -284,7 +322,7 @@ const FinancePage = () => {
                            </div>
                            <div>
                                <p className="text-sm text-blue-900 font-bold">Matriz de Recebimento {selectedYear}</p>
-                               <p className="text-[10px] text-blue-600 uppercase font-black">Registro manual de pagamentos recebidos</p>
+                               <p className="text-[10px] text-blue-600 uppercase font-black">Clique para registrar ou estornar pagamentos</p>
                            </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -334,18 +372,21 @@ const FinancePage = () => {
                                                 return (
                                                     <td key={idx} className="p-2 text-center border-r last:border-r-0">
                                                         <button
-                                                            disabled={paid || isActionLoading}
-                                                            onClick={() => handleCreateMonthlyPayment(sub, idx)}
+                                                            disabled={isActionLoading}
+                                                            onClick={() => handleToggleMonthlyPayment(sub, idx)}
                                                             className={`
                                                                 w-9 h-9 rounded-xl flex items-center justify-center mx-auto transition-all relative overflow-hidden group/check
                                                                 ${paid 
-                                                                    ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-100' 
+                                                                    ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-100 hover:bg-red-500' 
                                                                     : 'bg-white border-2 border-slate-100 text-slate-300 hover:border-brand-blue hover:text-brand-blue hover:bg-blue-50'}
                                                             `}
-                                                            title={paid ? "Pago" : "Registrar pagamento"}
+                                                            title={paid ? "Clique para estornar" : "Clique para registrar"}
                                                         >
                                                             {paid ? (
-                                                                <Icons.Check className="w-5 h-5 animate-scale-in" />
+                                                                <>
+                                                                    <Icons.Check className="w-5 h-5 animate-scale-in group-hover/check:hidden" />
+                                                                    <Icons.X className="w-5 h-5 hidden group-hover/check:block" />
+                                                                </>
                                                             ) : (
                                                                 <span className="text-[10px] font-black uppercase opacity-0 group-hover/check:opacity-100 transition-opacity">OK</span>
                                                             )}

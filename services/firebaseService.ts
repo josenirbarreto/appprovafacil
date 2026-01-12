@@ -316,7 +316,10 @@ export const FirebaseService = {
     savePlan: async (p: Plan) => { if (p.id) await updateDoc(doc(db, COLLECTIONS.PLANS, p.id), cleanPayload(p)); else await addDoc(collection(db, COLLECTIONS.PLANS), cleanPayload(p)); },
     deletePlan: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.PLANS, id)); },
     getPayments: async (userId: string) => { const q = query(collection(db, COLLECTIONS.PAYMENTS), where("userId", "==", userId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Payment)); },
-    addPayment: async (p: any) => { await addDoc(collection(db, COLLECTIONS.PAYMENTS), { ...p, date: new Date().toISOString() }); },
+    addPayment: async (p: any) => { 
+        await addDoc(collection(db, COLLECTIONS.PAYMENTS), { ...p, date: p.date || new Date().toISOString() }); 
+    },
+    deletePayment: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.PAYMENTS, id)); },
     getAllPayments: async () => { const snap = await getDocs(collection(db, COLLECTIONS.PAYMENTS)); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as Payment)); },
 
     // Marketing & Coupons
