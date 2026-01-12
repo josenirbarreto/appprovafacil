@@ -188,7 +188,7 @@ const FinancePage = () => {
                 u.plan.toLowerCase().includes(monthlySearch.toLowerCase())
             )
             .sort((a, b) => a.name.localeCompare(b.name));
-    }, [allUsers, monthlySearch]);
+    }, [allUsers, monthlySearch, selectedYear]);
 
     if (user?.role !== UserRole.ADMIN) return <Navigate to="/" />;
     if (loading && allUsers.length === 0) return <div className="p-8 text-center text-slate-500 font-bold uppercase animate-pulse">Sincronizando Financeiro...</div>;

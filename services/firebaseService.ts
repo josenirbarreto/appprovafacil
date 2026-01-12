@@ -271,7 +271,7 @@ export const FirebaseService = {
         }); 
     },
     
-    getStudentAttempts: async (eId: string, ident: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", eId), where("studentIdentifier", "==", ident)); const snap = await getDocs(q); return snap.map(d => d.data()); },
+    getStudentAttempts: async (eId: string, ident: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", eId), where("studentIdentifier", "==", ident)); const snap = await getDocs(q); return snap.docs.map(d => d.data()); },
 
     // Institutions & Classes
     getInstitutions: async (currentUser?: User | null) => { 
