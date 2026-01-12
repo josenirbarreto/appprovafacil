@@ -28,43 +28,57 @@ const PublicExam = () => {
         const loadExam = async () => {
             if (!examId) return;
             try {
+                setLoading(true);
                 const data = await FirebaseService.getExamById(examId);
                 if (!data) { 
                     setError('Avaliação não localizada. Verifique o link fornecido pelo professor.'); 
+                    return;
                 } 
-                else if (!data.publicConfig?.isPublished) { 
+                
+                if (!data.publicConfig?.isPublished) { 
                     setError('Esta avaliação não está mais disponível para acesso online.'); 
+                    return;
                 } 
-                else {
-                    const now = new Date();
-                    const start = new Date(data.publicConfig.startDate);
-                    const end = new Date(data.publicConfig.endDate);
-                    
-                    if (now < start) {
-                        setError(`Esta prova ainda não iniciou. Estará disponível em ${start.toLocaleString()}`);
-                    }
-                    else if (now > end) {
-                        setError('O prazo para realizar esta avaliação já expirou.');
-                    }
-                    else {
-                        setExam(data);
-                        // Tentativa silenciosa de carregar instituição e alunos para não travar a prova
-                        try {
-                            if (data.institutionId) {
-                                const inst = await FirebaseService.getInstitutionById(data.institutionId);
-                                setInstitution(inst);
-                            }
-                            if (data.classId) {
-                                const students = await FirebaseService.getStudents(data.classId);
-                                setClassStudents(Array.isArray(students) ? students : []);
-                            }
-                        } catch (e) {
-                            console.warn("Recursos secundários falharam, prosseguindo com a prova.");
-                        }
-                    }
+
+                const now = new Date();
+                const start = new Date(data.publicConfig.startDate);
+                const end = new Date(data.publicConfig.endDate);
+                
+                if (now < start) {
+                    setError(`Esta prova ainda não iniciou. Estará disponível em ${start.toLocaleString()}`);
+                    return;
                 }
+                
+                if (now > end) {
+                    setError('O prazo para realizar esta avaliação já expirou.');
+                    return;
+                }
+
+                setExam(data);
+
+                // CARGA DE ALUNOS - Crucial para navegadores anônimos
+                if (data.classId) {
+                    console.log("Tentando carregar lista de alunos para a turma:", data.classId);
+                    FirebaseService.getStudents(data.classId)
+                        .then(students => {
+                            if (Array.isArray(students)) {
+                                console.log(`${students.length} alunos carregados.`);
+                                setClassStudents(students);
+                            }
+                        })
+                        .catch(err => {
+                            console.warn("Acesso público à lista de alunos negado (Verifique as Rules do Firebase):", err);
+                        });
+                }
+
+                if (data.institutionId) {
+                    FirebaseService.getInstitutionById(data.institutionId)
+                        .then(setInstitution)
+                        .catch(e => console.warn("Erro ao buscar logo da escola."));
+                }
+
             } catch (err) { 
-                console.error(err);
+                console.error("Critical Exam Load Error:", err);
                 setError('Houve um erro técnico ao carregar a prova. Tente recarregar a página.'); 
             } finally { 
                 setLoading(false); 
@@ -182,20 +196,25 @@ const PublicExam = () => {
                         <div><p className="text-slate-400">Tempo</p><p className="text-slate-800">{exam?.publicConfig?.timeLimitMinutes ? `${exam.publicConfig.timeLimitMinutes} min` : 'Livre'}</p></div>
                         <div><p className="text-slate-400">Itens</p><p className="text-slate-800">{Array.isArray(exam?.questions) ? exam.questions.length : 0}</p></div>
                     </div>
+                    
                     {classStudents.length > 0 ? (
-                        <div className="space-y-4 text-left">
+                        <div className="space-y-4 text-left animate-fade-in">
                             <label className="text-[10px] font-black text-slate-500 uppercase px-1">Selecione seu nome da lista oficial:</label>
                             <Select value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)} className="h-14 font-bold border-2">
                                 <option value="">Procure seu nome...</option>
-                                {classStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                {classStudents.sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </Select>
+                            <p className="text-[9px] text-slate-400 text-center uppercase font-bold tracking-widest">OU INFORME SEUS DADOS CASO NÃO ESTEJA NA LISTA</p>
                         </div>
-                    ) : (
-                        <div className="space-y-4">
+                    ) : null}
+
+                    {(!classStudents.length || selectedStudentId === 'manual') && (
+                        <div className="space-y-4 animate-fade-in mt-4">
                             <Input label="Seu Nome Completo" value={manualStudentName} onChange={e => setManualStudentName(e.target.value)} placeholder="Digite como na chamada" />
                             <Input label="Documento / Matrícula (Opcional)" value={studentIdInput} onChange={e => setStudentIdInput(e.target.value)} placeholder="Para identificação" />
                         </div>
                     )}
+                    
                     <Button onClick={handleStart} className="w-full h-16 text-xl font-black mt-8 shadow-xl">INICIAR AVALIAÇÃO</Button>
                 </Card>
             </div>
