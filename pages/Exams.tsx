@@ -90,19 +90,18 @@ const ExamsPage = () => {
         }
     };
 
-    // --- MOTOR ANTI-COLA: EMBARALHAMENTO DETERMINÍSTICO POR VERSÃO ---
+    // --- MOTOR ANTI-COLA (VERSÕES A, B, C, D) ---
     const questionsByVersion = useMemo(() => {
         const baseQs = Array.isArray(editing.questions) ? [...editing.questions] : [];
         if (activeVersion === 'A' || baseQs.length === 0) return baseQs;
         
-        // Seed determinístico baseado na letra da versão (A=65, B=66, C=67...)
-        const seedValue = activeVersion.charCodeAt(0);
+        const seed = activeVersion.charCodeAt(0);
         const seededRandom = (s: number) => {
             const x = Math.sin(s) * 10000;
             return x - Math.floor(x);
         };
 
-        let currentSeed = seedValue;
+        let currentSeed = seed;
         const shuffle = (arr: any[]) => {
             const newArr = [...arr];
             for (let i = newArr.length - 1; i > 0; i--) {
@@ -112,10 +111,9 @@ const ExamsPage = () => {
             return newArr;
         };
 
-        // Embaralha a ordem das questões E a ordem das alternativas de cada questão
         return shuffle(baseQs).map(q => ({
             ...q,
-            options: Array.isArray(q.options) ? shuffle(q.options) : q.options
+            options: q.options ? shuffle(q.options) : q.options
         }));
     }, [editing.questions, activeVersion]);
 
@@ -224,7 +222,6 @@ const ExamsPage = () => {
     const activeChap = useMemo(() => activeDisc?.chapters.find(c => c.id === selC), [activeDisc, selC]);
     const activeUnit = useMemo(() => activeChap?.units.find(u => u.id === selU), [activeChap, selU]);
 
-    // --- CORREÇÃO: Prevenir erro TypeError em scopes.some ---
     const manualPool = useMemo(() => {
         const scopes = Array.isArray(editing.contentScopes) ? editing.contentScopes : [];
         if (scopes.length === 0) return [];
@@ -321,9 +318,9 @@ const ExamsPage = () => {
                                                                             <td className="p-4 text-right">
                                                                                 <div className="flex justify-end gap-1">
                                                                                     <button onClick={() => navigate('/exam-results', { state: { examId: exam.id } })} className="p-2 text-brand-blue hover:bg-blue-100 rounded-lg transition-colors" title="Resultados"><Icons.Eye /></button>
-                                                                                    <button onClick={() => { setEditing(exam); setCurrentStep(1); setIsModalOpen(true); }} className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg transition-colors" title="Editar"><Icons.Edit /></button>
-                                                                                    <button onClick={() => { setEditing(exam); setCurrentStep(4); setViewingMode('ONLINE_CONFIG'); setIsModalOpen(true); }} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-lg transition-colors" title="Compartilhar Link"><Icons.Share /></button>
-                                                                                    <button onClick={() => { setEditing(exam); setViewingMode('EXAM'); setCurrentStep(4); setIsModalOpen(true); }} className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg transition-colors" title="Imprimir"><Icons.Printer /></button>
+                                                                                    <button onClick={() => { setEditing(exam); setCurrentStep(1); setIsModalOpen(true); }} className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg transition-colors" title="Editar Configuração"><Icons.Edit /></button>
+                                                                                    <button onClick={() => { setEditing(exam); setCurrentStep(4); setViewingMode('ONLINE_CONFIG'); setIsModalOpen(true); }} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-lg transition-colors" title="Compartilhar Link Online"><Icons.Share /></button>
+                                                                                    <button onClick={() => { setEditing(exam); setViewingMode('EXAM'); setCurrentStep(4); setIsModalOpen(true); }} className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg transition-colors" title="Imprimir Prova"><Icons.Printer /></button>
                                                                                     <button onClick={() => handleDeleteExam(exam.id)} className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition-colors" title="Excluir"><Icons.Trash /></button>
                                                                                 </div>
                                                                             </td>
@@ -344,11 +341,11 @@ const ExamsPage = () => {
                 </div>
             )}
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Configurar Prova" : "Nova Prova"} maxWidth="max-w-7xl" footer={
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Gerenciar Avaliação" : "Nova Prova"} maxWidth="max-w-7xl" footer={
                 <div className="flex justify-between w-full items-center no-print">
                     {currentStep > 1 && <Button variant="ghost" onClick={() => setCurrentStep(currentStep - 1)} className="font-black uppercase text-xs"><Icons.ArrowLeft /> Anterior</Button>}
                     <div className="flex gap-2 ml-auto">
-                        {currentStep < 4 ? <Button onClick={() => setCurrentStep(currentStep + 1)} disabled={currentStep === 1 && !editing.title} className="px-10 h-12 font-black">Próximo <Icons.ArrowRight /></Button> : <Button onClick={handleSaveExam} className="px-12 h-12 shadow-xl font-black">SALVAR AVALIAÇÃO</Button>}
+                        {currentStep < 4 ? <Button onClick={() => setCurrentStep(currentStep + 1)} disabled={currentStep === 1 && !editing.title} className="px-10 h-12 font-black">Próximo <Icons.ArrowRight /></Button> : <Button onClick={handleSaveExam} className="px-12 h-12 shadow-xl font-black text-base">SALVAR E FINALIZAR</Button>}
                     </div>
                 </div>
             }>
@@ -505,70 +502,123 @@ const ExamsPage = () => {
                     )}
 
                     {currentStep === 4 && (
-                        <div className="grid grid-cols-4 gap-8">
+                        <div className="grid grid-cols-3 gap-8">
+                            {/* COLUNA DE CONFIGURAÇÕES (LADO ESQUERDO) */}
                             <div className="col-span-1 space-y-6 bg-slate-50 p-6 rounded-3xl border no-print h-fit">
                                 <div className="flex bg-white rounded-xl p-1 border shadow-inner">
                                     <button onClick={() => setViewingMode('EXAM')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${viewingMode === 'EXAM' ? 'bg-brand-blue text-white shadow-md' : 'text-slate-400'}`}>IMPRESSÃO</button>
                                     <button onClick={() => setViewingMode('ONLINE_CONFIG')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${viewingMode === 'ONLINE_CONFIG' ? 'bg-brand-blue text-white shadow-md' : 'text-slate-400'}`}>ONLINE</button>
                                 </div>
+
                                 {viewingMode === 'EXAM' ? (
                                     <div className="space-y-4">
-                                        <Select label="Fonte" value={printFontSize} onChange={e => setPrintFontSize(e.target.value)}>
+                                        <Select label="Fonte da Impressão" value={printFontSize} onChange={e => setPrintFontSize(e.target.value)}>
                                             <option value="text-[11px]">Pequena</option>
                                             <option value="text-sm">Padrão</option>
                                             <option value="text-base">Grande</option>
                                         </Select>
                                         
-                                        <div className="p-4 bg-white rounded-2xl border space-y-3">
+                                        <div className="p-4 bg-white rounded-2xl border space-y-3 shadow-sm">
                                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Anti-Cola (Versões)</label>
                                             <div className="flex gap-2">
                                                 {['A', 'B', 'C', 'D'].map(v => (
                                                     <button key={v} onClick={() => setActiveVersion(v)} className={`flex-1 h-10 rounded-xl font-black transition-all ${activeVersion === v ? 'bg-brand-blue text-white shadow-lg' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>{v}</button>
                                                 ))}
                                             </div>
-                                            <p className="text-[9px] text-slate-500 leading-tight italic">Trocar a versão reordena questões e alternativas em tempo real abaixo.</p>
+                                            <p className="text-[9px] text-slate-500 leading-tight italic">Trocar a versão reordena questões e alternativas para a impressão.</p>
                                         </div>
 
                                         <Button onClick={() => window.print()} className="w-full h-12 bg-slate-900 text-white shadow-xl"><Icons.Printer /> Imprimir Tudo</Button>
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
-                                        <div className="bg-white p-4 rounded-xl border flex items-center justify-between">
-                                            <span className="text-xs font-bold text-slate-700">Publicar Online?</span>
-                                            <input type="checkbox" checked={editing.publicConfig?.isPublished} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, isPublished: e.target.checked}})} className="w-5 h-5 text-brand-blue" />
+                                    <div className="space-y-6">
+                                        {/* STATUS E VISIBILIDADE */}
+                                        <div className="bg-white p-4 rounded-2xl border flex items-center justify-between shadow-sm">
+                                            <span className="text-xs font-bold text-slate-700">Publicar Prova Online?</span>
+                                            <input type="checkbox" checked={editing.publicConfig?.isPublished} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, isPublished: e.target.checked}})} className="w-5 h-5 text-brand-blue rounded" />
                                         </div>
-                                        <Input label="Tempo (minutos)" type="number" value={editing.publicConfig?.timeLimitMinutes} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, timeLimitMinutes: Number(e.target.value)}})} />
-                                        <div className="p-4 bg-white border rounded-xl">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Link da Prova</p>
-                                            <button onClick={() => handleCopyLink(editing.id || '')} className="text-brand-blue text-xs font-bold break-all text-left hover:underline">{getExamUrl(editing.id || 'NOVA')}</button>
+
+                                        {/* PERÍODO DE ACESSO */}
+                                        <div className="space-y-4 p-4 bg-white rounded-2xl border shadow-sm">
+                                            <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Período de Realização</h5>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="text-[9px] font-bold text-slate-500 block mb-1">DATA/HORA INICIAL</label>
+                                                    <input 
+                                                        type="datetime-local" 
+                                                        className="w-full text-xs border rounded-lg p-2 outline-none focus:ring-2 focus:ring-brand-blue"
+                                                        value={editing.publicConfig?.startDate?.slice(0, 16) || ''}
+                                                        onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, startDate: new Date(e.target.value).toISOString()}})}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-bold text-slate-500 block mb-1">DATA/HORA FINAL</label>
+                                                    <input 
+                                                        type="datetime-local" 
+                                                        className="w-full text-xs border rounded-lg p-2 outline-none focus:ring-2 focus:ring-brand-blue"
+                                                        value={editing.publicConfig?.endDate?.slice(0, 16) || ''}
+                                                        onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, endDate: new Date(e.target.value).toISOString()}})}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* REGRAS DE EXECUÇÃO */}
+                                        <div className="space-y-4 p-4 bg-white rounded-2xl border shadow-sm">
+                                            <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Execução</h5>
+                                            <Input label="Tempo Limite (minutos)" type="number" value={editing.publicConfig?.timeLimitMinutes} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, timeLimitMinutes: Number(e.target.value)}})} />
+                                            <div className="flex items-center justify-between py-2 border-t mt-2">
+                                                <span className="text-[11px] font-bold text-slate-700">Embaralhar Questões?</span>
+                                                <input type="checkbox" checked={editing.publicConfig?.randomizeQuestions} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, randomizeQuestions: e.target.checked}})} className="w-4 h-4 text-brand-blue rounded" />
+                                            </div>
+                                        </div>
+
+                                        {/* LINK DA PROVA */}
+                                        <div className="p-4 bg-white border rounded-2xl shadow-sm">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Link de Compartilhamento</p>
+                                            <div className="flex gap-1">
+                                                <input 
+                                                    readOnly
+                                                    className="flex-1 text-[10px] font-mono bg-slate-50 p-2 rounded border truncate"
+                                                    value={getExamUrl(editing.id || 'NOVA')}
+                                                />
+                                                <button 
+                                                    onClick={() => handleCopyLink(editing.id || '')}
+                                                    className="bg-brand-blue text-white p-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                                                    title="Copiar Link"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="col-span-3 bg-white rounded-2xl border shadow-inner h-[600px] overflow-y-auto custom-scrollbar overflow-x-hidden p-8">
+                            {/* PREVIEW DA PROVA (LADO DIREITO) */}
+                            <div className="col-span-2 bg-white rounded-2xl border shadow-inner h-[650px] overflow-y-auto custom-scrollbar overflow-x-hidden p-10">
                                 <div id="exam-print-container" className={`${printFontSize} text-black w-full`}>
                                     
                                     {/* PÁGINA 1: CONTEÚDO DA PROVA */}
-                                    <div className="print:page-break-after">
+                                    <div className="print:page-break-after bg-white p-2">
                                         {renderHeaderPrint()}
                                         {editing.instructions && <div className="mb-6 rich-text-content border-b pb-4 text-black text-[11px]" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
                                         
-                                        <div className={editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'space-y-6'}>
+                                        <div className={editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'space-y-8'}>
                                             {questionsByVersion.map((q, idx) => (
-                                                <div key={`${activeVersion}-${q.id}`} className="break-inside-avoid text-black mb-6">
-                                                    <div className="font-bold mb-2 flex gap-2">
+                                                <div key={`${activeVersion}-${q.id}`} className="break-inside-avoid text-black mb-8">
+                                                    <div className="font-bold mb-3 flex gap-2">
                                                         <span>{idx + 1}.</span>
                                                         <div className="rich-text-content flex-1" dangerouslySetInnerHTML={{__html: q.enunciado}} />
                                                     </div>
-                                                    <div className="ml-6 space-y-1">
+                                                    <div className="ml-6 space-y-2">
                                                         {(Array.isArray(q.options) ? q.options : []).map((opt, i) => (
-                                                            <div key={`${activeVersion}-${opt.id}-${i}`} className="flex gap-2 items-center">
-                                                                <span className="w-4 h-4 border border-black rounded-full flex items-center justify-center text-[8px] font-black shrink-0">{String.fromCharCode(65+i)}</span>
-                                                                <span className="text-[11px] leading-tight">{opt.text}</span>
+                                                            <div key={`${activeVersion}-${opt.id}-${i}`} className="flex gap-2 items-start">
+                                                                <span className="w-5 h-5 border border-black rounded-full flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5">{String.fromCharCode(65+i)}</span>
+                                                                <span className="text-[11px] leading-tight pt-0.5">{opt.text}</span>
                                                             </div>
                                                         ))}
-                                                        {q.type === QuestionType.SHORT_ANSWER && <div className="h-20 border-b border-dashed border-slate-400 w-full mt-2"></div>}
+                                                        {q.type === QuestionType.SHORT_ANSWER && <div className="h-24 border-b border-dashed border-slate-300 w-full mt-2"></div>}
                                                     </div>
                                                 </div>
                                             ))}
@@ -578,7 +628,6 @@ const ExamsPage = () => {
                                     {/* PÁGINA 2: CARTÃO DE RESPOSTAS */}
                                     {editing.showAnswerKey && (
                                         <div className="print:break-before-page mt-12 pt-8 border-t-2 border-black relative min-h-[900px] bg-white">
-                                            {/* Âncoras de Visão Computacional nos 4 cantos para correção via App */}
                                             <div className="vision-anchor anchor-tl absolute top-0 left-0"></div>
                                             <div className="vision-anchor anchor-tr absolute top-0 right-0"></div>
                                             <div className="vision-anchor anchor-bl absolute bottom-0 left-0"></div>
