@@ -79,7 +79,16 @@ const ExamsPage = () => {
         }
     };
 
-    // --- SCANNER LOGIC (Mantida do anterior) ---
+    // --- FILTRO DE ÁREAS AUTORIZADAS ---
+    const authorizedComponents = useMemo(() => {
+        if (!user || user.role === UserRole.ADMIN) return hierarchy;
+        const subjects = Array.isArray(user.subjects) ? user.subjects : [];
+        const grants = Array.isArray(user.accessGrants) ? user.accessGrants : [];
+        const authorizedIds = [...subjects, ...grants];
+        return hierarchy.filter(cc => authorizedIds.includes(cc.id));
+    }, [hierarchy, user]);
+
+    // --- SCANNER LOGIC ---
     const startScanner = async (exam: Exam) => {
         setScannedExam(exam);
         setIsScannerOpen(true);
@@ -183,7 +192,6 @@ const ExamsPage = () => {
         const versions: Record<string, Question[]> = {};
         for (let i = 0; i < count; i++) {
             const vLetter = String.fromCharCode(65 + i);
-            // Anti-cola: Embaralha questões e alternativas
             const shuffled = [...source].sort(() => 0.5 - Math.random()).map(q => ({
                 ...q,
                 options: q.type === QuestionType.MULTIPLE_CHOICE && Array.isArray(q.options) 
@@ -208,8 +216,6 @@ const ExamsPage = () => {
 
     const renderHeaderPrint = (titleSuffix: string = '') => (
         <div className="border-2 border-black p-4 mb-6 bg-white relative block">
-            <div className="vision-anchor anchor-tl hidden print:block"></div>
-            <div className="vision-anchor anchor-tr hidden print:block"></div>
             <div className="flex items-center gap-6 mb-4">
                 {selectedInstitution?.logoUrl && <img src={selectedInstitution.logoUrl} className="h-10 w-auto object-contain shrink-0" />}
                 <div className="flex-1">
@@ -283,7 +289,7 @@ const ExamsPage = () => {
                 </div>
             )}
 
-            {/* SCANNER OVERLAY - Mantido (simplificado para brevidade) */}
+            {/* SCANNER OVERLAY */}
             {isScannerOpen && (
                 <div className="scanner-overlay animate-fade-in no-print">
                     <div className="flex flex-col items-center gap-6 w-full max-w-lg p-6">
@@ -311,7 +317,7 @@ const ExamsPage = () => {
                 </div>
             )}
 
-            {/* MODAL DO WIZARD ATUALIZADO */}
+            {/* MODAL DO WIZARD */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editing.id ? "Editor de Avaliação" : "Nova Avaliação"} maxWidth="max-w-7xl" footer={
                 <div className="flex justify-between w-full items-center no-print">
                     {currentStep > 1 && <Button variant="ghost" onClick={() => setCurrentStep(currentStep - 1)} className="font-black uppercase text-xs"><Icons.ArrowLeft /> Anterior</Button>}
@@ -368,9 +374,9 @@ const ExamsPage = () => {
                             <div className="bg-blue-600 p-8 rounded-[40px] text-white shadow-xl">
                                 <h3 className="font-black text-xl mb-6 uppercase tracking-tight">Definição do Escopo Curricular</h3>
                                 <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-                                    <Select label="1. Área" value={scopeFilters.cc} onChange={e => setScopeFilters({...scopeFilters, cc: e.target.value, d: '', c: '', u: '', t: ''})} className="!bg-blue-700 !border-blue-500 !text-white">
+                                    <Select label="1. Área (Liberadas)" value={scopeFilters.cc} onChange={e => setScopeFilters({...scopeFilters, cc: e.target.value, d: '', c: '', u: '', t: ''})} className="!bg-blue-700 !border-blue-500 !text-white">
                                         <option value="">Todas</option>
-                                        {hierarchy.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
+                                        {authorizedComponents.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
                                     </Select>
                                     <Select label="2. Disciplina" value={scopeFilters.d} onChange={e => setScopeFilters({...scopeFilters, d: e.target.value, c: '', u: '', t: ''})} disabled={!scopeFilters.cc} className="!bg-blue-700 !border-blue-500 !text-white">
                                         <option value="">Todas</option>
@@ -473,9 +479,16 @@ const ExamsPage = () => {
                             </div>
 
                             <div className="lg:col-span-3 bg-white rounded-2xl p-4 border overflow-y-auto custom-scrollbar print:p-0 print:border-none print:overflow-visible shadow-inner">
-                                <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block`}>
+                                <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block relative min-h-[290mm]`}>
+                                    
+                                    {/* Âncoras de Visão Globais para o Container de Impressão */}
+                                    <div className="vision-anchor anchor-tl hidden print:block"></div>
+                                    <div className="vision-anchor anchor-tr hidden print:block"></div>
+                                    <div className="vision-anchor anchor-bl hidden print:block"></div>
+                                    <div className="vision-anchor anchor-br hidden print:block"></div>
+
                                     {viewingMode === 'EXAM' ? (
-                                        <div className="animate-fade-in bg-white w-full block">
+                                        <div className="animate-fade-in bg-white w-full block p-4">
                                             {renderHeaderPrint()}
                                             {editing.instructions && <div className="mb-6 p-4 border-l-4 border-black bg-slate-50 italic rich-text-content break-inside-avoid text-xs" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
                                             <div className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'w-full block'}`}>
@@ -495,25 +508,32 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="animate-fade-in bg-white w-full block relative min-h-[280mm] p-4">
-                                            <div className="vision-anchor anchor-tl hidden print:block"></div>
-                                            <div className="vision-anchor anchor-tr hidden print:block"></div>
-                                            <div className="vision-anchor anchor-bl hidden print:block"></div>
-                                            <div className="vision-anchor anchor-br hidden print:block"></div>
+                                        <div className="animate-fade-in bg-white w-full block p-4">
                                             {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
-                                            <div className="mt-12 grid grid-cols-2 gap-x-12 gap-y-6 bg-white print:grid">
-                                                {currentQs.map((_, idx) => (
-                                                    <div key={`card-${idx}`} className="flex items-center gap-4 border-b border-black/10 pb-2 break-inside-avoid">
-                                                        <span className="font-black text-slate-300 w-8 text-xl shrink-0">{idx + 1}</span>
-                                                        <div className="flex gap-4">
-                                                            {['A', 'B', 'C', 'D', 'E'].map(letter => (
-                                                                <div key={letter} className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center font-black text-sm bg-white shrink-0 shadow-sm">{letter}</div>
-                                                            ))}
+                                            <div className="mt-12 grid grid-cols-2 gap-x-12 gap-y-4 bg-white print:grid">
+                                                {currentQs.map((q, idx) => (
+                                                    <div key={`card-${idx}`} className="flex items-center justify-between border-b border-black/10 pb-2 break-inside-avoid h-12">
+                                                        <div className="flex items-center gap-4">
+                                                            <span className="font-black text-slate-800 w-6 text-base shrink-0">{idx + 1}</span>
+                                                            
+                                                            {q.type === QuestionType.SHORT_ANSWER ? (
+                                                                <div className="flex-1 italic text-[10px] text-slate-400 border-b border-dashed border-slate-300 w-48 pt-1">
+                                                                    Questão Dissertativa
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex gap-3">
+                                                                    {['A', 'B', 'C', 'D', 'E'].map(letter => (
+                                                                        <div key={letter} className="w-7 h-7 rounded-full border-2 border-black flex items-center justify-center font-black text-xs bg-white shrink-0">
+                                                                            {letter}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}
                                             </div>
-                                            <div className="absolute bottom-10 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em]">PROVA FÁCIL SCANNER V3</div>
+                                            <div className="absolute bottom-10 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em] no-print">PROVA FÁCIL SCANNER V3</div>
                                         </div>
                                     )}
                                 </div>
