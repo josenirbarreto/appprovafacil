@@ -216,7 +216,7 @@ const ExamsPage = () => {
     const currentQs = useMemo(() => examVersions[activeVersion] || editing.questions || [], [examVersions, activeVersion, editing.questions]);
 
     const renderHeaderPrint = (titleSuffix: string = '') => (
-        <div className="border-2 border-black p-4 mb-6 bg-white relative block">
+        <div className="border-2 border-black p-4 mb-6 bg-white block">
             <div className="flex items-center gap-6 mb-4">
                 {selectedInstitution?.logoUrl && <img src={selectedInstitution.logoUrl} alt="Logo" className="h-10 w-auto object-contain shrink-0" />}
                 <div className="flex-1">
@@ -480,13 +480,16 @@ const ExamsPage = () => {
                             </div>
 
                             <div className="lg:col-span-3 bg-white rounded-2xl p-4 border overflow-y-auto custom-scrollbar print:p-0 print:border-none print:overflow-visible shadow-inner">
-                                <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block relative h-full`}>
+                                <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block`}>
                                     
                                     {viewingMode === 'EXAM' ? (
-                                        <div className="animate-fade-in bg-white w-full block p-4">
+                                        <div className="animate-fade-in bg-white w-full block">
+                                            {/* Cabeçalho FORA das colunas para não sumir */}
                                             {renderHeaderPrint()}
+                                            
                                             {editing.instructions && <div className="mb-6 p-4 border-l-4 border-black bg-slate-50 italic rich-text-content break-inside-avoid text-xs" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
-                                            <div className={`${editing.columns === 2 ? 'preview-columns-2 print-columns-2' : 'w-full block'}`}>
+                                            
+                                            <div className={`${editing.columns === 2 ? 'print-columns-2' : 'w-full block'}`}>
                                                 {currentQs.map((q, idx) => (
                                                     <div key={idx} className="break-inside-avoid bg-white block mb-8">
                                                         <div className="flex gap-2 font-bold mb-2"><span>{idx + 1}.</span><div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} /></div>
@@ -503,15 +506,16 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="animate-fade-in bg-white w-full block p-12 relative min-h-[297mm]">
-                                            {/* Âncoras de Visão Apenas no Cartão Resposta */}
+                                        <div className="animate-fade-in bg-white w-full block relative min-h-[280mm]">
+                                            {/* Âncoras de Visão Apenas no Cartão Resposta e fora das colunas */}
                                             <div className="vision-anchor anchor-tl hidden print:block"></div>
                                             <div className="vision-anchor anchor-tr hidden print:block"></div>
                                             <div className="vision-anchor anchor-bl hidden print:block"></div>
                                             <div className="vision-anchor anchor-br hidden print:block"></div>
 
                                             {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
-                                            <div className="mt-12 grid grid-cols-2 gap-x-12 gap-y-4 bg-white print:grid">
+                                            
+                                            <div className="mt-8 answer-card-grid bg-white print:grid">
                                                 {currentQs.map((q, idx) => (
                                                     <div key={`card-${idx}`} className="flex items-center border-b border-black/10 pb-2 break-inside-avoid h-12">
                                                         <div className="flex items-center w-full gap-4">
@@ -522,7 +526,7 @@ const ExamsPage = () => {
                                                                     Questão Dissertativa
                                                                 </div>
                                                             ) : (
-                                                                <div className="flex gap-3">
+                                                                <div className="flex gap-2">
                                                                     {['A', 'B', 'C', 'D', 'E'].map(letter => (
                                                                         <div key={letter} className="w-7 h-7 rounded-full border-2 border-black flex items-center justify-center font-black text-xs bg-white shrink-0">
                                                                             {letter}
@@ -534,7 +538,7 @@ const ExamsPage = () => {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <div className="absolute bottom-10 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em] no-print">PROVA FÁCIL SCANNER V3</div>
+                                            <div className="absolute bottom-4 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em] no-print">PROVA FÁCIL SCANNER V5</div>
                                         </div>
                                     )}
                                 </div>
