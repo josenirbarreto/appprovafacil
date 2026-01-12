@@ -47,12 +47,10 @@
           size: A4;
         }
 
-        /* Reset Total de Visibilidade */
         body * {
           visibility: hidden !important;
         }
 
-        /* Container de Impressão (Força aparecer no topo da folha) */
         #exam-print-container, 
         #exam-print-container * {
           visibility: visible !important;
@@ -62,7 +60,7 @@
           position: absolute !important;
           left: 0 !important;
           top: 0 !important;
-          width: 190mm !important; /* A4 (210mm) - 20mm de margem */
+          width: 190mm !important;
           margin: 0 !important;
           padding: 0 !important;
           background: white !important;
@@ -73,26 +71,25 @@
           display: none !important;
         }
 
-        /* Colunas reais para as questões */
         .print-columns-2 {
           display: block !important;
           column-count: 2 !important;
-          column-gap: 10mm !important;
-          column-rule: 0.1pt solid #eee !important;
+          column-gap: 12mm !important;
+          column-rule: 0.5pt solid #000 !important; /* Linha entre colunas solicitada */
           width: 100% !important;
         }
 
         .break-inside-avoid {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
-          margin-bottom: 6mm !important;
+          margin-bottom: 8mm !important;
           display: block !important;
         }
 
         /* Âncoras Pretas nos 4 Cantos (Sólidas para o Scanner) */
         .vision-anchor {
-            width: 8mm !important;
-            height: 8mm !important;
+            width: 10mm !important;
+            height: 10mm !important;
             background-color: black !important;
             position: absolute !important;
             z-index: 9999 !important;
@@ -106,7 +103,6 @@
         .anchor-bl { bottom: 0; left: 0; }
         .anchor-br { bottom: 0; right: 0; }
 
-        /* Cartão Resposta */
         .answer-bubble {
           border: 1.5pt solid black !important;
           border-radius: 50% !important;
@@ -122,11 +118,14 @@
         }
       }
 
-      /* Estilos para o Preview na Tela */
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
       .rich-text-content img { max-width: 100%; height: auto; margin: 1rem 0; border-radius: 8px; }
-      .preview-columns-2 { column-count: 2; column-gap: 30px; }
+      .preview-columns-2 { 
+        column-count: 2; 
+        column-gap: 30px; 
+        column-rule: 1px solid #e2e8f0; /* Linha divisória no preview também */
+      }
     </style>
   <script type="importmap">
 {
