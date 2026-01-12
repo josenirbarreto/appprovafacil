@@ -130,19 +130,20 @@ const ExamsPage = () => {
                 contents: [{ text: "Analise o cartão resposta. Identifique o nome do aluno e as marcações de A a E para as questões." }, { inlineData: { data: base64Image, mimeType: 'image/jpeg' } }],
                 config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { studentName: { type: Type.STRING }, answers: { type: Type.OBJECT, additionalProperties: { type: Type.STRING } } }, required: ["studentName", "answers"] } }
             });
-            if (!response.text) throw new Error("IA não retornou texto");
-            const data = JSON.parse(response.text);
-            let score = 0;
-            const detailedResults = (scannedExam.questions || []).map((q, idx) => {
-                const qNum = (idx + 1).toString();
-                const studentAns = data.answers[qNum] || '';
-                const correctOpt = q.options?.find(o => o.isCorrect);
-                const correctLetter = q.options ? String.fromCharCode(65 + q.options.indexOf(correctOpt!)) : '?';
-                const isCorrect = studentAns.toUpperCase() === correctLetter.toUpperCase();
-                if (isCorrect) score++;
-                return { num: qNum, studentAns, correctAns: correctLetter, isCorrect };
-            });
-            setScanResult({ studentName: data.studentName || 'Desconhecido', score, total: scannedExam.questions?.length || 0, details: detailedResults });
+            if (response.text) {
+                const data = JSON.parse(response.text);
+                let score = 0;
+                const detailedResults = (scannedExam.questions || []).map((q, idx) => {
+                    const qNum = (idx + 1).toString();
+                    const studentAns = data.answers[qNum] || '';
+                    const correctOpt = q.options?.find(o => o.isCorrect);
+                    const correctLetter = q.options ? String.fromCharCode(65 + q.options.indexOf(correctOpt!)) : '?';
+                    const isCorrect = studentAns.toUpperCase() === correctLetter.toUpperCase();
+                    if (isCorrect) score++;
+                    return { num: qNum, studentAns, correctAns: correctLetter, isCorrect };
+                });
+                setScanResult({ studentName: data.studentName || 'Desconhecido', score, total: scannedExam.questions?.length || 0, details: detailedResults });
+            }
         } catch (err) { alert("Erro no processamento visual."); } finally { setScanLoading(false); }
     };
 
@@ -217,7 +218,7 @@ const ExamsPage = () => {
     const renderHeaderPrint = (titleSuffix: string = '') => (
         <div className="border-2 border-black p-4 mb-6 bg-white relative block">
             <div className="flex items-center gap-6 mb-4">
-                {selectedInstitution?.logoUrl && <img src={selectedInstitution.logoUrl} className="h-10 w-auto object-contain shrink-0" />}
+                {selectedInstitution?.logoUrl && <img src={selectedInstitution.logoUrl} alt="Logo" className="h-10 w-auto object-contain shrink-0" />}
                 <div className="flex-1">
                     <h1 className="font-black text-base uppercase leading-none">{selectedInstitution?.name || 'INSTITUIÇÃO'}</h1>
                     <h2 className="font-bold text-[10px] uppercase text-slate-700">{editing.title} {titleSuffix}</h2>
@@ -479,14 +480,8 @@ const ExamsPage = () => {
                             </div>
 
                             <div className="lg:col-span-3 bg-white rounded-2xl p-4 border overflow-y-auto custom-scrollbar print:p-0 print:border-none print:overflow-visible shadow-inner">
-                                <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block relative min-h-[290mm]`}>
+                                <div id="exam-print-container" className={`${printFontSize} text-black bg-white w-full print:block relative h-full`}>
                                     
-                                    {/* Âncoras de Visão Globais para o Container de Impressão */}
-                                    <div className="vision-anchor anchor-tl hidden print:block"></div>
-                                    <div className="vision-anchor anchor-tr hidden print:block"></div>
-                                    <div className="vision-anchor anchor-bl hidden print:block"></div>
-                                    <div className="vision-anchor anchor-br hidden print:block"></div>
-
                                     {viewingMode === 'EXAM' ? (
                                         <div className="animate-fade-in bg-white w-full block p-4">
                                             {renderHeaderPrint()}
@@ -508,16 +503,22 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="animate-fade-in bg-white w-full block p-4">
+                                        <div className="animate-fade-in bg-white w-full block p-12 relative min-h-[297mm]">
+                                            {/* Âncoras de Visão Apenas no Cartão Resposta */}
+                                            <div className="vision-anchor anchor-tl hidden print:block"></div>
+                                            <div className="vision-anchor anchor-tr hidden print:block"></div>
+                                            <div className="vision-anchor anchor-bl hidden print:block"></div>
+                                            <div className="vision-anchor anchor-br hidden print:block"></div>
+
                                             {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
                                             <div className="mt-12 grid grid-cols-2 gap-x-12 gap-y-4 bg-white print:grid">
                                                 {currentQs.map((q, idx) => (
-                                                    <div key={`card-${idx}`} className="flex items-center justify-between border-b border-black/10 pb-2 break-inside-avoid h-12">
-                                                        <div className="flex items-center gap-4">
+                                                    <div key={`card-${idx}`} className="flex items-center border-b border-black/10 pb-2 break-inside-avoid h-12">
+                                                        <div className="flex items-center w-full gap-4">
                                                             <span className="font-black text-slate-800 w-6 text-base shrink-0">{idx + 1}</span>
                                                             
                                                             {q.type === QuestionType.SHORT_ANSWER ? (
-                                                                <div className="flex-1 italic text-[10px] text-slate-400 border-b border-dashed border-slate-300 w-48 pt-1">
+                                                                <div className="flex-1 italic text-[10px] text-slate-400 border-b border-dashed border-slate-300 pt-1">
                                                                     Questão Dissertativa
                                                                 </div>
                                                             ) : (
