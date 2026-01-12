@@ -484,11 +484,8 @@ const ExamsPage = () => {
                                     
                                     {viewingMode === 'EXAM' ? (
                                         <div className="animate-fade-in bg-white w-full block">
-                                            {/* Cabeçalho FORA das colunas para não sumir */}
                                             {renderHeaderPrint()}
-                                            
                                             {editing.instructions && <div className="mb-6 p-4 border-l-4 border-black bg-slate-50 italic rich-text-content break-inside-avoid text-xs" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
-                                            
                                             <div className={`${editing.columns === 2 ? 'print-columns-2' : 'w-full block'}`}>
                                                 {currentQs.map((q, idx) => (
                                                     <div key={idx} className="break-inside-avoid bg-white block mb-8">
@@ -506,8 +503,8 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="animate-fade-in bg-white w-full block relative min-h-[280mm]">
-                                            {/* Âncoras de Visão Apenas no Cartão Resposta e fora das colunas */}
+                                        <div className="animate-fade-in bg-white w-full block relative min-h-[290mm] p-12">
+                                            {/* Âncoras de Visão Apenas no Cartão Resposta e posicionadas nos cantos físicos da folha */}
                                             <div className="vision-anchor anchor-tl hidden print:block"></div>
                                             <div className="vision-anchor anchor-tr hidden print:block"></div>
                                             <div className="vision-anchor anchor-bl hidden print:block"></div>
@@ -538,7 +535,7 @@ const ExamsPage = () => {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <div className="absolute bottom-4 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em] no-print">PROVA FÁCIL SCANNER V5</div>
+                                            <div className="absolute bottom-4 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em] no-print">PROVA FÁCIL SCANNER V6</div>
                                         </div>
                                     )}
                                 </div>
