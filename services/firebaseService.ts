@@ -119,6 +119,7 @@ export const FirebaseService = {
 
     createSubUser: async (owner: User, data: any) => { const id = `sub-${Date.now()}`; const user: User = { id, name: data.name, email: data.email, role: data.role, status: 'ACTIVE', plan: owner.plan, subscriptionEnd: owner.subscriptionEnd, ownerId: owner.id, subjects: data.subjects, institutionId: owner.institutionId, requiresPasswordChange: true }; await setDoc(doc(db, COLLECTIONS.USERS, id), user); return user; },
     updateUser: async (id: string, data: Partial<User>) => { await updateDoc(doc(db, COLLECTIONS.USERS, id), cleanPayload(data)); },
+    deleteUser: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.USERS, id)); },
     changeUserPassword: async (newPassword: string) => { if (auth.currentUser) { await updatePassword(auth.currentUser, newPassword); await updateDoc(doc(db, COLLECTIONS.USERS, auth.currentUser.uid), { requiresPasswordChange: false }); } },
     resetPassword: async (email: string) => { await sendPasswordResetEmail(auth, email); },
 
@@ -270,7 +271,7 @@ export const FirebaseService = {
         }); 
     },
     
-    getStudentAttempts: async (eId: string, ident: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", eId), where("studentIdentifier", "==", ident)); const snap = await getDocs(q); return snap.docs.map(d => d.data()); },
+    getStudentAttempts: async (eId: string, ident: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", eId), where("studentIdentifier", "==", ident)); const snap = await getDocs(q); return snap.map(d => d.data()); },
 
     // Institutions & Classes
     getInstitutions: async (currentUser?: User | null) => { 

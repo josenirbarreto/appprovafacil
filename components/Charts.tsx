@@ -1,6 +1,15 @@
+
 import React from 'react';
 
-export const SimpleBarChart = ({ data }: { data: { label: string, value: number, color?: string }[] }) => {
+export const SimpleBarChart = ({ 
+    data, 
+    valuePrefix = '', 
+    valueSuffix = 'provas' 
+}: { 
+    data: { label: string, value: number, color?: string }[],
+    valuePrefix?: string,
+    valueSuffix?: string
+}) => {
     const max = Math.max(...data.map(d => d.value), 1);
     return (
         <div className="flex items-end justify-between h-40 gap-2 w-full pt-6 border-b border-slate-100 pb-2">
@@ -9,7 +18,7 @@ export const SimpleBarChart = ({ data }: { data: { label: string, value: number,
                      {/* Tooltip */}
                      <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
                         <div className="bg-slate-800 text-white text-xs font-bold px-2 py-1 rounded shadow-lg whitespace-nowrap">
-                            {d.value} provas
+                            {valuePrefix}{d.value.toLocaleString('pt-BR')}{valueSuffix ? ` ${valueSuffix}` : ''}
                         </div>
                         <div className="w-2 h-2 bg-slate-800 rotate-45 mx-auto -mt-1"></div>
                      </div>
