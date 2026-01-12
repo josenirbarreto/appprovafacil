@@ -2,20 +2,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Plan, Payment, UserRole } from '../types';
 import { FirebaseService } from '../services/firebaseService';
-import { Card, Badge, Button, Modal, Select } from '../components/UI';
+import { Card, Badge, Button, Modal, Select, Input } from '../components/UI';
 import { Icons } from '../components/Icons';
 import { SimpleBarChart } from '../components/Charts';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const YEARS = [2024, 2025, 2026];
+const YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
 const FinancePage = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'GLOBAL' | 'MONTHLY'>('GLOBAL');
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [monthlySearch, setMonthlySearch] = useState('');
     
     // Estados do Modal
     const [showReportModal, setShowReportModal] = useState(false);
@@ -148,7 +149,6 @@ const FinancePage = () => {
             const userPlan = plans.find(p => p.name === u.plan);
             const amount = userPlan ? userPlan.price : 0;
             
-            // Criar data no meio do mês para evitar erros de virada
             const paymentDate = new Date(year, monthIdx, 15).toISOString();
 
             await FirebaseService.addPayment({
@@ -170,7 +170,6 @@ const FinancePage = () => {
         }
     };
 
-    // Helper para verificar se um mês está pago
     const isMonthPaid = (userId: string, monthIdx: number) => {
         return allPayments.some(p => {
             const pDate = new Date(p.date);
@@ -182,11 +181,17 @@ const FinancePage = () => {
     };
 
     const subscribers = useMemo(() => {
-        return allUsers.filter(u => u.role !== UserRole.ADMIN).sort((a, b) => a.name.localeCompare(b.name));
-    }, [allUsers]);
+        return allUsers
+            .filter(u => u.role !== UserRole.ADMIN)
+            .filter(u => 
+                u.name.toLowerCase().includes(monthlySearch.toLowerCase()) || 
+                u.plan.toLowerCase().includes(monthlySearch.toLowerCase())
+            )
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [allUsers, monthlySearch]);
 
     if (user?.role !== UserRole.ADMIN) return <Navigate to="/" />;
-    if (loading && allUsers.length === 0) return <div className="p-8 text-center text-slate-500">Carregando painel financeiro...</div>;
+    if (loading && allUsers.length === 0) return <div className="p-8 text-center text-slate-500 font-bold uppercase animate-pulse">Sincronizando Financeiro...</div>;
 
     return (
         <div className="p-8 h-full bg-slate-50 overflow-y-auto custom-scrollbar print:p-0 print:bg-white">
@@ -195,7 +200,7 @@ const FinancePage = () => {
                     <h2 className="text-3xl font-display font-bold text-slate-800 flex items-center gap-2">
                         <Icons.Bank /> Gestão Financeira
                     </h2>
-                    <p className="text-slate-500">Controle de faturamento e mensalidades.</p>
+                    <p className="text-slate-500">Controle de faturamento e fluxo de caixa.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" onClick={loadData} disabled={isActionLoading}>
@@ -272,72 +277,111 @@ const FinancePage = () => {
                 </div>
             ) : (
                 <div className="animate-fade-in space-y-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
                         <div className="flex items-center gap-3">
-                           <div className="p-2 bg-blue-100 text-brand-blue rounded-lg">
-                               <Icons.Magic className="w-5 h-5" />
+                           <div className="w-10 h-10 bg-blue-100 text-brand-blue rounded-lg flex items-center justify-center shrink-0">
+                               <Icons.Magic className="w-5 h-5 shrink-0" />
                            </div>
                            <div>
                                <p className="text-sm text-blue-900 font-bold">Matriz de Recebimento {selectedYear}</p>
-                               <p className="text-[10px] text-blue-600 uppercase font-black">Clique no checkbox para gerar baixa manual</p>
+                               <p className="text-[10px] text-blue-600 uppercase font-black">Registro manual de pagamentos recebidos</p>
                            </div>
                         </div>
-                        <div className="w-32">
-                            <Select 
-                                value={selectedYear} 
-                                onChange={e => setSelectedYear(Number(e.target.value))}
-                                className="h-9 font-black text-xs"
-                            >
-                                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                            </Select>
+                        <div className="flex items-center gap-4">
+                            <div className="relative w-full md:w-64">
+                                <input 
+                                    type="text"
+                                    className="w-full pl-8 pr-4 py-2 border-2 border-slate-200 rounded-xl outline-none focus:border-brand-blue bg-white h-9 text-xs font-bold"
+                                    placeholder="Buscar por assinante..."
+                                    value={monthlySearch}
+                                    onChange={e => setMonthlySearch(e.target.value)}
+                                />
+                                <div className="absolute left-2.5 top-2 text-slate-400"><Icons.Search className="w-4 h-4" /></div>
+                            </div>
+                            <div className="w-40 flex items-center gap-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase shrink-0">ANO:</label>
+                                <Select 
+                                    value={selectedYear} 
+                                    onChange={e => setSelectedYear(Number(e.target.value))}
+                                    className="h-9 font-black text-xs !py-1"
+                                >
+                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                                </Select>
+                            </div>
                         </div>
                     </div>
                     
-                    <Card className="overflow-hidden p-0">
+                    <Card className="overflow-hidden p-0 border-slate-200 shadow-md">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm border-collapse">
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
-                                        <th className="p-4 font-black text-slate-500 uppercase text-[10px] sticky left-0 bg-slate-50 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">Assinante</th>
+                                        <th className="p-4 font-black text-slate-500 uppercase text-[10px] sticky left-0 bg-slate-50 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)] border-r min-w-[200px]">Assinante</th>
                                         {MONTHS.map(m => (
-                                            <th key={m} className="p-2 font-black text-slate-500 uppercase text-[10px] text-center min-w-[60px]">{m}</th>
+                                            <th key={m} className="p-2 font-black text-slate-500 uppercase text-[10px] text-center min-w-[75px] border-r last:border-r-0">{m}</th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {subscribers.map(sub => (
-                                        <tr key={sub.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="p-4 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
-                                                <p className="font-bold text-slate-800 truncate max-w-[150px]">{sub.name}</p>
+                                        <tr key={sub.id} className="hover:bg-slate-50 transition-colors group">
+                                            <td className="p-4 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)] border-r">
+                                                <p className="font-bold text-slate-800 truncate max-w-[180px]">{sub.name}</p>
                                                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{sub.plan}</p>
                                             </td>
                                             {MONTHS.map((_, idx) => {
                                                 const paid = isMonthPaid(sub.id, idx);
                                                 return (
-                                                    <td key={idx} className="p-2 text-center">
-                                                        <input 
-                                                            type="checkbox"
-                                                            checked={paid}
+                                                    <td key={idx} className="p-2 text-center border-r last:border-r-0">
+                                                        <button
                                                             disabled={paid || isActionLoading}
-                                                            onChange={() => handleCreateMonthlyPayment(sub, idx)}
-                                                            className={`w-5 h-5 rounded cursor-pointer transition-all ${paid ? 'text-green-500 bg-green-50 border-green-200 opacity-50' : 'text-brand-blue border-slate-300 hover:border-brand-blue'}`}
-                                                        />
+                                                            onClick={() => handleCreateMonthlyPayment(sub, idx)}
+                                                            className={`
+                                                                w-9 h-9 rounded-xl flex items-center justify-center mx-auto transition-all relative overflow-hidden group/check
+                                                                ${paid 
+                                                                    ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-100' 
+                                                                    : 'bg-white border-2 border-slate-100 text-slate-300 hover:border-brand-blue hover:text-brand-blue hover:bg-blue-50'}
+                                                            `}
+                                                            title={paid ? "Pago" : "Registrar pagamento"}
+                                                        >
+                                                            {paid ? (
+                                                                <Icons.Check className="w-5 h-5 animate-scale-in" />
+                                                            ) : (
+                                                                <span className="text-[10px] font-black uppercase opacity-0 group-hover/check:opacity-100 transition-opacity">OK</span>
+                                                            )}
+                                                            {!paid && <div className="w-1.5 h-1.5 rounded-full bg-slate-200 group-hover/check:hidden"></div>}
+                                                        </button>
                                                     </td>
                                                 );
                                             })}
                                         </tr>
                                     ))}
+                                    {subscribers.length === 0 && (
+                                        <tr>
+                                            <td colSpan={13} className="p-20 text-center text-slate-400 italic font-bold">Nenhum assinante encontrado para esta busca.</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
                     </Card>
+                    <div className="flex gap-4 p-4 bg-slate-100 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded bg-emerald-500"></div>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">PAGAMENTO CONFIRMADO</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded bg-white border-2 border-slate-200"></div>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">PENDENTE / EM ABERTO</span>
+                        </div>
+                    </div>
                 </div>
             )}
 
             {/* MODAL DE RELATÓRIOS (Simplificado) */}
             <Modal isOpen={showReportModal} onClose={() => setShowReportModal(false)} title="Exportar Dados">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-                    <Button variant="outline" className="h-20 flex-col" onClick={() => alert('Exportando CSV...')}>
+                    <Button variant="outline" className="h-20 flex-col" onClick={() => alert('Recurso de exportação em desenvolvimento.')}>
                         <Icons.Download /> CSV de Transações
                     </Button>
                     <Button variant="outline" className="h-20 flex-col" onClick={() => window.print()}>
