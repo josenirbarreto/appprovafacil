@@ -124,18 +124,12 @@ export const FirebaseService = {
 
     // Hierarchy
     getPublicComponents: async () => {
-        /**
-         * Tenta buscar os componentes curriculares do banco.
-         * Se falhar por falta de permissão (usuário deslogado), retorna uma lista padrão (BNCC) 
-         * para não travar o fluxo de cadastro.
-         */
         try {
             const snap = await getDocs(collection(db, COLLECTIONS.COMPONENTS));
             if (snap.empty) throw new Error("Coleção vazia");
             return snap.docs.map(doc => ({ ...(doc.data() as object), id: doc.id } as CurricularComponent));
         } catch (e) {
             console.warn("Acesso ao Firestore negado ou indisponível. Usando fallback de componentes padrão.");
-            // Fallback: Áreas de conhecimento padrão para o cadastro inicial
             return [
                 { id: 'default-mat', name: 'Matemática', disciplines: [] },
                 { id: 'default-port', name: 'Língua Portuguesa', disciplines: [] },
@@ -190,7 +184,7 @@ export const FirebaseService = {
 
     // Questions
     getQuestions: async (currentUser?: User | null) => { 
-        if (!currentUser) return []; // CRÍTICO: Se não houver usuário, retorna vazio em vez de tentar ler tudo
+        if (!currentUser) return []; 
         
         let constraints: QueryConstraint[] = [];
         if (currentUser?.role === UserRole.TEACHER) constraints.push(where("visibility", "in", ["PUBLIC", "INSTITUTION", "PRIVATE"]));
@@ -217,23 +211,11 @@ export const FirebaseService = {
     addQuestion: async (q: Question) => { const { id, ...data } = q; const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), cleanPayload(data)); return { ...q, id: docRef.id }; },
     updateQuestion: async (q: Question) => { 
         const { id, ...data } = q; 
-        
         let finalStatus = q.reviewStatus;
         let finalVisibility = q.visibility;
-
-        if (q.reviewStatus === 'REJECTED') {
-            finalStatus = 'PENDING';
-            finalVisibility = 'PUBLIC';
-        } else if (q.visibility === 'PUBLIC') {
-            finalStatus = 'PENDING';
-        }
-
-        const payload = { 
-            ...data, 
-            reviewStatus: finalStatus, 
-            visibility: finalVisibility,
-            reviewComment: null 
-        };
+        if (q.reviewStatus === 'REJECTED') { finalStatus = 'PENDING'; finalVisibility = 'PUBLIC'; } 
+        else if (q.visibility === 'PUBLIC') { finalStatus = 'PENDING'; }
+        const payload = { ...data, reviewStatus: finalStatus, visibility: finalVisibility, reviewComment: null };
         await updateDoc(doc(db, COLLECTIONS.QUESTIONS, id), cleanPayload(payload)); 
     },
     deleteQuestion: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, id)); },
@@ -258,8 +240,36 @@ export const FirebaseService = {
     deleteExam: async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.EXAMS, id)); },
     getExamResults: async (examId: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", examId)); const snap = await getDocs(q); return snap.docs.map(d => ({ ...(d.data() as object), id: d.id } as ExamAttempt)); },
     updateAttemptScore: async (id: string, score: number, manualGradingComplete: boolean = true, questionScores?: Record<string, number>) => { const updates: any = { score, manualGradingComplete }; if (questionScores) updates.questionScores = questionScores; await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), updates); },
-    startAttempt: async (examId: string, studentName: string, studentIdentifier: string, totalQuestions: number, studentId?: string) => { const attempt = { examId, studentName, studentIdentifier, studentId, totalQuestions, startedAt: new Date().toISOString(), answers: {}, score: 0, status: 'IN_PROGRESS' }; const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), cleanPayload(attempt)); return { ...attempt, id: docRef.id } as ExamAttempt; },
-    submitAttempt: async (id: string, answers: any, score: number, total: number) => { await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { answers, score, totalQuestions: total, submittedAt: new Date().toISOString(), status: 'COMPLETED' }); },
+    
+    // --- CORREÇÃO START ATTEMPT ---
+    startAttempt: async (examId: string, studentName: string, studentIdentifier: string, totalQuestions: number, studentId?: string) => { 
+        const attempt = { 
+            examId, 
+            studentName, 
+            studentIdentifier, 
+            studentId, 
+            totalQuestions, 
+            startedAt: new Date().toISOString(), 
+            answers: {}, 
+            score: 0, 
+            status: 'IN_PROGRESS' 
+        }; 
+        // FIX: Salvando na coleção correta de ATTEMPTS
+        const docRef = await addDoc(collection(db, COLLECTIONS.ATTEMPTS), cleanPayload(attempt)); 
+        return { ...attempt, id: docRef.id } as ExamAttempt; 
+    },
+    
+    submitAttempt: async (id: string, answers: any, score: number, total: number) => { 
+        if (!id) throw new Error("ID da tentativa não fornecido.");
+        await updateDoc(doc(db, COLLECTIONS.ATTEMPTS, id), { 
+            answers, 
+            score, 
+            totalQuestions: total, 
+            submittedAt: new Date().toISOString(), 
+            status: 'COMPLETED' 
+        }); 
+    },
+    
     getStudentAttempts: async (eId: string, ident: string) => { const q = query(collection(db, COLLECTIONS.ATTEMPTS), where("examId", "==", eId), where("studentIdentifier", "==", ident)); const snap = await getDocs(q); return snap.docs.map(d => d.data()); },
 
     // Institutions & Classes
