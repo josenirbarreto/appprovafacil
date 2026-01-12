@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Exam, Institution, SchoolClass, Question, CurricularComponent, UserRole, QuestionType, ExamContentScope } from '../types';
+import { Exam, Institution, SchoolClass, Question, CurricularComponent, UserRole, QuestionType, ExamContentScope, PublicExamConfig } from '../types';
 import { FirebaseService } from '../services/firebaseService';
 import { Button, Modal, Select, Input, Badge, Card, RichTextEditor } from '../components/UI';
 import { Icons } from '../components/Icons';
@@ -90,7 +89,44 @@ const ExamsPage = () => {
         }
     };
 
-    // --- MOTOR ANTI-COLA (VERSÕES A, B, C, D) ---
+    // --- HELPERS DE DATA PARA DATETIME-LOCAL (CORREÇÃO DE TIMEZONE) ---
+    const formatToLocalDatetime = (dateString?: string) => {
+        if (!dateString) return '';
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '';
+        
+        // Extrai partes locais para evitar o salto de timezone do toISOString().slice(0,16)
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
+    const updatePublicConfig = (updates: Partial<PublicExamConfig>) => {
+        const defaultConfig: PublicExamConfig = {
+            isPublished: false,
+            startDate: new Date().toISOString(),
+            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            timeLimitMinutes: 60,
+            allowedAttempts: 1,
+            randomizeQuestions: true,
+            requireIdentifier: true,
+            showFeedback: true
+        };
+
+        setEditing({
+            ...editing,
+            publicConfig: {
+                ...(editing.publicConfig || defaultConfig),
+                ...updates
+            }
+        });
+    };
+
+    // --- MOTOR ANTI-COLA ---
     const questionsByVersion = useMemo(() => {
         const baseQs = Array.isArray(editing.questions) ? [...editing.questions] : [];
         if (activeVersion === 'A' || baseQs.length === 0) return baseQs;
@@ -217,10 +253,11 @@ const ExamsPage = () => {
         return hierarchy.filter(cc => authorized.includes(cc.id));
     }, [hierarchy, user]);
 
-    const activeComp = useMemo(() => hierarchy.find(h => h.id === selCc), [hierarchy, selCc]);
-    const activeDisc = useMemo(() => activeComp?.disciplines.find(d => d.id === selD), [activeComp, selD]);
-    const activeChap = useMemo(() => activeDisc?.chapters.find(c => c.id === selC), [activeDisc, selC]);
-    const activeUnit = useMemo(() => activeChap?.units.find(u => u.id === selU), [activeChap, selU]);
+    // Fix: Definindo seletores ativos para a hierarquia no Wizard (Passo 2)
+    const activeComp = useMemo(() => hierarchy.find(cc => cc.id === selCc), [hierarchy, selCc]);
+    const activeDisc = useMemo(() => activeComp?.disciplines?.find(d => d.id === selD), [activeComp, selD]);
+    const activeChap = useMemo(() => activeDisc?.chapters?.find(c => c.id === selC), [activeDisc, selC]);
+    const activeUnit = useMemo(() => activeChap?.units?.find(u => u.id === selU), [activeChap, selU]);
 
     const manualPool = useMemo(() => {
         const scopes = Array.isArray(editing.contentScopes) ? editing.contentScopes : [];
@@ -535,7 +572,7 @@ const ExamsPage = () => {
                                         {/* STATUS E VISIBILIDADE */}
                                         <div className="bg-white p-4 rounded-2xl border flex items-center justify-between shadow-sm">
                                             <span className="text-xs font-bold text-slate-700">Publicar Prova Online?</span>
-                                            <input type="checkbox" checked={editing.publicConfig?.isPublished} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, isPublished: e.target.checked}})} className="w-5 h-5 text-brand-blue rounded" />
+                                            <input type="checkbox" checked={editing.publicConfig?.isPublished} onChange={e => updatePublicConfig({ isPublished: e.target.checked })} className="w-5 h-5 text-brand-blue rounded" />
                                         </div>
 
                                         {/* PERÍODO DE ACESSO */}
@@ -547,8 +584,8 @@ const ExamsPage = () => {
                                                     <input 
                                                         type="datetime-local" 
                                                         className="w-full text-xs border rounded-lg p-2 outline-none focus:ring-2 focus:ring-brand-blue"
-                                                        value={editing.publicConfig?.startDate?.slice(0, 16) || ''}
-                                                        onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, startDate: new Date(e.target.value).toISOString()}})}
+                                                        value={formatToLocalDatetime(editing.publicConfig?.startDate)}
+                                                        onChange={e => updatePublicConfig({ startDate: e.target.value ? new Date(e.target.value).toISOString() : '' })}
                                                     />
                                                 </div>
                                                 <div>
@@ -556,8 +593,8 @@ const ExamsPage = () => {
                                                     <input 
                                                         type="datetime-local" 
                                                         className="w-full text-xs border rounded-lg p-2 outline-none focus:ring-2 focus:ring-brand-blue"
-                                                        value={editing.publicConfig?.endDate?.slice(0, 16) || ''}
-                                                        onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, endDate: new Date(e.target.value).toISOString()}})}
+                                                        value={formatToLocalDatetime(editing.publicConfig?.endDate)}
+                                                        onChange={e => updatePublicConfig({ endDate: e.target.value ? new Date(e.target.value).toISOString() : '' })}
                                                     />
                                                 </div>
                                             </div>
@@ -566,10 +603,10 @@ const ExamsPage = () => {
                                         {/* REGRAS DE EXECUÇÃO */}
                                         <div className="space-y-4 p-4 bg-white rounded-2xl border shadow-sm">
                                             <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Execução</h5>
-                                            <Input label="Tempo Limite (minutos)" type="number" value={editing.publicConfig?.timeLimitMinutes} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, timeLimitMinutes: Number(e.target.value)}})} />
+                                            <Input label="Tempo Limite (minutos)" type="number" value={editing.publicConfig?.timeLimitMinutes} onChange={e => updatePublicConfig({ timeLimitMinutes: Number(e.target.value) })} />
                                             <div className="flex items-center justify-between py-2 border-t mt-2">
                                                 <span className="text-[11px] font-bold text-slate-700">Embaralhar Questões?</span>
-                                                <input type="checkbox" checked={editing.publicConfig?.randomizeQuestions} onChange={e => setEditing({...editing, publicConfig: {...editing.publicConfig!, randomizeQuestions: e.target.checked}})} className="w-4 h-4 text-brand-blue rounded" />
+                                                <input type="checkbox" checked={editing.publicConfig?.randomizeQuestions} onChange={e => updatePublicConfig({ randomizeQuestions: e.target.checked })} className="w-4 h-4 text-brand-blue rounded" />
                                             </div>
                                         </div>
 
