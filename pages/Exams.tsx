@@ -484,12 +484,20 @@ const ExamsPage = () => {
                                     
                                     {viewingMode === 'EXAM' ? (
                                         <div className="animate-fade-in bg-white w-full block">
+                                            {/* Cabeçalho FORA das colunas de questões */}
                                             {renderHeaderPrint()}
-                                            {editing.instructions && <div className="mb-6 p-4 border-l-4 border-black bg-slate-50 italic rich-text-content break-inside-avoid text-xs" dangerouslySetInnerHTML={{__html: editing.instructions}} />}
-                                            <div className={`${editing.columns === 2 ? 'print-columns-2' : 'w-full block'}`}>
+                                            
+                                            {editing.instructions && (
+                                                <div className="mb-6 p-4 border-l-4 border-black bg-slate-50 italic rich-text-content text-xs" dangerouslySetInnerHTML={{__html: editing.instructions}} />
+                                            )}
+                                            
+                                            <div className={`${editing.columns === 2 ? 'print-columns-2 preview-columns-2' : 'w-full block'}`}>
                                                 {currentQs.map((q, idx) => (
                                                     <div key={idx} className="break-inside-avoid bg-white block mb-8">
-                                                        <div className="flex gap-2 font-bold mb-2"><span>{idx + 1}.</span><div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} /></div>
+                                                        <div className="flex gap-2 font-bold mb-2">
+                                                            <span>{idx + 1}.</span>
+                                                            <div className="flex-1 rich-text-content" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                        </div>
                                                         <div className="mt-2 ml-6 space-y-2 block">
                                                             {(q.options || []).map((opt, i) => (
                                                                 <div key={i} className="flex gap-3 py-1 items-start">
@@ -503,16 +511,17 @@ const ExamsPage = () => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="animate-fade-in bg-white w-full block relative min-h-[290mm] p-12">
-                                            {/* Âncoras de Visão Apenas no Cartão Resposta e posicionadas nos cantos físicos da folha */}
+                                        <div className="animate-fade-in bg-white w-full block relative min-h-[290mm] p-4">
+                                            {/* Âncoras visíveis apenas no Cartão Resposta e com posição fixa na impressão */}
                                             <div className="vision-anchor anchor-tl hidden print:block"></div>
                                             <div className="vision-anchor anchor-tr hidden print:block"></div>
                                             <div className="vision-anchor anchor-bl hidden print:block"></div>
                                             <div className="vision-anchor anchor-br hidden print:block"></div>
 
+                                            {/* Cabeçalho no topo do Cartão Resposta */}
                                             {renderHeaderPrint('(CARTÃO-RESPOSTA)')}
                                             
-                                            <div className="mt-8 answer-card-grid bg-white print:grid">
+                                            <div className="answer-card-grid bg-white print:grid">
                                                 {currentQs.map((q, idx) => (
                                                     <div key={`card-${idx}`} className="flex items-center border-b border-black/10 pb-2 break-inside-avoid h-12">
                                                         <div className="flex items-center w-full gap-4">
@@ -535,7 +544,7 @@ const ExamsPage = () => {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <div className="absolute bottom-4 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em] no-print">PROVA FÁCIL SCANNER V6</div>
+                                            <div className="absolute bottom-4 left-0 right-0 text-center opacity-10 text-[8px] uppercase font-black tracking-[1.5em] no-print">PROVA FÁCIL SCANNER V7</div>
                                         </div>
                                     )}
                                 </div>
