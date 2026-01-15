@@ -126,21 +126,28 @@ export const FirebaseService = {
     // Hierarchy
     getPublicComponents: async () => {
         try {
+            // Consulta absoluta sem ordenação para não falhar se as regras ou índices não estiverem prontos
             const snap = await getDocs(collection(db, COLLECTIONS.COMPONENTS));
-            if (snap.empty) throw new Error("Coleção vazia");
-            return snap.docs.map(doc => ({ ...(doc.data() as object), id: doc.id } as CurricularComponent));
-        } catch (e) {
-            console.warn("Acesso ao Firestore negado ou indisponível. Usando fallback de componentes padrão.");
-            return [
-                { id: 'default-mat', name: 'Matemática', disciplines: [] },
-                { id: 'default-port', name: 'Língua Portuguesa', disciplines: [] },
-                { id: 'default-cie', name: 'Ciências da Natureza', disciplines: [] },
-                { id: 'default-his', name: 'História', disciplines: [] },
-                { id: 'default-geo', name: 'Geografia', disciplines: [] },
-                { id: 'default-art', name: 'Artes', disciplines: [] },
-                { id: 'default-efis', name: 'Educação Física', disciplines: [] },
-                { id: 'default-ing', name: 'Língua Inglesa', disciplines: [] }
-            ] as CurricularComponent[];
+            
+            if (snap.empty) return [];
+            
+            // Ordenação manual para evitar erro de índice
+            return snap.docs
+                .map(doc => ({ ...(doc.data() as object), id: doc.id } as CurricularComponent))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                
+        } catch (e: any) {
+            console.error("ERRO FIREBASE:", e.code);
+            // Se o erro for de permissão, significa que as regras no console do Firebase não foram aplicadas.
+            // Retornamos um fallback amigável para o seletor de registro não ficar em branco
+            if (e.code === 'permission-denied') {
+                return [
+                    { id: 'fb-mat', name: 'Matemática (Geral)', disciplines: [] },
+                    { id: 'fb-por', name: 'Português (Geral)', disciplines: [] },
+                    { id: 'fb-cie', name: 'Ciências', disciplines: [] }
+                ] as CurricularComponent[];
+            }
+            throw e; 
         }
     },
     getHierarchy: async () => { 
