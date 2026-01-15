@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Exam, Institution, SchoolClass, Question, CurricularComponent, UserRole, QuestionType, ExamContentScope, PublicExamConfig } from '../types';
@@ -24,6 +25,7 @@ const ExamsPage = () => {
 
     // Modal/Wizard States
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
     const [editing, setEditing] = useState<Partial<Exam>>({ questions: [], contentScopes: [] });
     const [currentStep, setCurrentStep] = useState(1);
     const [viewingMode, setViewingMode] = useState<'EXAM' | 'ONLINE_CONFIG'>('EXAM');
@@ -95,7 +97,6 @@ const ExamsPage = () => {
         const d = new Date(dateString);
         if (isNaN(d.getTime())) return '';
         
-        // Extrai partes locais para evitar o salto de timezone do toISOString().slice(0,16)
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
@@ -253,22 +254,32 @@ const ExamsPage = () => {
         return hierarchy.filter(cc => authorized.includes(cc.id));
     }, [hierarchy, user]);
 
-    // Fix: Definindo seletores ativos para a hierarquia no Wizard (Passo 2)
     const activeComp = useMemo(() => hierarchy.find(cc => cc.id === selCc), [hierarchy, selCc]);
     const activeDisc = useMemo(() => activeComp?.disciplines?.find(d => d.id === selD), [activeComp, selD]);
     const activeChap = useMemo(() => activeDisc?.chapters?.find(c => c.id === selC), [activeDisc, selC]);
     const activeUnit = useMemo(() => activeChap?.units?.find(u => u.id === selU), [activeChap, selU]);
 
+    // Pool de questões filtrado por escopo e ORDENADO (Selecionadas no topo)
     const manualPool = useMemo(() => {
         const scopes = Array.isArray(editing.contentScopes) ? editing.contentScopes : [];
         if (scopes.length === 0) return [];
-        return allQuestions.filter(q => 
+        
+        const pool = allQuestions.filter(q => 
             scopes.some(s => 
                 q.componentId === s.componentId && 
                 (!s.disciplineId || q.disciplineId === s.disciplineId)
             )
         );
-    }, [allQuestions, editing.contentScopes]);
+
+        // Lógica de ordenação: Se estiver no array de questões da prova, vai para o topo
+        const selectedIds = new Set(editing.questions?.map(q => q.id) || []);
+        
+        return [...pool].sort((a, b) => {
+            const aSel = selectedIds.has(a.id) ? 1 : 0;
+            const bSel = selectedIds.has(b.id) ? 1 : 0;
+            return bSel - aSel;
+        });
+    }, [allQuestions, editing.contentScopes, editing.questions]);
 
     const renderHeaderPrint = () => (
         <div className="border-2 border-black p-4 mb-6 bg-white block text-black">
@@ -509,13 +520,27 @@ const ExamsPage = () => {
                             ) : (
                                 <div className="grid grid-cols-2 gap-6 h-[500px]">
                                     <div className="flex flex-col gap-4 border p-4 rounded-3xl bg-slate-50 overflow-hidden">
-                                        <h4 className="text-xs font-black uppercase text-slate-400 px-2 tracking-widest">Banco Disponível</h4>
+                                        <h4 className="text-xs font-black uppercase text-slate-400 px-2 tracking-widest">Banco Disponível (Filtrado por Escopo)</h4>
                                         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                                             {manualPool.map(q => {
                                                 const isSelected = !!(Array.isArray(editing.questions) ? editing.questions.find(x => x.id === q.id) : false);
                                                 return (
-                                                    <div key={q.id} className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${isSelected ? 'border-brand-blue bg-white opacity-50' : 'border-white bg-white hover:border-slate-200'}`} onClick={() => !isSelected && toggleQuestionManual(q)}>
-                                                        <div className="text-xs font-bold text-slate-700 line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                    <div 
+                                                        key={q.id} 
+                                                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-start gap-3 ${isSelected ? 'border-brand-blue bg-blue-50/50 shadow-inner' : 'border-white bg-white hover:border-slate-200'}`} 
+                                                        onClick={() => toggleQuestionManual(q)}
+                                                    >
+                                                        <div className="flex-1">
+                                                            <div className="text-xs font-bold text-slate-700 line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
+                                                            {isSelected && <Badge color="blue" className="mt-2 text-[8px]">SELECIONADA</Badge>}
+                                                        </div>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); setPreviewQuestion(q); }} 
+                                                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition-colors"
+                                                            title="Visualizar Questão"
+                                                        >
+                                                            <Icons.Eye className="w-4 h-4" />
+                                                        </button>
                                                     </div>
                                                 );
                                             })}
@@ -525,10 +550,13 @@ const ExamsPage = () => {
                                         <h4 className="text-xs font-black uppercase text-white/40 px-2 tracking-widest">Itens na Prova ({Array.isArray(editing.questions) ? editing.questions.length : 0})</h4>
                                         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                                             {(Array.isArray(editing.questions) ? editing.questions : []).map((q, idx) => (
-                                                <div key={q.id} className="p-3 bg-white/10 rounded-xl flex gap-3 text-white border border-white/10">
+                                                <div key={q.id} className="p-3 bg-white/10 rounded-xl flex gap-3 text-white border border-white/10 group">
                                                     <span className="w-5 h-5 rounded bg-white/20 flex items-center justify-center font-black text-[10px]">{idx+1}</span>
                                                     <div className="flex-1 text-xs font-medium line-clamp-2" dangerouslySetInnerHTML={{__html: q.enunciado}} />
-                                                    <button onClick={() => toggleQuestionManual(q)} className="text-white/40 hover:text-red-400"><Icons.X /></button>
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={() => setPreviewQuestion(q)} className="text-white/60 hover:text-white p-1"><Icons.Eye className="w-4 h-4" /></button>
+                                                        <button onClick={() => toggleQuestionManual(q)} className="text-white/40 hover:text-red-400 p-1"><Icons.X /></button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -746,6 +774,50 @@ const ExamsPage = () => {
                         </div>
                     )}
                 </div>
+            </Modal>
+
+            {/* MODAL DE VISUALIZAÇÃO RÁPIDA DE QUESTÃO */}
+            <Modal
+                isOpen={!!previewQuestion}
+                onClose={() => setPreviewQuestion(null)}
+                title="Visualizar Questão"
+                maxWidth="max-w-3xl"
+                footer={<Button onClick={() => setPreviewQuestion(null)}>Fechar</Button>}
+            >
+                {previewQuestion && (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="flex justify-between items-start">
+                            <div className="flex flex-wrap gap-2">
+                                <Badge color="blue">{previewQuestion.type}</Badge>
+                                <Badge color={previewQuestion.difficulty === 'Hard' ? 'red' : 'green'}>{previewQuestion.difficulty}</Badge>
+                            </div>
+                        </div>
+
+                        <div 
+                            className="p-6 bg-slate-50 rounded-2xl border-2 border-slate-100 font-medium text-lg leading-relaxed text-slate-800 rich-text-content" 
+                            dangerouslySetInnerHTML={{ __html: previewQuestion.enunciado }} 
+                        />
+
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Opções & Gabarito</h4>
+                            {(previewQuestion.type === QuestionType.MULTIPLE_CHOICE || previewQuestion.type === QuestionType.TRUE_FALSE) ? (
+                                previewQuestion.options?.map((opt, i) => (
+                                    <div key={opt.id} className={`p-4 rounded-xl border-2 flex items-center gap-4 ${opt.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100 opacity-60'}`}>
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${opt.isCorrect ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                            {String.fromCharCode(65+i)}
+                                        </div>
+                                        <span className={`flex-1 font-bold ${opt.isCorrect ? 'text-green-900' : 'text-slate-600'}`}>{opt.text}</span>
+                                        {opt.isCorrect && <Icons.Check className="text-green-500 w-5 h-5" />}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="p-6 bg-blue-50 border-2 border-blue-100 rounded-xl">
+                                    <p className="text-blue-900 font-bold">{previewQuestion.options?.[0]?.text || '(Sem gabarito cadastrado)'}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div>
     );
